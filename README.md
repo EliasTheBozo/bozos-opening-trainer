@@ -129,3 +129,13 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Bot and training games remain clockless
 - Move lists are paired by full turn: 1. e4 e5
 - Updated high-contrast piece styling while preserving board colors
+
+
+## Web v1.5.2 — BOZO Coach
+
+- Connects Study Mode to the deployed Supabase `explain-move` Edge Function
+- Adds an Explain this move button and custom questions
+- Displays summaries, purposes, warnings, and follow-up questions
+- Draws AI-generated arrows and highlighted squares over the study board
+- Requires the user to be signed in
+- Remains unavailable in active friend duels through the backend safety rule

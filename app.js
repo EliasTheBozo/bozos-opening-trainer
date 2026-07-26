@@ -933,6 +933,18 @@ $('study-end').addEventListener('click', () => setStudyPly(studyMoves.length));
 $('study-flip').addEventListener('click', () => {
   studyOrientation = studyOrientation === 'white' ? 'black' : 'white';
   paintStudy();
+  if (lastCoachExplanation) {
+    drawCoachAnnotations(
+      lastCoachExplanation.arrows || [],
+      lastCoachExplanation.highlights || []
+    );
+  }
+});
+
+$('ask-coach-button').addEventListener('click', askCurrentStudyMove);
+$('clear-coach-button').addEventListener('click', clearCoach);
+$('coach-question').addEventListener('keydown', event => {
+  if (event.key === 'Enter') askCurrentStudyMove();
 });
 
 async function openStudyOpening(openingId) {
@@ -956,6 +968,7 @@ async function openStudyOpening(openingId) {
   $('study-subtitle').textContent = `${data.variation || 'Main Line'} · ${data.eco || 'ECO —'}`;
   $('study-pgn').textContent = data.pgn;
   $('study-modal').hidden = false;
+  clearCoach();
   paintStudy();
 }
 
@@ -969,6 +982,8 @@ function setStudyPly(nextPly) {
   for (let i = 0; i < studyPly; i++) {
     studyGame.move(studyMoves[i], { sloppy: true });
   }
+  clearCoachAnnotations();
+  updateCoachMoveLabel();
   paintStudy();
 }
 
@@ -1000,6 +1015,245 @@ function paintStudy() {
   $('study-start').disabled = studyPly === 0;
   $('study-next').disabled = studyPly === studyMoves.length;
   $('study-end').disabled = studyPly === studyMoves.length;
+  updateCoachMoveLabel();
+}
+
+
+
+let lastCoachExplanation = null;
+
+function updateCoachMoveLabel() {
+  const label = $('coach-move-label');
+  if (!label) return;
+  label.textContent = studyPly > 0
+    ? `${Math.ceil(studyPly / 2)}${studyPly % 2 ? '.' : '...'} ${studyMoves[studyPly - 1]}`
+    : 'Choose a move';
+}
+
+function clearCoachAnnotations() {
+  const svg = $('study-arrow-layer');
+  if (svg) svg.innerHTML = '';
+  lastCoachExplanation = null;
+}
+
+function clearCoach() {
+  clearCoachAnnotations();
+  const answer = $('coach-answer');
+  const question = $('coach-question');
+  if (answer) {
+    answer.innerHTML =
+      'Select a move in the line, then ask BOZO Coach why it is played.';
+  }
+  if (question) question.value = '';
+  updateCoachMoveLabel();
+}
+
+async function askCurrentStudyMove() {
+  const answer = $('coach-answer');
+  const button = $('ask-coach-button');
+
+  if (!state.session?.user) {
+    answer.textContent = 'Sign in before using BOZO Coach.';
+    return;
+  }
+
+  if (!studyOpening || !studyGame || studyPly === 0) {
+    answer.textContent = 'Choose a move from the move list first.';
+    return;
+  }
+
+  const replayBefore = new Chess();
+  for (let index = 0; index < studyPly - 1; index++) {
+    replayBefore.move(studyMoves[index], { sloppy: true });
+  }
+
+  const question = $('coach-question').value.trim();
+  const playedMove = studyMoves[studyPly - 1];
+
+  button.disabled = true;
+  button.textContent = 'BOZO Coach is thinking…';
+  answer.innerHTML = '<div class="coach-thinking">Analyzing the position and opening idea…</div>';
+  clearCoachAnnotations();
+
+  try {
+    const { data, error } = await sb.functions.invoke('explain-move', {
+      body: {
+        fen: studyGame.fen(),
+        previousFen: replayBefore.fen(),
+        playedMove,
+        moveNumber: Math.ceil(studyPly / 2),
+        opening: studyOpening.name,
+        variation: studyOpening.variation || 'Main Line',
+        question: question || 'Why is this move played?',
+        mode: 'study',
+        gameStatus: 'study',
+        moveHistory: studyMoves.slice(0, studyPly)
+      }
+    });
+
+    if (error) {
+      let message = error.message || 'BOZO Coach could not respond.';
+      try {
+        const context = await error.context?.json?.();
+        if (context?.error) message = context.error;
+      } catch (_) {}
+      throw new Error(message);
+    }
+
+    if (data?.error) throw new Error(data.error);
+    if (!data?.explanation) throw new Error('BOZO Coach returned no explanation.');
+
+    lastCoachExplanation = data.explanation;
+    renderCoachExplanation(data.explanation);
+  } catch (error) {
+    answer.innerHTML = `<div class="coach-error">${escapeHtml(
+      error?.message || 'BOZO Coach could not respond.'
+    )}</div>`;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Explain this move';
+  }
+}
+
+function renderCoachExplanation(explanation) {
+  const purposes = Array.isArray(explanation.purpose)
+    ? explanation.purpose.filter(Boolean)
+    : [];
+
+  $('coach-answer').innerHTML = `
+    <p class="coach-summary">${escapeHtml(explanation.summary || '')}</p>
+
+    ${purposes.length ? `
+      <div class="coach-section">
+        <b>What it accomplishes</b>
+        <ul>
+          ${purposes.map(item => `<li>${escapeHtml(item)}</li>`).join('')}
+        </ul>
+      </div>
+    ` : ''}
+
+    ${explanation.watchFor ? `
+      <div class="coach-warning">
+        <b>Watch for:</b>
+        <span>${escapeHtml(explanation.watchFor)}</span>
+      </div>
+    ` : ''}
+
+    ${explanation.suggestedQuestion ? `
+      <button class="coach-follow-up"
+              data-coach-question="${escapeHtml(explanation.suggestedQuestion)}">
+        ${escapeHtml(explanation.suggestedQuestion)}
+      </button>
+    ` : ''}
+  `;
+
+  const followUp = $('coach-answer').querySelector('[data-coach-question]');
+  if (followUp) {
+    followUp.addEventListener('click', () => {
+      $('coach-question').value = followUp.dataset.coachQuestion;
+      askCurrentStudyMove();
+    });
+  }
+
+  drawCoachAnnotations(
+    explanation.arrows || [],
+    explanation.highlights || []
+  );
+}
+
+function squareCenter(square, orientation = 'white') {
+  const fileIndex = square.charCodeAt(0) - 97;
+  const rankIndex = Number(square[1]) - 1;
+  const displayedFile = orientation === 'white' ? fileIndex : 7 - fileIndex;
+  const displayedRank = orientation === 'white' ? 7 - rankIndex : rankIndex;
+
+  return {
+    x: displayedFile * 100 + 50,
+    y: displayedRank * 100 + 50
+  };
+}
+
+function validSquare(square) {
+  return typeof square === 'string' && /^[a-h][1-8]$/.test(square);
+}
+
+function drawCoachAnnotations(arrows = [], highlights = []) {
+  const svg = $('study-arrow-layer');
+  if (!svg) return;
+
+  const colors = {
+    green: '#78c850',
+    yellow: '#f6c945',
+    red: '#ef5350',
+    blue: '#42a5f5',
+    purple: '#a855f7'
+  };
+
+  const markerDefinitions = Object.entries(colors).map(([name, color]) => `
+    <marker id="coach-arrow-${name}"
+            markerWidth="8"
+            markerHeight="8"
+            refX="6.5"
+            refY="4"
+            orient="auto"
+            markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="${color}"></path>
+    </marker>
+  `).join('');
+
+  const highlightMarkup = highlights
+    .filter(item => validSquare(item.square))
+    .slice(0, 4)
+    .map(item => {
+      const center = squareCenter(item.square, studyOrientation);
+      const color = colors[item.color] || colors.purple;
+      return `
+        <rect x="${center.x - 48}"
+              y="${center.y - 48}"
+              width="96"
+              height="96"
+              rx="10"
+              fill="${color}"
+              opacity=".25">
+          <title>${escapeHtml(item.label || '')}</title>
+        </rect>
+      `;
+    }).join('');
+
+  const arrowMarkup = arrows
+    .filter(item => validSquare(item.from) && validSquare(item.to))
+    .slice(0, 4)
+    .map(item => {
+      const from = squareCenter(item.from, studyOrientation);
+      const to = squareCenter(item.to, studyOrientation);
+      const colorName = colors[item.color] ? item.color : 'purple';
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const shorten = 23;
+      const endX = to.x - (dx / length) * shorten;
+      const endY = to.y - (dy / length) * shorten;
+
+      return `
+        <line x1="${from.x}"
+              y1="${from.y}"
+              x2="${endX}"
+              y2="${endY}"
+              stroke="${colors[colorName]}"
+              stroke-width="14"
+              stroke-linecap="round"
+              opacity=".86"
+              marker-end="url(#coach-arrow-${colorName})">
+          <title>${escapeHtml(item.label || '')}</title>
+        </line>
+      `;
+    }).join('');
+
+  svg.innerHTML = `
+    <defs>${markerDefinitions}</defs>
+    ${highlightMarkup}
+    ${arrowMarkup}
+  `;
 }
 
 

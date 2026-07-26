@@ -420,7 +420,13 @@
       </div>
       <div class="study-layout">
         <div>
-          <div id="study-board" class="web-duel-board study-board"></div>
+          <div class="study-board-shell">
+            <div id="study-board" class="web-duel-board study-board"></div>
+            <svg id="study-arrow-layer"
+                 class="board-arrow-layer"
+                 viewBox="0 0 800 800"
+                 aria-hidden="true"></svg>
+          </div>
           <div class="study-controls">
             <button id="study-start" class="button secondary">⏮ Start</button>
             <button id="study-prev" class="button secondary">← Previous</button>
@@ -441,6 +447,37 @@
           <div class="study-tip">
             Use Previous and Next to walk through the line without an opponent.
           </div>
+
+          <section id="bozo-coach-panel" class="bozo-coach-panel">
+            <div class="coach-heading">
+              <div>
+                <span class="eyebrow">BOZO COACH</span>
+                <h3>Understand this move</h3>
+              </div>
+              <span id="coach-move-label" class="coach-move-label">Choose a move</span>
+            </div>
+
+            <div id="coach-answer" class="coach-answer">
+              Select a move in the line, then ask BOZO Coach why it is played.
+            </div>
+
+            <label class="coach-question-label">
+              Ask a question
+              <input id="coach-question"
+                     maxlength="300"
+                     placeholder="Why is this move played?">
+            </label>
+
+            <div class="coach-actions">
+              <button id="ask-coach-button" class="button primary">
+                Explain this move
+              </button>
+              <button id="clear-coach-button" class="button secondary">
+                Clear
+              </button>
+            </div>
+          </section>
+
         </aside>
       </div>
     </div>
