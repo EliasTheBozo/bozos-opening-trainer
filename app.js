@@ -401,7 +401,16 @@ function formatPreviewMoves(pgn = '', fullMoves = 4) {
 function openChallengeForOpening(name) {
   route('challenges');
   setTimeout(() => {
-    $('new-challenge-button')?.click();
+    openNewGameSetup('friend');
+    $('duel-opening-search').value = name;
+    searchDuelOpenings();
+  }, 80);
+}
+
+function openBotForOpening(name) {
+  route('challenges');
+  setTimeout(() => {
+    openNewGameSetup('bot');
     $('duel-opening-search').value = name;
     searchDuelOpenings();
   }, 80);
@@ -445,19 +454,27 @@ function renderOpeningFamily(family) {
       </div>
 
       ${single ? `
-        <div class="single-line-actions two-actions">
-          <button class="study-button" onclick="openStudyById('${preview.id}')">Study this line</button>
+        <div class="single-line-actions three-actions">
+          <button class="study-button" onclick="openStudyById('${preview.id}')">Study</button>
+          <button class="family-bot-button"
+                  onclick="openBotForOpening('${escapeHtml(challengeName).replace(/'/g, "\\'")}')">
+            Play bot
+          </button>
           <button class="family-practice-button"
                   onclick="openChallengeForOpening('${escapeHtml(challengeName).replace(/'/g, "\\'")}')">
             Challenge
           </button>
         </div>
       ` : `
-        <div class="family-action-row three-actions">
+        <div class="family-action-row four-actions">
           <button class="study-button" onclick="openStudyById('${preview.id}')">Study preview</button>
+          <button class="family-bot-button"
+                  onclick="openBotForOpening('${escapeHtml(family.name).replace(/'/g, "\\'")}')">
+            Play bot
+          </button>
           <button class="family-practice-button"
                   onclick="openChallengeForOpening('${escapeHtml(family.name).replace(/'/g, "\\'")}')">
-            Challenge family
+            Challenge
           </button>
           <button class="family-toggle"
                   data-family-toggle="${family.id}"
@@ -483,8 +500,12 @@ function renderOpeningFamily(family) {
                   </div>
                   <code>${escapeHtml(line.pgn || '')}</code>
                   ${line.notes ? `<p>${escapeHtml(line.notes)}</p>` : ''}
-                  <div class="line-action-row">
+                  <div class="line-action-row three-line-actions">
                     <button class="line-study-button" onclick="openStudyById('${line.id}')">Study</button>
+                    <button class="line-bot-button"
+                            onclick="openBotForOpening('${escapeHtml(lineChallengeName).replace(/'/g, "\\'")}')">
+                      Bot
+                    </button>
                     <button class="line-challenge-button"
                             onclick="openChallengeForOpening('${escapeHtml(lineChallengeName).replace(/'/g, "\\'")}')">
                       Challenge
@@ -2171,6 +2192,588 @@ function drawReviewCoachAnnotations(arrows = [], highlights = []) {
   svg.innerHTML = `<defs>${markers}</defs>${squares}${lines}`;
 }
 
+
+/* ============================================================
+   BOZO BOT — OPENING-LOCKED PRACTICE + STOCKFISH FREE PLAY
+   ============================================================ */
+
+const BOT_STRENGTHS = {
+  beginner: { label: 'Beginner', depth: 4, randomness: 0.48 },
+  casual: { label: 'Casual', depth: 6, randomness: 0.28 },
+  club: { label: 'Club', depth: 9, randomness: 0.12 },
+  advanced: { label: 'Advanced', depth: 12, randomness: 0.04 },
+  master: { label: 'BOZO Master', depth: 15, randomness: 0 }
+};
+
+let webBotSession = null;
+let webBotSelectedSquare = null;
+let webBotAnalysisToken = 0;
+let botUserArrows = [];
+let botArrowStart = null;
+let botRightMouseDown = false;
+
+async function startWebBotGameFromSetup() {
+  const openingId = $('duel-opening-id').value;
+  if (!openingId) {
+    $('duel-create-status').textContent = 'Choose a cloud opening line first.';
+    return;
+  }
+
+  const button = $('send-opening-duel');
+  button.disabled = true;
+  button.textContent = 'Loading line…';
+  $('duel-create-status').textContent = '';
+
+  try {
+    const { data: opening, error } = await sb.from('openings')
+      .select('id,eco,name,variation,pgn')
+      .eq('id', openingId)
+      .single();
+
+    if (error) throw error;
+
+    const parser = new Chess();
+    const loaded = parser.load_pgn(opening.pgn || '', { sloppy: true });
+    if (!loaded) throw new Error('The selected opening line contains invalid move text.');
+
+    const bookSans = parser.history();
+    if (!bookSans.length) throw new Error('The selected line contains no moves.');
+
+    const strengthKey = $('bot-strength').value;
+    const strength = BOT_STRENGTHS[strengthKey] || BOT_STRENGTHS.club;
+    const playerColor = $('duel-color').value === 'black' ? 'b' : 'w';
+    const requestedBookPlies = Number($('duel-required-plies').value);
+    const requiredBookPlies = Math.min(requestedBookPlies, bookSans.length);
+
+    webBotSession = {
+      opening,
+      game: new Chess(),
+      bookSans,
+      requiredBookPlies,
+      playerColor,
+      strengthKey,
+      strength,
+      phase: 'book',
+      status: 'active',
+      resultReason: '',
+      moves: [],
+      selected: null,
+      lastMove: null,
+      botThinking: false,
+      startedAt: Date.now()
+    };
+
+    $('challenge-create-modal').hidden = true;
+    $('bot-game-modal').hidden = false;
+    $('bot-game-title').textContent =
+      `${opening.name}${opening.variation ? ': ' + opening.variation : ''}`;
+    $('bot-game-subtitle').textContent =
+      `${opening.eco || 'ECO —'} · ${Math.ceil(requiredBookPlies / 2)} required book moves`;
+    $('bot-book-name').textContent =
+      `${opening.name}${opening.variation ? ': ' + opening.variation : ''}`;
+    $('bot-book-pgn').textContent = opening.pgn || '';
+    $('bot-player-color-label').textContent = playerColor === 'w' ? 'White' : 'Black';
+    $('bot-strength-label').textContent = strength.label;
+    $('bot-review-button').hidden = true;
+    botUserArrows = [];
+    webBotSelectedSquare = null;
+
+    paintWebBotGame();
+    updateWebBotStatus();
+    updateWebBotEvaluation();
+
+    if (!webBotIsPlayerTurn()) {
+      setTimeout(playWebBotMove, 450);
+    }
+  } catch (error) {
+    console.error(error);
+    $('duel-create-status').textContent =
+      error?.message || 'BOZO Bot could not start.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Start training game';
+  }
+}
+
+function closeWebBotGame() {
+  $('bot-game-modal').hidden = true;
+  webBotAnalysisToken++;
+  webBotSession = null;
+  webBotSelectedSquare = null;
+  botUserArrows = [];
+}
+
+function webBotIsPlayerTurn() {
+  return Boolean(
+    webBotSession &&
+    webBotSession.game.turn() === webBotSession.playerColor
+  );
+}
+
+function webBotBookMoveAtPly(ply = webBotSession?.game.history().length || 0) {
+  return webBotSession?.bookSans?.[ply] || null;
+}
+
+function webBotStillMatchesBook() {
+  if (!webBotSession) return false;
+  const history = webBotSession.game.history().map(reviewCleanSan);
+  return history.every((move, index) =>
+    reviewCleanSan(webBotSession.bookSans[index]) === move
+  );
+}
+
+function webBotBookPhaseActive() {
+  if (!webBotSession) return false;
+  const ply = webBotSession.game.history().length;
+  return (
+    ply < webBotSession.requiredBookPlies &&
+    ply < webBotSession.bookSans.length &&
+    webBotStillMatchesBook()
+  );
+}
+
+function updateWebBotPhase() {
+  if (!webBotSession || webBotSession.status !== 'active') return;
+  webBotSession.phase = webBotBookPhaseActive() ? 'book' : 'freeplay';
+}
+
+function paintWebBotGame() {
+  if (!webBotSession) return;
+
+  const game = webBotSession.game;
+  const board = fenBoard(game.fen());
+  const orientation = webBotSession.playerColor === 'w' ? 'white' : 'black';
+  const ranks = orientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = orientation === 'white'
+    ? ['a','b','c','d','e','f','g','h']
+    : ['h','g','f','e','d','c','b','a'];
+
+  const legalTargets = webBotSelectedSquare
+    ? game.moves({ square: webBotSelectedSquare, verbose: true }).map(move => move.to)
+    : [];
+
+  $('web-bot-board').innerHTML = ranks.flatMap(rank =>
+    files.map(file => {
+      const square = `${file}${rank}`;
+      const row = 8 - rank;
+      const col = file.charCodeAt(0) - 97;
+      const symbol = board[row][col];
+      const pieceColor = symbol
+        ? (symbol === symbol.toUpperCase() ? 'white' : 'black')
+        : '';
+      const classes = [];
+      if (webBotSession.lastMove &&
+          (square === webBotSession.lastMove.from || square === webBotSession.lastMove.to)) {
+        classes.push('bot-last-square');
+      }
+      if (square === webBotSelectedSquare) classes.push('bot-selected-square');
+      if (legalTargets.includes(square)) classes.push('bot-legal-square');
+
+      return `<button type="button"
+                      class="${classes.join(' ')}"
+                      data-bot-square="${square}"
+                      data-piece-color="${pieceColor}">
+                ${webPiece(symbol)}
+              </button>`;
+    })
+  ).join('');
+
+  $$('[data-bot-square]').forEach(button => {
+    button.addEventListener('click', () => handleWebBotSquare(button.dataset.botSquare));
+    button.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      if (!botRightMouseDown) toggleBotSquareHighlight(button.dataset.botSquare);
+    });
+    button.addEventListener('mousedown', event => {
+      if (event.button !== 2) return;
+      event.preventDefault();
+      botRightMouseDown = true;
+      botArrowStart = button.dataset.botSquare;
+    });
+    button.addEventListener('mouseup', event => {
+      if (event.button !== 2 || !botArrowStart) return;
+      event.preventDefault();
+      const end = button.dataset.botSquare;
+      if (end !== botArrowStart) addBotUserArrow(botArrowStart, end);
+      botArrowStart = null;
+      setTimeout(() => { botRightMouseDown = false; }, 0);
+    });
+  });
+
+  paintBotUserAnnotations();
+  renderWebBotMoveList();
+}
+
+function handleWebBotSquare(square) {
+  if (!webBotSession ||
+      webBotSession.status !== 'active' ||
+      webBotSession.botThinking ||
+      !webBotIsPlayerTurn()) return;
+
+  const game = webBotSession.game;
+  const piece = game.get(square);
+
+  if (!webBotSelectedSquare) {
+    if (piece && piece.color === webBotSession.playerColor) {
+      webBotSelectedSquare = square;
+      paintWebBotGame();
+    }
+    return;
+  }
+
+  if (piece && piece.color === webBotSession.playerColor) {
+    webBotSelectedSquare = square;
+    paintWebBotGame();
+    return;
+  }
+
+  const from = webBotSelectedSquare;
+  webBotSelectedSquare = null;
+  const legal = game.moves({ square: from, verbose: true });
+  const candidate = legal.find(move => move.to === square);
+
+  if (!candidate) {
+    paintWebBotGame();
+    toast('That move is not legal.');
+    return;
+  }
+
+  const currentPly = game.history().length;
+  const expectedSan = webBotBookMoveAtPly(currentPly);
+
+  if (webBotBookPhaseActive() &&
+      reviewCleanSan(candidate.san) !== reviewCleanSan(expectedSan)) {
+    paintWebBotGame();
+    $('bot-game-message').innerHTML =
+      `Stay in the selected line. The book move is <b>${escapeHtml(expectedSan)}</b>.`;
+    toast(`Book move: ${expectedSan}`);
+    return;
+  }
+
+  const played = game.move({
+    from,
+    to: square,
+    promotion: candidate.promotion || 'q'
+  });
+
+  if (!played) {
+    paintWebBotGame();
+    toast('That move could not be played.');
+    return;
+  }
+
+  webBotSession.lastMove = played;
+  webBotSession.moves = game.history();
+  updateWebBotPhase();
+  paintWebBotGame();
+  updateWebBotStatus();
+  updateWebBotEvaluation();
+
+  if (checkWebBotGameOver()) return;
+  setTimeout(playWebBotMove, 420);
+}
+
+async function playWebBotMove() {
+  if (!webBotSession ||
+      webBotSession.status !== 'active' ||
+      webBotIsPlayerTurn() ||
+      webBotSession.botThinking) return;
+
+  const session = webBotSession;
+  const game = session.game;
+  session.botThinking = true;
+  updateWebBotStatus();
+
+  try {
+    let played = null;
+    const currentPly = game.history().length;
+    const expectedSan = webBotBookMoveAtPly(currentPly);
+
+    if (webBotBookPhaseActive() && expectedSan) {
+      played = game.move(expectedSan, { sloppy: true });
+      if (!played) throw new Error(`Invalid book move: ${expectedSan}`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } else {
+      updateWebBotPhase();
+      const engine = await getReviewEngine();
+      const result = await engine.analyze(game.fen(), session.strength.depth);
+      if (webBotSession !== session || session.status !== 'active') return;
+
+      let chosenUci = result.bestMove;
+      if (session.strength.randomness > 0 && Math.random() < session.strength.randomness) {
+        const legalMoves = game.moves({ verbose: true });
+        const candidates = legalMoves.filter(move => {
+          const givesAwayQueen =
+            move.captured === 'q' && move.piece !== 'q';
+          return !givesAwayQueen;
+        });
+        const pool = candidates.length ? candidates : legalMoves;
+        const random = pool[Math.floor(Math.random() * pool.length)];
+        if (random) {
+          chosenUci = `${random.from}${random.to}${random.promotion || ''}`;
+        }
+      }
+
+      const from = chosenUci?.slice(0, 2);
+      const to = chosenUci?.slice(2, 4);
+      const promotion = chosenUci?.slice(4, 5) || 'q';
+      played = game.move({ from, to, promotion });
+
+      if (!played) throw new Error(`Stockfish returned an illegal move: ${chosenUci}`);
+    }
+
+    session.lastMove = played;
+    session.moves = game.history();
+    updateWebBotPhase();
+    paintWebBotGame();
+    updateWebBotStatus();
+    updateWebBotEvaluation();
+    checkWebBotGameOver();
+  } catch (error) {
+    console.error('BOZO Bot error:', error);
+    $('bot-game-message').textContent =
+      error?.message || 'BOZO Bot could not move.';
+  } finally {
+    if (webBotSession === session) {
+      session.botThinking = false;
+      updateWebBotStatus();
+    }
+  }
+}
+
+function checkWebBotGameOver() {
+  if (!webBotSession) return true;
+  const game = webBotSession.game;
+  if (!game.game_over()) return false;
+
+  webBotSession.status = 'completed';
+
+  if (game.in_checkmate()) {
+    const loser = game.turn();
+    webBotSession.resultReason =
+      loser === webBotSession.playerColor
+        ? 'Checkmate. BOZO Bot wins.'
+        : 'Checkmate. You defeated BOZO Bot!';
+  } else if (game.in_stalemate()) {
+    webBotSession.resultReason = 'Draw by stalemate.';
+  } else if (game.in_threefold_repetition()) {
+    webBotSession.resultReason = 'Draw by threefold repetition.';
+  } else if (game.insufficient_material()) {
+    webBotSession.resultReason = 'Draw by insufficient material.';
+  } else {
+    webBotSession.resultReason = 'The game ended in a draw.';
+  }
+
+  $('bot-review-button').hidden = false;
+  updateWebBotStatus();
+  paintWebBotGame();
+  return true;
+}
+
+function updateWebBotStatus() {
+  if (!webBotSession) return;
+
+  const session = webBotSession;
+  const game = session.game;
+  const playerTurn = webBotIsPlayerTurn();
+
+  if (session.status === 'completed') {
+    $('bot-turn-badge').textContent = 'Game complete';
+    $('bot-phase-label').textContent = 'Finished';
+    $('bot-game-message').textContent = session.resultReason;
+    return;
+  }
+
+  $('bot-phase-label').textContent =
+    session.phase === 'book' ? 'Book phase' : 'Free play';
+
+  if (session.botThinking) {
+    $('bot-turn-badge').textContent = 'BOZO Bot thinking…';
+    $('bot-game-message').textContent =
+      session.phase === 'book'
+        ? 'BOZO Bot is following the selected line.'
+        : `Stockfish is thinking at depth ${session.strength.depth}.`;
+    return;
+  }
+
+  $('bot-turn-badge').textContent = playerTurn ? 'Your move' : 'BOZO Bot';
+  if (playerTurn) {
+    const expected = webBotBookPhaseActive()
+      ? webBotBookMoveAtPly(game.history().length)
+      : null;
+    $('bot-game-message').innerHTML = expected
+      ? `Play the selected book move. <span class="bot-hidden-hint">Hint available after an incorrect attempt.</span>`
+      : 'Any legal move is allowed. The opening lesson is complete.';
+  } else {
+    $('bot-game-message').textContent =
+      session.phase === 'book'
+        ? 'BOZO Bot will answer with the stored book move.'
+        : 'BOZO Bot will choose a Stockfish move.';
+  }
+}
+
+function renderWebBotMoveList() {
+  if (!webBotSession) return;
+  $('bot-move-list').innerHTML = renderDuelMoveRows(webBotSession.game.history());
+}
+
+async function updateWebBotEvaluation() {
+  if (!webBotSession) return;
+  const session = webBotSession;
+  const token = ++webBotAnalysisToken;
+
+  try {
+    const engine = await getReviewEngine();
+    const result = await engine.analyze(session.game.fen(), 7);
+    if (token !== webBotAnalysisToken || webBotSession !== session) return;
+
+    const cp = whiteReviewEval(result, session.game.turn());
+    const bounded = result.mate != null
+      ? (result.mate > 0 ? 1000 : -1000)
+      : Math.max(-1000, Math.min(1000, cp));
+    const whitePercent = Math.max(5, Math.min(95, 50 + bounded / 20));
+    $('bot-eval-white').style.width = `${whitePercent}%`;
+    $('bot-eval-label').textContent = formatReviewEval(cp, result.mate);
+  } catch (error) {
+    if (token === webBotAnalysisToken) {
+      $('bot-eval-label').textContent = '?';
+    }
+  }
+}
+
+function resignWebBotGame() {
+  if (!webBotSession || webBotSession.status !== 'active') return;
+  webBotSession.status = 'completed';
+  webBotSession.resultReason = 'You resigned. BOZO Bot wins.';
+  $('bot-review-button').hidden = false;
+  updateWebBotStatus();
+}
+
+function restartWebBotGame() {
+  if (!webBotSession) return;
+  const setup = {
+    opening: webBotSession.opening,
+    bookSans: webBotSession.bookSans,
+    requiredBookPlies: webBotSession.requiredBookPlies,
+    playerColor: webBotSession.playerColor,
+    strengthKey: webBotSession.strengthKey,
+    strength: webBotSession.strength
+  };
+
+  webBotSession = {
+    ...setup,
+    game: new Chess(),
+    phase: 'book',
+    status: 'active',
+    resultReason: '',
+    moves: [],
+    selected: null,
+    lastMove: null,
+    botThinking: false,
+    startedAt: Date.now()
+  };
+
+  webBotSelectedSquare = null;
+  botUserArrows = [];
+  $('bot-review-button').hidden = true;
+  paintWebBotGame();
+  updateWebBotStatus();
+  updateWebBotEvaluation();
+
+  if (!webBotIsPlayerTurn()) setTimeout(playWebBotMove, 450);
+}
+
+function reviewWebBotGame() {
+  if (!webBotSession) return;
+  const pgn = webBotSession.game.pgn();
+  closeWebBotGame();
+  route('review');
+
+  setTimeout(() => {
+    $('review-pgn-input').value = pgn;
+    $('review-import-message').textContent =
+      'BOZO Bot game loaded. Choose the analysis settings and click Analyze game.';
+    $('review-pgn-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
+}
+
+$('close-bot-game').addEventListener('click', closeWebBotGame);
+$('bot-resign-button').addEventListener('click', resignWebBotGame);
+$('bot-restart-button').addEventListener('click', restartWebBotGame);
+$('bot-review-button').addEventListener('click', reviewWebBotGame);
+$('clear-bot-arrows').addEventListener('click', () => {
+  botUserArrows = [];
+  paintBotUserAnnotations();
+});
+
+function botSquareCenter(square) {
+  const orientation = webBotSession?.playerColor === 'b' ? 'black' : 'white';
+  const fileIndex = square.charCodeAt(0) - 97;
+  const rankIndex = Number(square[1]) - 1;
+  return {
+    x: (orientation === 'white' ? fileIndex : 7 - fileIndex) * 100 + 50,
+    y: (orientation === 'white' ? 7 - rankIndex : rankIndex) * 100 + 50
+  };
+}
+
+function addBotUserArrow(from, to) {
+  const existing = botUserArrows.findIndex(item =>
+    item.type === 'arrow' && item.from === from && item.to === to
+  );
+  if (existing >= 0) botUserArrows.splice(existing, 1);
+  else botUserArrows.push({ type: 'arrow', from, to });
+  paintBotUserAnnotations();
+}
+
+function toggleBotSquareHighlight(square) {
+  const existing = botUserArrows.findIndex(item =>
+    item.type === 'square' && item.square === square
+  );
+  if (existing >= 0) botUserArrows.splice(existing, 1);
+  else botUserArrows.push({ type: 'square', square });
+  paintBotUserAnnotations();
+}
+
+function paintBotUserAnnotations() {
+  const svg = $('bot-user-arrow-layer');
+  if (!svg || !webBotSession) return;
+
+  const marker = `
+    <marker id="bot-user-arrow-head"
+            markerWidth="8" markerHeight="8"
+            refX="6.5" refY="4"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#f6c945"></path>
+    </marker>`;
+
+  const markup = botUserArrows.map(item => {
+    if (item.type === 'square') {
+      const center = botSquareCenter(item.square);
+      return `<rect x="${center.x - 48}" y="${center.y - 48}"
+                    width="96" height="96" rx="10"
+                    fill="#f6c945" opacity=".28"></rect>`;
+    }
+
+    const from = botSquareCenter(item.from);
+    const to = botSquareCenter(item.to);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const endX = to.x - dx / length * 23;
+    const endY = to.y - dy / length * 23;
+
+    return `<line x1="${from.x}" y1="${from.y}"
+                  x2="${endX}" y2="${endY}"
+                  stroke="#f6c945"
+                  stroke-width="14"
+                  stroke-linecap="round"
+                  opacity=".82"
+                  marker-end="url(#bot-user-arrow-head)"></line>`;
+  }).join('');
+
+  svg.innerHTML = `<defs>${marker}</defs>${markup}`;
+}
+
 let challengeFilter = 'active';
 let webChallengeRows = [];
 let activeWebDuel = null;
@@ -2193,11 +2796,30 @@ $$('[data-challenge-filter]').forEach(button => {
   });
 });
 
-$('new-challenge-button').addEventListener('click', () => {
+let newGameMode = 'friend';
+
+function openNewGameSetup(mode = 'friend') {
+  newGameMode = mode;
   $('challenge-create-modal').hidden = false;
   $('duel-opening-results').innerHTML = '';
   $('duel-opening-id').value = '';
+  $('duel-create-status').textContent = '';
+  $$('[data-new-game-mode]').forEach(button =>
+    button.classList.toggle('active', button.dataset.newGameMode === mode)
+  );
+  $('friend-game-fields').hidden = mode !== 'friend';
+  $('bot-game-fields').hidden = mode !== 'bot';
+  $('send-opening-duel').textContent =
+    mode === 'bot' ? 'Start training game' : 'Send challenge';
+}
+
+$('new-challenge-button').addEventListener('click', () => openNewGameSetup('friend'));
+$('new-bot-game-button').addEventListener('click', () => openNewGameSetup('bot'));
+
+$$('[data-new-game-mode]').forEach(button => {
+  button.addEventListener('click', () => openNewGameSetup(button.dataset.newGameMode));
 });
+
 $('close-challenge-create').addEventListener('click', () => $('challenge-create-modal').hidden = true);
 $('close-challenge-game').addEventListener('click', closeWebDuel);
 $('duel-refresh-button').addEventListener('click', () => openWebDuel(activeWebDuel?.id));
@@ -2208,7 +2830,10 @@ $('duel-opening-search').addEventListener('input', () => {
   clearTimeout(openingSearchTimer);
   openingSearchTimer = setTimeout(searchDuelOpenings, 260);
 });
-$('send-opening-duel').addEventListener('click', sendWebChallenge);
+$('send-opening-duel').addEventListener('click', () => {
+  if (newGameMode === 'bot') startWebBotGameFromSetup();
+  else sendWebChallenge();
+});
 
 async function searchDuelOpenings() {
   const query = $('duel-opening-search').value.trim();

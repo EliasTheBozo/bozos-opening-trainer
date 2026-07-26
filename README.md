@@ -152,3 +152,17 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Clickable move-by-move board playback
 - Evaluation bar and engine alternatives
 - BOZO Coach explanations grounded in Stockfish results
+
+
+## Web v1.7.0 — BOZO Bot
+
+- Restores BOZO Bot to the website
+- Separate Challenge Friend and Play BOZO Bot flows
+- Five bot strengths
+- Opening-locked book phase
+- Stockfish free play after the required opening moves
+- Legal move highlighting and evaluation bar
+- No clock in bot games
+- Right-click arrows and highlighted squares
+- Resign, restart, and direct handoff to Game Review
+- Play Bot shortcuts throughout the Opening Library

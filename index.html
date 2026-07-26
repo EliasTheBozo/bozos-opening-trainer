@@ -232,9 +232,12 @@
           <div>
             <div class="eyebrow">OPENING DUELS</div>
             <h1>Prove your theory.</h1>
-            <p>Choose a cloud line, send it to another player, and play the position together.</p>
+            <p>Challenge a friend or train the same opening against BOZO Bot.</p>
           </div>
-          <button id="new-challenge-button" class="button primary">New challenge</button>
+          <div class="challenge-primary-actions">
+            <button id="new-bot-game-button" class="button secondary">Play BOZO Bot</button>
+            <button id="new-challenge-button" class="button primary">Challenge friend</button>
+          </div>
         </div>
 
         <div class="challenge-tabs">
@@ -654,17 +657,48 @@
 <div id="challenge-create-modal" class="modal-backdrop" hidden>
     <div class="auth-modal challenge-create-modal">
       <button id="close-challenge-create" class="modal-close">×</button>
-      <div class="eyebrow">NEW OPENING DUEL</div>
+      <div class="eyebrow">NEW OPENING GAME</div>
       <h2>Choose the battleground</h2>
-      <label>Opponent username<input id="duel-opponent" placeholder="@username"></label>
+
+      <div class="new-game-mode-tabs">
+        <button class="active" data-new-game-mode="friend">Challenge friend</button>
+        <button data-new-game-mode="bot">Play BOZO Bot</button>
+      </div>
+
+      <div id="friend-game-fields">
+        <label>Opponent username
+          <input id="duel-opponent" placeholder="@username">
+        </label>
+      </div>
+
+      <div id="bot-game-fields" hidden>
+        <label>BOZO Bot strength
+          <select id="bot-strength">
+            <option value="beginner">Beginner · depth 4</option>
+            <option value="casual">Casual · depth 6</option>
+            <option value="club" selected>Club · depth 9</option>
+            <option value="advanced">Advanced · depth 12</option>
+            <option value="master">BOZO Master · depth 15</option>
+          </select>
+        </label>
+        <p class="bot-mode-note">
+          BOZO Bot follows the selected book line first, then continues the game with Stockfish.
+        </p>
+      </div>
+
       <label>Opening or sideline
         <input id="duel-opening-search" placeholder="Search Polish, Alekhine, Italian…">
       </label>
       <div id="duel-opening-results" class="duel-opening-results"></div>
       <input id="duel-opening-id" type="hidden">
+
       <label>Your color
-        <select id="duel-color"><option value="white">White</option><option value="black">Black</option></select>
+        <select id="duel-color">
+          <option value="white">White</option>
+          <option value="black">Black</option>
+        </select>
       </label>
+
       <label>Required book moves
         <select id="duel-required-plies">
           <option value="8">4 moves</option>
@@ -673,6 +707,7 @@
           <option value="20">10 moves</option>
         </select>
       </label>
+
       <button id="send-opening-duel" class="button primary">Send challenge</button>
       <div id="duel-create-status" class="auth-message"></div>
     </div>
@@ -720,6 +755,86 @@
             <div id="duel-move-list" class="duel-move-list"></div>
           </div>
           <div id="duel-game-message" class="auth-message"></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="bot-game-modal" class="modal-backdrop" hidden>
+    <div class="duel-game-modal bot-game-modal">
+      <button id="close-bot-game" class="modal-close">×</button>
+
+      <div class="duel-game-header">
+        <div>
+          <div class="eyebrow">BOZO BOT ARENA</div>
+          <h2 id="bot-game-title">Opening</h2>
+          <p id="bot-game-subtitle"></p>
+        </div>
+        <span id="bot-turn-badge" class="cloud-pill">Loading…</span>
+      </div>
+
+      <div class="bot-battle-strip">
+        <div class="bot-fighter">
+          <span>YOU</span>
+          <b id="bot-player-color-label">White</b>
+        </div>
+        <div class="bot-versus">VS</div>
+        <div class="bot-fighter">
+          <span>BOZO BOT</span>
+          <b id="bot-strength-label">Club</b>
+        </div>
+      </div>
+
+      <div class="duel-game-layout bot-game-layout">
+        <div class="bot-board-column">
+          <div class="bot-board-shell">
+            <div id="web-bot-board" class="web-duel-board"></div>
+            <svg id="bot-user-arrow-layer"
+                 class="board-arrow-layer bot-user-arrow-layer"
+                 viewBox="0 0 800 800"
+                 aria-hidden="true"></svg>
+          </div>
+
+          <div class="bot-eval-row">
+            <span>Black</span>
+            <div class="bot-eval-track">
+              <div id="bot-eval-white" class="bot-eval-white"></div>
+            </div>
+            <b id="bot-eval-label">0.00</b>
+            <span>White</span>
+          </div>
+
+          <div class="duel-actions">
+            <button id="bot-resign-button" class="button secondary">Resign</button>
+            <button id="bot-restart-button" class="button secondary">Restart</button>
+            <button id="bot-review-button" class="button primary" hidden>Review game</button>
+          </div>
+        </div>
+
+        <aside class="duel-sidebar">
+          <div class="duel-book-card">
+            <span>SELECTED LINE</span>
+            <b id="bot-book-name"></b>
+            <code id="bot-book-pgn"></code>
+          </div>
+
+          <div id="bot-game-status-card" class="bot-game-status-card">
+            <span class="eyebrow">TRAINING STATUS</span>
+            <b id="bot-phase-label">Book phase</b>
+            <p id="bot-game-message">Loading the selected line…</p>
+          </div>
+
+          <div>
+            <span class="eyebrow">MOVES</span>
+            <div id="bot-move-list" class="duel-move-list"></div>
+          </div>
+
+          <div class="bot-annotation-help">
+            <b>Board notes</b>
+            <span>Right-click and drag to draw an arrow. Right-click a square to highlight it.</span>
+            <button id="clear-bot-arrows" class="button secondary">Clear arrows</button>
+          </div>
         </aside>
       </div>
     </div>
