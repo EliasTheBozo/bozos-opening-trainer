@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#16091f">
+  <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
+  <title>BOZO'S Opening Trainer</title>
+  <link rel="icon" href="./assets/bozo-mascot.webp">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="background-glow glow-one"></div>
+  <div class="background-glow glow-two"></div>
+
+  <header class="site-header">
+    <a class="brand" href="#home" data-route="home">
+      <img src="./assets/bozo-mascot.webp" alt="Professor Bozo">
+      <span>
+        <b>BOZO'S</b>
+        <small>Master openings while having fun.</small>
+      </span>
+    </a>
+
+    <nav class="desktop-nav" aria-label="Main navigation">
+      <button data-route="home">Home</button>
+      <button data-route="library">Opening Library</button>
+      <button data-route="dashboard">Dashboard</button>
+      <button data-route="profile">Profile</button>
+      <button id="owner-nav" data-route="owner" hidden>Owner's Office</button>
+    </nav>
+
+    <div class="header-actions">
+      <span id="cloud-state" class="cloud-pill">Connecting…</span>
+      <button id="header-auth-button" class="button secondary">Sign in</button>
+      <button id="mobile-menu-button" class="mobile-menu-button" aria-label="Open navigation">☰</button>
+    </div>
+  </header>
+
+  <div id="mobile-nav" class="mobile-nav" hidden>
+    <button data-route="home">Home</button>
+    <button data-route="library">Opening Library</button>
+    <button data-route="dashboard">Dashboard</button>
+    <button data-route="profile">Profile</button>
+    <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
+  </div>
+
+  <main>
+    <section id="view-home" class="view active">
+      <div class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">THE OPENING SCHOOL WITH A SENSE OF HUMOR</div>
+          <h1>Master openings.<br><span>Not just moves.</span></h1>
+          <p>
+            Learn chess openings through structured practice, five-star mastery,
+            cloud progress, and a growing community built around understanding the ideas.
+          </p>
+          <div class="hero-actions">
+            <button id="hero-start-button" class="button primary">Start training</button>
+            <button class="button secondary" data-route="library">Explore openings</button>
+          </div>
+          <div class="hero-proof">
+            <span><b>3,800+</b> opening lines</span>
+            <span><b>5</b> mastery stars</span>
+            <span><b>1</b> account everywhere</span>
+          </div>
+        </div>
+
+        <div class="hero-card">
+          <div class="mascot-stage">
+            <img src="./assets/bozo-mascot.webp" alt="Professor Bozo">
+            <div class="speech-card">
+              <span>BOZO SAYS</span>
+              <b>Memorize ideas, not moves.</b>
+            </div>
+          </div>
+          <div class="mastery-preview">
+            <div>
+              <span>Opening Mastery</span>
+              <b id="home-mastery-preview">0</b>
+            </div>
+            <div class="stars">★★★★★</div>
+            <small>Master all five challenges to earn 500 mastery.</small>
+          </div>
+        </div>
+      </div>
+
+      <div id="announcement-card" class="announcement-card" hidden>
+        <div class="announcement-icon">📣</div>
+        <div>
+          <span>BOZO BULLETIN</span>
+          <h3 id="announcement-title"></h3>
+          <p id="announcement-body"></p>
+        </div>
+      </div>
+
+      <section class="feature-section">
+        <div class="section-heading">
+          <div class="eyebrow">WHY BOZO'S?</div>
+          <h2>A complete opening-learning platform</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <div class="feature-icon">🎓</div>
+            <h3>BOZO Academy</h3>
+            <p>Structured lessons, plans, traps, quizzes, and practical tests.</p>
+          </article>
+          <article>
+            <div class="feature-icon">⭐</div>
+            <h3>Opening Mastery</h3>
+            <p>Earn five stars and a permanent 500-mastery trophy for each opening.</p>
+          </article>
+          <article>
+            <div class="feature-icon">☁</div>
+            <h3>One cloud profile</h3>
+            <p>Use the same account and progress on Android and the website.</p>
+          </article>
+          <article>
+            <div class="feature-icon">📚</div>
+            <h3>Opening Library</h3>
+            <p>Search the opening database and move from research directly into training.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="mastery-explainer">
+        <div>
+          <div class="eyebrow">OPENING MASTERY</div>
+          <h2>Five challenges. One permanent trophy.</h2>
+          <p>
+            Completing a line once is only the beginning. BOZO'S tests consistency,
+            practical play, reviewed games, and final understanding.
+          </p>
+        </div>
+        <ol class="mastery-steps">
+          <li><span>1</span><div><b>Learn</b><small>Complete the stored line.</small></div></li>
+          <li><span>2</span><div><b>Consistency</b><small>Reach at least 90% mastery.</small></div></li>
+          <li><span>3</span><div><b>Practical</b><small>Win from the opening against BOZO Bot.</small></div></li>
+          <li><span>4</span><div><b>Real game</b><small>Score 90% opening accuracy in review.</small></div></li>
+          <li><span>5</span><div><b>Master</b><small>Pass the final assessment and earn +500.</small></div></li>
+        </ol>
+      </section>
+    </section>
+
+    <section id="view-library" class="view">
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">OPENING LIBRARY</div>
+          <h1>Explore the theory.</h1>
+          <p>Search the cloud opening database. Published lines appear here automatically.</p>
+        </div>
+        <div class="search-box">
+          <input id="opening-search-input" placeholder="Search Polish, Italian, Bird…">
+          <button id="opening-search-button" class="button primary">Search</button>
+        </div>
+      </div>
+      <div id="opening-results" class="opening-grid">
+        <div class="empty-state">
+          <div>♟</div>
+          <b>Search the opening library</b>
+          <span>The website reads published openings from the same Supabase project.</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-dashboard" class="view">
+      <div id="dashboard-guest" class="auth-required">
+        <img src="./assets/bozo-mascot.webp" alt="">
+        <h1>Your training headquarters</h1>
+        <p>Sign in with the same account you use in the Android app.</p>
+        <button class="button primary open-auth">Sign in</button>
+      </div>
+
+      <div id="dashboard-user" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">HEADQUARTERS</div>
+            <h1 id="dashboard-greeting">Welcome back.</h1>
+            <p>Your cloud progress updates across BOZO'S platforms.</p>
+          </div>
+          <button id="dashboard-sync-button" class="button secondary">Refresh cloud data</button>
+        </div>
+
+        <div class="stats-grid">
+          <article><span>Cloud XP</span><b id="dashboard-xp">0</b><small>General progression</small></article>
+          <article><span>Opening Mastery</span><b id="dashboard-mastery">0</b><small>500 per mastered opening</small></article>
+          <article><span>Openings Mastered</span><b id="dashboard-mastered">0</b><small>Five-star trophies</small></article>
+          <article><span>Current Streak</span><b id="dashboard-streak">0</b><small>Days</small></article>
+        </div>
+
+        <div class="dashboard-columns">
+          <section class="panel">
+            <div class="panel-heading">
+              <div><span>TROPHY ROOM</span><h2>Your Opening Mastery</h2></div>
+            </div>
+            <div id="web-trophy-room" class="trophy-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div><span>CONTINUE</span><h2>Next steps</h2></div>
+            </div>
+            <div class="next-step-list">
+              <button data-route="library"><b>Browse the Opening Library</b><small>Find the next line to learn.</small></button>
+              <button data-route="profile"><b>Complete your profile</b><small>Update your public BOZO identity.</small></button>
+              <button id="dashboard-owner-shortcut" data-route="owner" hidden><b>Open the Owner's Office</b><small>Manage the platform.</small></button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-profile" class="view">
+      <div id="profile-guest" class="auth-required">
+        <img src="./assets/bozo-mascot.webp" alt="">
+        <h1>Your BOZO profile</h1>
+        <p>Sign in to view and edit the same profile used by the Android app.</p>
+        <button class="button primary open-auth">Sign in</button>
+      </div>
+
+      <div id="profile-user" hidden>
+        <div class="profile-hero">
+          <img id="profile-avatar" src="./assets/bozo-mascot.webp" alt="">
+          <div>
+            <div id="profile-role-badge" class="role-badge">Member</div>
+            <h1 id="profile-ign">Player</h1>
+            <p id="profile-username">@username</p>
+          </div>
+        </div>
+
+        <div class="profile-layout">
+          <section class="panel">
+            <div class="panel-heading"><div><span>PROFILE</span><h2>Edit your identity</h2></div></div>
+            <label>IGN<input id="profile-ign-input" maxlength="28"></label>
+            <label>Username<input id="profile-username-input" maxlength="20"></label>
+            <label>Bio<textarea id="profile-bio-input" maxlength="160"></textarea></label>
+            <label>Opening personality
+              <select id="profile-personality-input">
+                <option>Explorer</option>
+                <option>Trickster</option>
+                <option>Gambiteer</option>
+                <option>Strategist</option>
+                <option>Defender</option>
+              </select>
+            </label>
+            <button id="profile-save-button" class="button primary">Save profile</button>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading"><div><span>ACCOUNT</span><h2>Cloud session</h2></div></div>
+            <div class="account-summary">
+              <span>Email</span><b id="profile-email"></b>
+              <span>User ID</span><code id="profile-user-id"></code>
+            </div>
+            <button id="sign-out-button" class="button secondary">Sign out</button>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-owner" class="view">
+      <div id="owner-denied" class="auth-required">
+        <div class="lock-icon">🔒</div>
+        <h1>Owner access required</h1>
+        <p>The Owner's Office is available only to the platform's single Creator account.</p>
+      </div>
+
+      <div id="owner-content" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">OWNER'S OFFICE</div>
+            <h1>Run the BOZO platform.</h1>
+            <p>Live tools connected to the same Supabase backend as the Android app.</p>
+          </div>
+        </div>
+
+        <div class="owner-tool-grid">
+          <button data-owner-panel="analytics"><span>📊</span><b>Analytics</b><small>Live platform totals</small></button>
+          <button data-owner-panel="users"><span>👥</span><b>Users</b><small>Search accounts and roles</small></button>
+          <button data-owner-panel="announcements"><span>📣</span><b>Announcements</b><small>Publish a bulletin</small></button>
+          <button data-owner-panel="submissions"><span>📖</span><b>Opening Review</b><small>Pending community theory</small></button>
+          <button data-owner-panel="reports"><span>🚩</span><b>Reports</b><small>Open moderation cases</small></button>
+          <button data-owner-panel="audit"><span>🧾</span><b>Audit History</b><small>Staff and owner actions</small></button>
+        </div>
+
+        <section id="owner-panel" class="panel owner-panel">
+          <div class="empty-state"><div>👑</div><b>Welcome, Creator.</b><span>Choose an Owner tool above.</span></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="brand footer-brand">
+      <img src="./assets/bozo-mascot.webp" alt="">
+      <span><b>BOZO'S</b><small>Master openings while having fun.</small></span>
+    </div>
+    <p>Android and web. One Supabase account.</p>
+  </footer>
+
+  <div id="auth-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal">
+      <button id="close-auth-modal" class="modal-close">×</button>
+      <div class="auth-brand">
+        <img src="./assets/bozo-mascot.webp" alt="">
+        <div><span>WELCOME TO</span><h2>BOZO'S</h2></div>
+      </div>
+
+      <div class="auth-tabs">
+        <button id="auth-signin-tab" class="active">Sign in</button>
+        <button id="auth-signup-tab">Create account</button>
+      </div>
+
+      <form id="signin-form">
+        <label>Email<input id="signin-email" type="email" required autocomplete="email"></label>
+        <label>Password<input id="signin-password" type="password" required autocomplete="current-password"></label>
+        <button class="button primary" type="submit">Sign in</button>
+        <button id="forgot-password-button" class="text-button" type="button">Forgot password?</button>
+      </form>
+
+      <form id="signup-form" hidden>
+        <label>IGN<input id="signup-ign" maxlength="28" required></label>
+        <label>Username<input id="signup-username" maxlength="20" required></label>
+        <label>Email<input id="signup-email" type="email" required autocomplete="email"></label>
+        <label>Password<input id="signup-password" type="password" minlength="8" required autocomplete="new-password"></label>
+        <button class="button primary" type="submit">Create account</button>
+      </form>
+
+      <div id="auth-message" class="auth-message"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
