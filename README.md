@@ -122,3 +122,10 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Real Friends page with requests, acceptance, removal, and challenge shortcuts
 - Study buttons on every opening line and variation
 - Read-only step-through study board with move navigation and board flipping
+
+
+## Web v1.5.1
+- Human friend duels show live chess clocks
+- Bot and training games remain clockless
+- Move lists are paired by full turn: 1. e4 e5
+- Updated high-contrast piece styling while preserving board colors

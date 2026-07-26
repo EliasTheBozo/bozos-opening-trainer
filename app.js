@@ -879,6 +879,46 @@ function challengeWebFriend(username) {
   }, 80);
 }
 
+
+function groupMovesByTurn(moves = []) {
+  const rows = [];
+  for (let index = 0; index < moves.length; index += 2) {
+    rows.push({
+      turn: Math.floor(index / 2) + 1,
+      white: moves[index] || '',
+      black: moves[index + 1] || ''
+    });
+  }
+  return rows;
+}
+
+
+function renderDuelMoveRows(moves = []) {
+  return groupMovesByTurn(moves).map(row => `
+    <div class="grouped-move-row duel-history-row">
+      <span class="move-number">${row.turn}.</span>
+      <span>${escapeHtml(row.white)}</span>
+      <span>${escapeHtml(row.black)}</span>
+    </div>
+  `).join('');
+}
+
+function renderGroupedMoveRows(moves = [], currentPly = moves.length) {
+  return groupMovesByTurn(moves).map(row => {
+    const whitePly = (row.turn - 1) * 2 + 1;
+    const blackPly = whitePly + 1;
+    return `
+      <div class="grouped-move-row">
+        <span class="move-number">${row.turn}.</span>
+        <button class="${whitePly <= currentPly ? 'played' : ''} ${whitePly === currentPly ? 'current' : ''}"
+                onclick="setStudyPly(${whitePly})">${escapeHtml(row.white)}</button>
+        <button class="${row.black && blackPly <= currentPly ? 'played' : ''} ${blackPly === currentPly ? 'current' : ''}"
+                ${row.black ? `onclick="setStudyPly(${blackPly})"` : 'disabled'}>${escapeHtml(row.black)}</button>
+      </div>
+    `;
+  }).join('');
+}
+
 let studyOpening = null;
 let studyGame = null;
 let studyMoves = [];
@@ -954,18 +994,123 @@ function paintStudy() {
     ? 'Start position'
     : `${studyPly}/${studyMoves.length} plies`;
 
-  $('study-move-list').innerHTML = studyMoves.map((move, index) => `
-    <button class="${index < studyPly ? 'played' : ''} ${index === studyPly-1 ? 'current' : ''}"
-            onclick="setStudyPly(${index+1})">
-      <b>${index+1}.</b> ${escapeHtml(move)}
-    </button>
-  `).join('');
+  $('study-move-list').innerHTML = renderGroupedMoveRows(studyMoves, studyPly);
 
   $('study-prev').disabled = studyPly === 0;
   $('study-start').disabled = studyPly === 0;
   $('study-next').disabled = studyPly === studyMoves.length;
   $('study-end').disabled = studyPly === studyMoves.length;
 }
+
+
+const FriendDuelClock = (() => {
+  let timer = null;
+  let duelId = null;
+  let activeColor = 'white';
+  let whiteMs = 10 * 60 * 1000;
+  let blackMs = 10 * 60 * 1000;
+  let lastTick = 0;
+  let running = false;
+
+  function format(ms) {
+    const safe = Math.max(0, ms);
+    const totalSeconds = Math.ceil(safe / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  function isHumanFriendDuel(duel) {
+    if (!duel) return false;
+    const hasTwoHumans = Boolean(
+      duel.challenger_id &&
+      (duel.opponent_id || duel.challenged_id || duel.accepted_by)
+    );
+    const botFlag = duel.is_bot === true ||
+      duel.opponent_type === 'bot' ||
+      duel.mode === 'bot' ||
+      duel.game_type === 'bot';
+    return hasTwoHumans && !botFlag;
+  }
+
+  function paint() {
+    const wrap = document.getElementById('friend-duel-clocks');
+    if (!wrap) return;
+    wrap.querySelectorAll('.player-clock-card').forEach(card => {
+      card.classList.toggle('active', card.dataset.color === activeColor && running);
+    });
+    const white = document.getElementById('friend-clock-white');
+    const black = document.getElementById('friend-clock-black');
+    if (white) white.textContent = format(whiteMs);
+    if (black) black.textContent = format(blackMs);
+  }
+
+  function tick() {
+    if (!running) return;
+    const now = Date.now();
+    const elapsed = now - lastTick;
+    lastTick = now;
+    if (activeColor === 'white') whiteMs -= elapsed;
+    else blackMs -= elapsed;
+    if (whiteMs <= 0 || blackMs <= 0) {
+      running = false;
+      stopTimer();
+      window.dispatchEvent(new CustomEvent('bozo-clock-expired', {
+        detail: { color: whiteMs <= 0 ? 'white' : 'black', duelId }
+      }));
+    }
+    paint();
+  }
+
+  function stopTimer() {
+    if (timer) clearInterval(timer);
+    timer = null;
+  }
+
+  function start(duel) {
+    const wrap = document.getElementById('friend-duel-clocks');
+    if (!isHumanFriendDuel(duel)) {
+      stop();
+      if (wrap) wrap.hidden = true;
+      return;
+    }
+
+    duelId = duel.id;
+    whiteMs = Number(duel.white_time_ms ?? duel.white_clock_ms ?? 600000);
+    blackMs = Number(duel.black_time_ms ?? duel.black_clock_ms ?? 600000);
+    activeColor = duel.turn_color || duel.active_color || 'white';
+    running = !['completed','resigned','drawn','aborted'].includes(duel.status);
+    lastTick = Date.now();
+
+    if (wrap) wrap.hidden = false;
+    const whiteName = document.getElementById('friend-clock-white-name');
+    const blackName = document.getElementById('friend-clock-black-name');
+    if (whiteName) whiteName.textContent = duel.white_name || 'White';
+    if (blackName) blackName.textContent = duel.black_name || 'Black';
+
+    stopTimer();
+    if (running) timer = setInterval(tick, 250);
+    paint();
+  }
+
+  function onMove(nextColor, serverState = {}) {
+    tick();
+    activeColor = nextColor;
+    if (Number.isFinite(serverState.white_time_ms)) whiteMs = serverState.white_time_ms;
+    if (Number.isFinite(serverState.black_time_ms)) blackMs = serverState.black_time_ms;
+    lastTick = Date.now();
+    paint();
+  }
+
+  function stop() {
+    running = false;
+    stopTimer();
+    const wrap = document.getElementById('friend-duel-clocks');
+    if (wrap) wrap.hidden = true;
+  }
+
+  return { start, onMove, stop, isHumanFriendDuel };
+})();
 
 let challengeFilter = 'active';
 let webChallengeRows = [];
@@ -1212,8 +1357,7 @@ function paintWebDuel() {
   $('web-duel-board').querySelectorAll('button').forEach(b => b.addEventListener('click', () => clickWebDuelSquare(b.dataset.square)));
 
   const moves=c.move_history || [];
-  $('duel-move-list').innerHTML = moves.length ? moves.map((m,i) =>
-    `<span><b>${i+1}.</b> ${escapeHtml(m.san)}</span>`).join('') : '<small>No moves yet.</small>';
+  $('duel-move-list').innerHTML = renderDuelMoveRows(moves);
 }
 
 async function clickWebDuelSquare(square) {
