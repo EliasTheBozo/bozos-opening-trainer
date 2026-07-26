@@ -1,0 +1,4 @@
+Stockfish is free software licensed under the GNU General Public License v3.
+Source and license information:
+https://github.com/official-stockfish/Stockfish
+https://github.com/nmrugg/stockfish.js

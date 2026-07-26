@@ -139,3 +139,16 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Draws AI-generated arrows and highlighted squares over the study board
 - Requires the user to be signed in
 - Remains unavailable in active friend duels through the backend safety rule
+
+
+## Web v1.6.0 — Game Review
+
+- Restores Review as a first-class website tab
+- Paste or upload PGN files
+- Bundled browser Stockfish analysis
+- Opening detection and matched book depth
+- Opening and overall accuracy
+- Best/Excellent/Good/Inaccuracy/Mistake/Blunder classifications
+- Clickable move-by-move board playback
+- Evaluation bar and engine alternatives
+- BOZO Coach explanations grounded in Stockfish results

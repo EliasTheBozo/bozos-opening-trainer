@@ -51,6 +51,7 @@ function route(name) {
   if (name === 'dashboard') renderDashboard();
   if (name === 'challenges') renderChallenges();
   if (name === 'friends') renderFriends();
+  if (name === 'review') prepareReviewPage();
   if (name === 'profile') renderProfile();
   if (name === 'owner') renderOwnerGate();
 }
@@ -1365,6 +1366,810 @@ const FriendDuelClock = (() => {
 
   return { start, onMove, stop, isHumanFriendDuel };
 })();
+
+
+/* ============================================================
+   GAME REVIEW — STOCKFISH + BOZO COACH
+   ============================================================ */
+
+const REVIEW_STOCKFISH_JS = './assets/stockfish.worker.js';
+const REVIEW_STOCKFISH_WASM = './assets/stockfish.wasm';
+const REVIEW_MATE_SCORE = 100000;
+
+let reviewEngine = null;
+let reviewEngineReady = null;
+let reviewEngineSearch = null;
+let reviewData = null;
+let reviewStepIndex = 0;
+let reviewOrientation = 'white';
+let reviewCoachExplanation = null;
+let reviewOpeningCatalog = null;
+
+function prepareReviewPage() {
+  const label = $('review-engine-state');
+  if (label && reviewEngineReady) label.textContent = 'Stockfish ready';
+}
+
+$$('[data-review-input]').forEach(button => {
+  button.addEventListener('click', () => {
+    $$('[data-review-input]').forEach(item => item.classList.toggle('active', item === button));
+    $('review-paste-panel').hidden = button.dataset.reviewInput !== 'paste';
+    $('review-upload-panel').hidden = button.dataset.reviewInput !== 'upload';
+  });
+});
+
+$('review-pgn-file').addEventListener('change', async event => {
+  const file = event.target.files?.[0];
+  $('review-file-name').textContent = file ? file.name : 'No file selected';
+  if (!file) return;
+  try {
+    $('review-pgn-input').value = await file.text();
+  } catch (error) {
+    $('review-import-message').textContent = 'The selected file could not be read.';
+  }
+});
+
+$('start-game-review').addEventListener('click', startGameReview);
+$('review-start').addEventListener('click', () => setReviewStep(0));
+$('review-prev').addEventListener('click', () => setReviewStep(reviewStepIndex - 1));
+$('review-next').addEventListener('click', () => setReviewStep(reviewStepIndex + 1));
+$('review-end').addEventListener('click', () => setReviewStep(reviewData?.rows.length || 0));
+$('review-flip').addEventListener('click', () => {
+  reviewOrientation = reviewOrientation === 'white' ? 'black' : 'white';
+  paintGameReview();
+  if (reviewCoachExplanation) drawReviewCoachAnnotations(
+    reviewCoachExplanation.arrows || [],
+    reviewCoachExplanation.highlights || []
+  );
+});
+$('ask-review-coach').addEventListener('click', askReviewCoach);
+$('clear-review-coach').addEventListener('click', clearReviewCoach);
+$('review-coach-question').addEventListener('keydown', event => {
+  if (event.key === 'Enter') askReviewCoach();
+});
+
+function parseReviewPgn(pgn) {
+  const game = new Chess();
+  const loaded = game.load_pgn(pgn, { sloppy: true });
+  if (!loaded) throw new Error('This PGN could not be parsed. Check that the move text is complete.');
+  const history = game.history({ verbose: true });
+  if (!history.length) throw new Error('No playable moves were found in this PGN.');
+
+  const headers = typeof game.header === 'function' ? game.header() : {};
+  return {
+    headers,
+    sans: history.map(move => move.san)
+  };
+}
+
+function reviewCleanSan(move) {
+  return String(move || '').replace(/[+#?!]/g, '');
+}
+
+async function loadReviewOpeningCatalog() {
+  if (reviewOpeningCatalog) return reviewOpeningCatalog;
+  const { data, error } = await sb.from('openings')
+    .select('id,eco,name,variation,pgn')
+    .eq('status', 'published')
+    .limit(10000);
+  if (error) throw error;
+
+  reviewOpeningCatalog = (data || []).map(opening => {
+    const parser = new Chess();
+    const okay = parser.load_pgn(opening.pgn || '', { sloppy: true });
+    return {
+      ...opening,
+      sans: okay ? parser.history().map(reviewCleanSan) : []
+    };
+  }).filter(opening => opening.sans.length);
+
+  return reviewOpeningCatalog;
+}
+
+async function detectReviewOpening(gameSans) {
+  const catalog = await loadReviewOpeningCatalog();
+  const cleanGame = gameSans.map(reviewCleanSan);
+  let best = null;
+  let depth = 0;
+
+  for (const opening of catalog) {
+    let matched = 0;
+    while (
+      matched < opening.sans.length &&
+      matched < cleanGame.length &&
+      opening.sans[matched] === cleanGame[matched]
+    ) matched++;
+
+    if (matched > depth) {
+      depth = matched;
+      best = opening;
+    }
+  }
+
+  return { opening: best, depth };
+}
+
+class ReviewStockfish {
+  constructor() {
+    this.worker = null;
+    this.listeners = new Set();
+    this.readyResolvers = [];
+    this.bestResolvers = [];
+    this.failure = null;
+    this.searching = false;
+  }
+
+  fail(error) {
+    if (this.failure) return;
+    this.failure = error;
+    while (this.bestResolvers.length) {
+      const pending = this.bestResolvers.shift();
+      pending.unsubscribe();
+      pending.reject(error);
+    }
+  }
+
+  send(command) {
+    if (!this.worker) throw new Error('Stockfish is not initialized.');
+    this.worker.postMessage(command);
+  }
+
+  onMessage(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  waitFor(text, timeout = 15000) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        unsubscribe();
+        reject(new Error(`Stockfish timed out waiting for ${text}.`));
+      }, timeout);
+      const unsubscribe = this.onMessage(message => {
+        if (message === text || message.includes(text)) {
+          clearTimeout(timer);
+          unsubscribe();
+          resolve(message);
+        }
+      });
+    });
+  }
+
+  async initialize() {
+    if (this.worker) return;
+    const scriptUrl = new URL(REVIEW_STOCKFISH_JS, document.baseURI);
+    const wasmUrl = new URL(REVIEW_STOCKFISH_WASM, document.baseURI);
+    scriptUrl.hash = encodeURIComponent(wasmUrl.href);
+
+    this.worker = new Worker(scriptUrl.href);
+    this.worker.addEventListener('message', event => this.handle(String(event.data)));
+    this.worker.addEventListener('error', event => {
+      this.fail(new Error(event?.message || 'Stockfish worker failed to load.'));
+    });
+
+    this.send('uci');
+    await this.waitFor('uciok');
+    this.send('setoption name Threads value 1');
+    this.send('setoption name Hash value 32');
+    this.send('setoption name MultiPV value 1');
+    this.send('isready');
+    await this.waitFor('readyok');
+  }
+
+  handle(message) {
+    this.listeners.forEach(listener => listener(message));
+    if (message.startsWith('bestmove ')) {
+      this.searching = false;
+      const pending = this.bestResolvers.shift();
+      if (pending) {
+        pending.unsubscribe();
+        pending.resolve(message.split(/\s+/)[1] || null);
+      }
+    }
+  }
+
+  async analyze(fen, depth) {
+    await this.initialize();
+    if (this.failure) throw this.failure;
+    if (this.searching) this.send('stop');
+
+    this.send(`position fen ${fen}`);
+    this.searching = true;
+
+    let cp = null;
+    let mate = null;
+    let depthSeen = -1;
+    let pv = [];
+
+    const unsubscribeInfo = this.onMessage(message => {
+      if (!message.startsWith('info ') || /\b(lowerbound|upperbound)\b/.test(message)) return;
+      const depthMatch = message.match(/\bdepth (\d+)/);
+      const currentDepth = depthMatch ? Number(depthMatch[1]) : depthSeen;
+      if (currentDepth < depthSeen) return;
+      depthSeen = currentDepth;
+
+      const cpMatch = message.match(/\bscore cp (-?\d+)/);
+      const mateMatch = message.match(/\bscore mate (-?\d+)/);
+      const pvMatch = message.match(/\bpv (.+)$/);
+
+      if (cpMatch) {
+        cp = Number(cpMatch[1]);
+        mate = null;
+      }
+      if (mateMatch) {
+        mate = Number(mateMatch[1]);
+        cp = null;
+      }
+      if (pvMatch) pv = pvMatch[1].trim().split(/\s+/);
+    });
+
+    const bestMove = await new Promise((resolve, reject) => {
+      const unsubscribe = () => unsubscribeInfo();
+      this.bestResolvers.push({ resolve, reject, unsubscribe });
+      this.send(`go depth ${depth}`);
+    });
+
+    unsubscribeInfo();
+    return { cp, mate, bestMove, pv, depthSeen };
+  }
+}
+
+async function getReviewEngine() {
+  if (reviewEngineReady) return reviewEngineReady;
+  reviewEngineReady = (async () => {
+    $('review-engine-state').textContent = 'Loading Stockfish…';
+    reviewEngine = new ReviewStockfish();
+    await reviewEngine.initialize();
+    $('review-engine-state').textContent = 'Stockfish 18 ready';
+    return reviewEngine;
+  })().catch(error => {
+    reviewEngineReady = null;
+    reviewEngine = null;
+    $('review-engine-state').textContent = 'Engine failed';
+    throw error;
+  });
+  return reviewEngineReady;
+}
+
+function whiteReviewEval(result, turn) {
+  let cp;
+  if (result.mate != null) {
+    cp = result.mate > 0
+      ? REVIEW_MATE_SCORE - Math.abs(result.mate)
+      : -REVIEW_MATE_SCORE + Math.abs(result.mate);
+  } else {
+    cp = result.cp || 0;
+  }
+  return turn === 'w' ? cp : -cp;
+}
+
+function reviewWinPercent(whiteCp) {
+  const cp = Math.max(-1000, Math.min(1000, whiteCp));
+  return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1);
+}
+
+function reviewMoveAccuracy(winLoss) {
+  const accuracy = 103.1668 * Math.exp(-0.04354 * Math.max(0, winLoss)) - 3.1669;
+  return Math.max(0, Math.min(100, accuracy));
+}
+
+function classifyReviewLoss(loss, isBook) {
+  if (isBook) return { label: 'Book', cls: 'book' };
+  if (loss <= 0) return { label: 'Best', cls: 'best' };
+  if (loss <= 20) return { label: 'Excellent', cls: 'excellent' };
+  if (loss <= 50) return { label: 'Good', cls: 'good' };
+  if (loss <= 100) return { label: 'Inaccuracy', cls: 'inaccuracy' };
+  if (loss <= 200) return { label: 'Mistake', cls: 'mistake' };
+  return { label: 'Blunder', cls: 'blunder' };
+}
+
+function reviewUciToSan(fen, uci) {
+  if (!uci || uci === '(none)') return '—';
+  const game = new Chess(fen);
+  const move = game.move({
+    from: uci.slice(0, 2),
+    to: uci.slice(2, 4),
+    promotion: uci[4] || 'q'
+  });
+  return move?.san || uci;
+}
+
+async function computeWebsiteReview(sans, depth, maxPlies, bookDepth, onProgress) {
+  const engine = await getReviewEngine();
+  const game = new Chess();
+  const plies = sans.slice(0, maxPlies);
+  const initialFen = game.fen();
+
+  let analysis = await engine.analyze(initialFen, depth);
+  let evalBefore = whiteReviewEval(analysis, game.turn());
+  let engineBestBefore = reviewUciToSan(initialFen, analysis.bestMove);
+  let pvBefore = analysis.pv || [];
+  const rows = [];
+
+  for (let index = 0; index < plies.length; index++) {
+    const previousFen = game.fen();
+    const mover = game.turn();
+    const played = game.move(plies[index], { sloppy: true });
+    if (!played) break;
+
+    const fen = game.fen();
+    analysis = await engine.analyze(fen, depth);
+    const evalAfter = whiteReviewEval(analysis, game.turn());
+
+    const rawLoss = mover === 'w'
+      ? evalBefore - evalAfter
+      : evalAfter - evalBefore;
+    const engineLoss = Math.max(0, Math.round(rawLoss));
+    const isBook = index < bookDepth;
+    const classification = classifyReviewLoss(engineLoss, isBook);
+
+    const winBefore = reviewWinPercent(evalBefore);
+    const winAfter = reviewWinPercent(evalAfter);
+    const moverBefore = mover === 'w' ? winBefore : 100 - winBefore;
+    const moverAfter = mover === 'w' ? winAfter : 100 - winAfter;
+    const accuracy = isBook ? 100 : reviewMoveAccuracy(moverBefore - moverAfter);
+
+    rows.push({
+      ply: index + 1,
+      mover,
+      san: played.san,
+      from: played.from,
+      to: played.to,
+      previousFen,
+      fen,
+      whiteCp: evalAfter,
+      mate: analysis.mate,
+      engineLoss: isBook ? 0 : engineLoss,
+      rawEngineLoss: engineLoss,
+      accuracy,
+      label: classification.label,
+      cls: classification.cls,
+      isBook,
+      engineBest: engineBestBefore,
+      principalVariation: pvBefore.slice(0, 8),
+      wasTop: reviewCleanSan(engineBestBefore) === reviewCleanSan(played.san)
+    });
+
+    evalBefore = evalAfter;
+    engineBestBefore = reviewUciToSan(fen, analysis.bestMove);
+    pvBefore = analysis.pv || [];
+    onProgress?.(index + 1, plies.length);
+  }
+
+  return {
+    initialFen,
+    initialEval: whiteReviewEval(await engine.analyze(initialFen, depth), 'w'),
+    rows
+  };
+}
+
+function reviewAverage(values) {
+  return values.length
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : null;
+}
+
+function reviewAccuracyFor(rows) {
+  const value = reviewAverage(rows.map(row => row.accuracy));
+  return value == null ? null : Math.round(value * 10) / 10;
+}
+
+async function startGameReview() {
+  const message = $('review-import-message');
+  const button = $('start-game-review');
+  const pgn = $('review-pgn-input').value.trim();
+
+  message.textContent = '';
+  if (!pgn) {
+    message.textContent = 'Paste or upload a PGN first.';
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = parseReviewPgn(pgn);
+  } catch (error) {
+    message.textContent = error.message;
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Analyzing…';
+  $('review-progress-wrap').hidden = false;
+  $('review-results').hidden = true;
+
+  try {
+    const openingMatch = await detectReviewOpening(parsed.sans);
+    const depth = Number($('review-depth').value);
+    const maxPlies = Number($('review-max-plies').value);
+
+    reviewData = await computeWebsiteReview(
+      parsed.sans,
+      depth,
+      maxPlies,
+      openingMatch.depth,
+      (done, total) => {
+        const percentage = Math.round(done / total * 100);
+        $('review-progress-label').textContent =
+          `Stockfish depth ${depth} · analyzing move ${done} of ${total}`;
+        $('review-progress-percent').textContent = `${percentage}%`;
+        $('review-progress-bar').style.width = `${percentage}%`;
+      }
+    );
+
+    reviewData.headers = parsed.headers;
+    reviewData.openingMatch = openingMatch;
+    reviewStepIndex = 0;
+    reviewOrientation = 'white';
+
+    renderReviewSummary();
+    renderReviewMoveList();
+    clearReviewCoach();
+    paintGameReview();
+    $('review-results').hidden = false;
+    $('review-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (error) {
+    console.error(error);
+    message.textContent = error?.message || 'Game review failed.';
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Analyze game';
+    $('review-progress-wrap').hidden = true;
+  }
+}
+
+function renderReviewSummary() {
+  const rows = reviewData.rows;
+  const openingRows = rows.filter(row => row.ply <= 16);
+  const overall = reviewAccuracyFor(rows);
+  const openingAccuracy = reviewAccuracyFor(openingRows);
+  const turning = [...rows].sort((a, b) => b.rawEngineLoss - a.rawEngineLoss)[0];
+
+  $('review-opening-accuracy').textContent =
+    openingAccuracy == null ? '—' : `${openingAccuracy}%`;
+  $('review-overall-accuracy').textContent =
+    overall == null ? '—' : `${overall}%`;
+
+  const match = reviewData.openingMatch;
+  $('review-opening-name').textContent = match.opening
+    ? match.opening.name
+    : 'Unknown opening';
+  $('review-book-depth').textContent =
+    `${match.depth} matched book ${match.depth === 1 ? 'ply' : 'plies'}`;
+
+  if (turning) {
+    $('review-turning-point').textContent =
+      `${Math.ceil(turning.ply / 2)}${turning.mover === 'w' ? '.' : '...'} ${turning.san}`;
+    $('review-turning-detail').textContent =
+      `${turning.label} · ${turning.rawEngineLoss}cp swing`;
+  }
+}
+
+function renderReviewMoveList() {
+  const rows = reviewData.rows;
+  const grouped = [];
+
+  for (let index = 0; index < rows.length; index += 2) {
+    grouped.push({
+      turn: index / 2 + 1,
+      white: rows[index],
+      black: rows[index + 1]
+    });
+  }
+
+  $('game-review-moves').innerHTML = grouped.map(group => `
+    <div class="review-move-row">
+      <span>${group.turn}.</span>
+      ${reviewMoveButton(group.white)}
+      ${reviewMoveButton(group.black)}
+    </div>
+  `).join('');
+
+  $$('[data-review-step]').forEach(button => {
+    button.addEventListener('click', () => setReviewStep(Number(button.dataset.reviewStep)));
+  });
+}
+
+function reviewMoveButton(row) {
+  if (!row) return '<button disabled></button>';
+  return `
+    <button data-review-step="${row.ply}"
+            class="review-move-button review-${row.cls}">
+      <b>${escapeHtml(row.san)}</b>
+      <small>${escapeHtml(row.label)}</small>
+    </button>
+  `;
+}
+
+function setReviewStep(step) {
+  if (!reviewData) return;
+  reviewStepIndex = Math.max(0, Math.min(reviewData.rows.length, step));
+  clearReviewCoachAnnotations();
+  updateReviewSelectedMove();
+  paintGameReview();
+}
+
+function paintGameReview() {
+  if (!reviewData) return;
+
+  const fen = reviewStepIndex === 0
+    ? reviewData.initialFen
+    : reviewData.rows[reviewStepIndex - 1].fen;
+  const board = fenBoard(fen);
+  const ranks = reviewOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = reviewOrientation === 'white'
+    ? ['a','b','c','d','e','f','g','h']
+    : ['h','g','f','e','d','c','b','a'];
+
+  const selected = reviewStepIndex === 0 ? null : reviewData.rows[reviewStepIndex - 1];
+
+  $('game-review-board').innerHTML = ranks.flatMap(rank =>
+    files.map(file => {
+      const row = 8 - rank;
+      const col = file.charCodeAt(0) - 97;
+      const square = `${file}${rank}`;
+      const last = selected && (square === selected.from || square === selected.to);
+      const symbol = board[row][col];
+      const color = symbol
+        ? (symbol === symbol.toUpperCase() ? 'white' : 'black')
+        : '';
+      return `<div class="${last ? 'review-last-square' : ''}"
+                   data-piece-color="${color}">${webPiece(symbol)}</div>`;
+    })
+  ).join('');
+
+  $$('[data-review-step]').forEach(button =>
+    button.classList.toggle('active', Number(button.dataset.reviewStep) === reviewStepIndex)
+  );
+
+  paintReviewEvaluation(selected?.whiteCp || 0, selected?.mate);
+  updateReviewSelectedMove();
+
+  $('review-start').disabled = reviewStepIndex === 0;
+  $('review-prev').disabled = reviewStepIndex === 0;
+  $('review-next').disabled = reviewStepIndex === reviewData.rows.length;
+  $('review-end').disabled = reviewStepIndex === reviewData.rows.length;
+}
+
+function formatReviewEval(cp, mate) {
+  if (mate != null) return mate > 0 ? `M${mate}` : `-M${Math.abs(mate)}`;
+  return `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(2)}`;
+}
+
+function paintReviewEvaluation(cp = 0, mate = null) {
+  const bounded = mate != null
+    ? (mate > 0 ? 1000 : -1000)
+    : Math.max(-1000, Math.min(1000, cp));
+  const whitePercent = Math.max(5, Math.min(95, 50 + bounded / 20));
+  $('review-eval-white').style.width = `${whitePercent}%`;
+  $('review-eval-label').textContent = formatReviewEval(cp, mate);
+}
+
+function updateReviewSelectedMove() {
+  const row = reviewStepIndex === 0 ? null : reviewData?.rows[reviewStepIndex - 1];
+
+  if (!row) {
+    $('review-selected-move').textContent = 'Starting position';
+    $('review-classification').textContent = '—';
+    $('review-classification').className = 'review-classification';
+    $('review-selected-summary').textContent =
+      'Choose a move to inspect its evaluation and alternatives.';
+    $('review-move-eval').textContent = '0.00';
+    $('review-move-accuracy').textContent = '—';
+    $('review-move-loss').textContent = '—';
+    $('review-engine-best').textContent = '—';
+    $('review-coach-move-label').textContent = 'Choose a move';
+    return;
+  }
+
+  const moveLabel = `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
+  $('review-selected-move').textContent = moveLabel;
+  $('review-classification').textContent = row.label;
+  $('review-classification').className = `review-classification review-${row.cls}`;
+  $('review-selected-summary').textContent = row.isBook
+    ? 'This move matched the published opening database.'
+    : row.wasTop
+      ? 'The played move matched Stockfish’s first choice.'
+      : `Stockfish preferred ${row.engineBest}.`;
+  $('review-move-eval').textContent = formatReviewEval(row.whiteCp, row.mate);
+  $('review-move-accuracy').textContent = `${Math.round(row.accuracy * 10) / 10}%`;
+  $('review-move-loss').textContent = `${row.rawEngineLoss}cp`;
+  $('review-engine-best').textContent = row.engineBest || '—';
+  $('review-coach-move-label').textContent = moveLabel;
+}
+
+function clearReviewCoachAnnotations() {
+  $('game-review-arrow-layer').innerHTML = '';
+  reviewCoachExplanation = null;
+}
+
+function clearReviewCoach() {
+  clearReviewCoachAnnotations();
+  $('review-coach-answer').textContent =
+    'Select an analyzed move, then ask why it worked or failed.';
+  $('review-coach-question').value = '';
+}
+
+async function askReviewCoach() {
+  const row = reviewStepIndex === 0 ? null : reviewData?.rows[reviewStepIndex - 1];
+  const answer = $('review-coach-answer');
+  const button = $('ask-review-coach');
+
+  if (!state.session?.user) {
+    answer.textContent = 'Sign in before using BOZO Coach.';
+    return;
+  }
+  if (!row) {
+    answer.textContent = 'Select an analyzed move first.';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'BOZO Coach is thinking…';
+  answer.innerHTML = '<div class="coach-thinking">Turning the engine result into a useful explanation…</div>';
+  clearReviewCoachAnnotations();
+
+  try {
+    const question = $('review-coach-question').value.trim();
+    const opening = reviewData.openingMatch?.opening;
+
+    const { data, error } = await sb.functions.invoke('explain-move', {
+      body: {
+        mode: 'game_review',
+        gameStatus: 'completed',
+        fen: row.fen,
+        previousFen: row.previousFen,
+        playedMove: row.san,
+        moveNumber: Math.ceil(row.ply / 2),
+        opening: opening?.name || 'Unknown opening',
+        variation: opening?.variation || 'Imported game',
+        question: question || `Why was this move classified as ${row.label}?`,
+        moveHistory: reviewData.rows.slice(0, row.ply).map(item => item.san),
+        evaluationBefore: reviewStepIndex > 1
+          ? reviewData.rows[reviewStepIndex - 2].whiteCp
+          : 0,
+        evaluationAfter: row.whiteCp,
+        evaluationUnit: 'centipawns from White perspective',
+        bestMove: row.engineBest,
+        principalVariation: row.principalVariation,
+        classification: row.label,
+        centipawnLoss: row.rawEngineLoss,
+        moveAccuracy: Math.round(row.accuracy * 10) / 10,
+        openingAccuracy: reviewAccuracyFor(
+          reviewData.rows.filter(item => item.ply <= 16)
+        ),
+        overallAccuracy: reviewAccuracyFor(reviewData.rows)
+      }
+    });
+
+    if (error) {
+      let message = error.message || 'BOZO Coach could not respond.';
+      try {
+        const context = await error.context?.json?.();
+        if (context?.error) message = context.error;
+      } catch (_) {}
+      throw new Error(message);
+    }
+
+    if (data?.error) throw new Error(data.error);
+    if (!data?.explanation) throw new Error('BOZO Coach returned no explanation.');
+
+    reviewCoachExplanation = data.explanation;
+    renderReviewCoachExplanation(data.explanation);
+  } catch (error) {
+    answer.innerHTML = `<div class="coach-error">${escapeHtml(
+      error?.message || 'BOZO Coach could not respond.'
+    )}</div>`;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Explain selected move';
+  }
+}
+
+function renderReviewCoachExplanation(explanation) {
+  const purposes = Array.isArray(explanation.purpose)
+    ? explanation.purpose.filter(Boolean)
+    : [];
+
+  $('review-coach-answer').innerHTML = `
+    <p class="coach-summary">${escapeHtml(explanation.summary || '')}</p>
+    ${purposes.length ? `
+      <div class="coach-section">
+        <b>What happened</b>
+        <ul>${purposes.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      </div>
+    ` : ''}
+    ${explanation.watchFor ? `
+      <div class="coach-warning">
+        <b>Watch for:</b>
+        <span>${escapeHtml(explanation.watchFor)}</span>
+      </div>
+    ` : ''}
+    ${explanation.suggestedQuestion ? `
+      <button class="coach-follow-up"
+              data-review-follow-up="${escapeHtml(explanation.suggestedQuestion)}">
+        ${escapeHtml(explanation.suggestedQuestion)}
+      </button>
+    ` : ''}
+  `;
+
+  const followUp = $('review-coach-answer').querySelector('[data-review-follow-up]');
+  if (followUp) {
+    followUp.addEventListener('click', () => {
+      $('review-coach-question').value = followUp.dataset.reviewFollowUp;
+      askReviewCoach();
+    });
+  }
+
+  drawReviewCoachAnnotations(
+    explanation.arrows || [],
+    explanation.highlights || []
+  );
+}
+
+function reviewSquareCenter(square) {
+  const fileIndex = square.charCodeAt(0) - 97;
+  const rankIndex = Number(square[1]) - 1;
+  return {
+    x: (reviewOrientation === 'white' ? fileIndex : 7 - fileIndex) * 100 + 50,
+    y: (reviewOrientation === 'white' ? 7 - rankIndex : rankIndex) * 100 + 50
+  };
+}
+
+function drawReviewCoachAnnotations(arrows = [], highlights = []) {
+  const svg = $('game-review-arrow-layer');
+  const colors = {
+    green: '#78c850',
+    yellow: '#f6c945',
+    red: '#ef5350',
+    blue: '#42a5f5',
+    purple: '#a855f7'
+  };
+
+  const markers = Object.entries(colors).map(([name, color]) => `
+    <marker id="review-arrow-${name}"
+            markerWidth="8" markerHeight="8"
+            refX="6.5" refY="4"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="${color}"></path>
+    </marker>
+  `).join('');
+
+  const squares = highlights
+    .filter(item => validSquare(item.square))
+    .slice(0, 4)
+    .map(item => {
+      const center = reviewSquareCenter(item.square);
+      return `<rect x="${center.x - 48}" y="${center.y - 48}"
+                    width="96" height="96" rx="10"
+                    fill="${colors[item.color] || colors.purple}"
+                    opacity=".25"></rect>`;
+    }).join('');
+
+  const lines = arrows
+    .filter(item => validSquare(item.from) && validSquare(item.to))
+    .slice(0, 4)
+    .map(item => {
+      const from = reviewSquareCenter(item.from);
+      const to = reviewSquareCenter(item.to);
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const endX = to.x - dx / length * 23;
+      const endY = to.y - dy / length * 23;
+      const name = colors[item.color] ? item.color : 'purple';
+
+      return `<line x1="${from.x}" y1="${from.y}"
+                    x2="${endX}" y2="${endY}"
+                    stroke="${colors[name]}"
+                    stroke-width="14"
+                    stroke-linecap="round"
+                    opacity=".86"
+                    marker-end="url(#review-arrow-${name})"></line>`;
+    }).join('');
+
+  svg.innerHTML = `<defs>${markers}</defs>${squares}${lines}`;
+}
 
 let challengeFilter = 'active';
 let webChallengeRows = [];

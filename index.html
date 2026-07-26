@@ -30,6 +30,7 @@
       <button data-route="dashboard">Dashboard</button>
       <button data-route="challenges">Challenges</button>
       <button data-route="friends">Friends</button>
+      <button data-route="review">Review</button>
       <button data-route="profile">Profile</button>
       <button id="owner-nav" data-route="owner" hidden>Owner's Office</button>
     </nav>
@@ -47,6 +48,7 @@
     <button data-route="dashboard">Dashboard</button>
     <button data-route="challenges">Challenges</button>
     <button data-route="friends">Friends</button>
+    <button data-route="review">Review</button>
     <button data-route="profile">Profile</button>
     <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
   </div>
@@ -270,6 +272,172 @@
           <button data-friend-filter="outgoing">Sent</button>
         </div>
         <div id="web-friends-list" class="web-friends-list"></div>
+      </div>
+    </section>
+
+
+    <section id="view-review" class="view">
+      <div class="page-heading review-heading">
+        <div>
+          <div class="eyebrow">STOCKFISH + BOZO COACH</div>
+          <h1>Review your game.</h1>
+          <p>Import a PGN, measure opening and overall accuracy, then ask BOZO Coach about any move.</p>
+        </div>
+        <span id="review-engine-state" class="cloud-pill">Engine loads when needed</span>
+      </div>
+
+      <div class="review-import-card">
+        <div class="review-import-tabs">
+          <button class="active" data-review-input="paste">Paste PGN</button>
+          <button data-review-input="upload">Upload .pgn</button>
+        </div>
+
+        <div id="review-paste-panel">
+          <label>
+            PGN
+            <textarea id="review-pgn-input"
+                      placeholder='[Event "My Game"]&#10;&#10;1. e4 e5 2. Nf3 Nc6 3. Bc4 ...'></textarea>
+          </label>
+        </div>
+
+        <div id="review-upload-panel" hidden>
+          <label class="review-file-drop">
+            <input id="review-pgn-file" type="file" accept=".pgn,text/plain">
+            <b>Choose a PGN file</b>
+            <span id="review-file-name">No file selected</span>
+          </label>
+        </div>
+
+        <div class="review-settings">
+          <label>
+            Engine depth
+            <select id="review-depth">
+              <option value="8">Fast · depth 8</option>
+              <option value="10" selected>Balanced · depth 10</option>
+              <option value="12">Deep · depth 12</option>
+            </select>
+          </label>
+          <label>
+            Maximum plies
+            <select id="review-max-plies">
+              <option value="40">40 plies</option>
+              <option value="60" selected>60 plies</option>
+              <option value="80">80 plies</option>
+            </select>
+          </label>
+          <button id="start-game-review" class="button primary">Analyze game</button>
+        </div>
+
+        <div id="review-progress-wrap" class="review-progress-wrap" hidden>
+          <div class="review-progress-copy">
+            <span id="review-progress-label">Preparing review…</span>
+            <b id="review-progress-percent">0%</b>
+          </div>
+          <div class="review-progress-track">
+            <span id="review-progress-bar"></span>
+          </div>
+        </div>
+
+        <div id="review-import-message" class="auth-message"></div>
+      </div>
+
+      <div id="review-results" hidden>
+        <div class="review-score-grid">
+          <article class="review-score-card">
+            <span>Opening accuracy</span>
+            <strong id="review-opening-accuracy">—</strong>
+            <small id="review-opening-detail">First 16 plies</small>
+          </article>
+          <article class="review-score-card">
+            <span>Overall accuracy</span>
+            <strong id="review-overall-accuracy">—</strong>
+            <small id="review-overall-detail">Both sides</small>
+          </article>
+          <article class="review-score-card">
+            <span>Opening detected</span>
+            <strong id="review-opening-name">Unknown</strong>
+            <small id="review-book-depth">0 book plies</small>
+          </article>
+          <article class="review-score-card">
+            <span>Turning point</span>
+            <strong id="review-turning-point">—</strong>
+            <small id="review-turning-detail">Largest evaluation swing</small>
+          </article>
+        </div>
+
+        <div class="review-workspace">
+          <div class="review-board-column">
+            <div class="review-board-shell">
+              <div id="game-review-board" class="web-duel-board review-board"></div>
+              <svg id="game-review-arrow-layer"
+                   class="board-arrow-layer"
+                   viewBox="0 0 800 800"
+                   aria-hidden="true"></svg>
+            </div>
+
+            <div class="review-board-controls">
+              <button id="review-start" class="button secondary">⏮ Start</button>
+              <button id="review-prev" class="button secondary">← Previous</button>
+              <button id="review-next" class="button primary">Next →</button>
+              <button id="review-end" class="button secondary">End ⏭</button>
+              <button id="review-flip" class="button secondary">Flip board</button>
+            </div>
+
+            <div class="review-eval-row">
+              <span>Black</span>
+              <div class="review-eval-track">
+                <div id="review-eval-white" class="review-eval-white"></div>
+              </div>
+              <b id="review-eval-label">0.00</b>
+              <span>White</span>
+            </div>
+          </div>
+
+          <aside class="review-side-column">
+            <div class="review-selected-card">
+              <div>
+                <span class="eyebrow">SELECTED MOVE</span>
+                <h2 id="review-selected-move">Starting position</h2>
+              </div>
+              <span id="review-classification" class="review-classification">—</span>
+              <p id="review-selected-summary">Choose a move to inspect its evaluation and alternatives.</p>
+              <div class="review-move-facts">
+                <div><span>Evaluation</span><b id="review-move-eval">0.00</b></div>
+                <div><span>Accuracy</span><b id="review-move-accuracy">—</b></div>
+                <div><span>Loss</span><b id="review-move-loss">—</b></div>
+                <div><span>Engine choice</span><b id="review-engine-best">—</b></div>
+              </div>
+            </div>
+
+            <div>
+              <span class="eyebrow">MOVE LIST</span>
+              <div id="game-review-moves" class="game-review-moves"></div>
+            </div>
+
+            <section class="bozo-coach-panel review-coach-panel">
+              <div class="coach-heading">
+                <div>
+                  <span class="eyebrow">BOZO COACH</span>
+                  <h3>Ask about this move</h3>
+                </div>
+                <span id="review-coach-move-label" class="coach-move-label">Choose a move</span>
+              </div>
+              <div id="review-coach-answer" class="coach-answer">
+                Select an analyzed move, then ask why it worked or failed.
+              </div>
+              <label class="coach-question-label">
+                Ask a question
+                <input id="review-coach-question"
+                       maxlength="300"
+                       placeholder="Why was this move inaccurate?">
+              </label>
+              <div class="coach-actions">
+                <button id="ask-review-coach" class="button primary">Explain selected move</button>
+                <button id="clear-review-coach" class="button secondary">Clear</button>
+              </div>
+            </section>
+          </aside>
+        </div>
       </div>
     </section>
 
