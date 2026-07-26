@@ -179,3 +179,13 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Uses a separate Stockfish worker for bot moves
 - Adds a bot-turn watchdog to recover missed free-play handoffs
 - Prevents the review evaluation worker from delaying bot moves
+
+
+## Web v1.7.3 — Guaranteed BOZO Bot Replies
+
+- Immediate bot request after every player move
+- Permanent 350ms bot-turn monitor
+- 9-second Stockfish timeout
+- Guaranteed legal fallback move
+- No recursive status scheduling
+- Cache-busted app.js?v=1.7.3

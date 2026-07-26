@@ -2230,6 +2230,8 @@ let webBotSelectedSquare = null;
 let webBotAnalysisToken = 0;
 let webBotMoveEngine = null;
 let webBotTurnWatchdog = null;
+let webBotTurnMonitor = null;
+let webBotMovePromise = null;
 let botUserArrows = [];
 let botArrowStart = null;
 let botRightMouseDown = false;
@@ -2302,9 +2304,11 @@ async function startWebBotGameFromSetup() {
 
     paintWebBotGame();
     updateWebBotStatus();
+    startWebBotTurnMonitor();
+    updateWebBotEvaluation();
 
     if (!webBotIsPlayerTurn()) {
-      scheduleWebBotMove(120);
+      requestWebBotMove('game-start');
     }
   } catch (error) {
     console.error(error);
@@ -2319,6 +2323,8 @@ async function startWebBotGameFromSetup() {
 function closeWebBotGame() {
   clearTimeout(webBotTurnWatchdog);
   webBotTurnWatchdog = null;
+  stopWebBotTurnMonitor();
+  webBotMovePromise = null;
   $('bot-game-modal').hidden = true;
   webBotAnalysisToken++;
   webBotSession = null;
@@ -2496,40 +2502,111 @@ function handleWebBotSquare(square) {
     return;
   }
 
-  // Give the bot's reply priority over the optional evaluation-bar search.
-  scheduleWebBotMove(60);
+  requestWebBotMove('player-moved');
 }
 
-function scheduleWebBotMove(delay = 80) {
-  clearTimeout(webBotTurnWatchdog);
-  webBotTurnWatchdog = setTimeout(() => {
-    webBotTurnWatchdog = null;
+function startWebBotTurnMonitor() {
+  stopWebBotTurnMonitor();
+
+  webBotTurnMonitor = setInterval(() => {
     if (!webBotSession ||
         webBotSession.status !== 'active' ||
-        webBotIsPlayerTurn() ||
-        webBotSession.botThinking) return;
+        webBotIsPlayerTurn()) return;
 
-    playWebBotMove().catch(error => {
-      console.error('Scheduled BOZO Bot move failed:', error);
-      if (webBotSession) {
-        webBotSession.botThinking = false;
+    requestWebBotMove('turn-monitor');
+  }, 350);
+}
+
+function stopWebBotTurnMonitor() {
+  if (webBotTurnMonitor) clearInterval(webBotTurnMonitor);
+  webBotTurnMonitor = null;
+}
+
+function requestWebBotMove(reason = 'requested') {
+  if (!webBotSession ||
+      webBotSession.status !== 'active' ||
+      webBotIsPlayerTurn()) {
+    return Promise.resolve(null);
+  }
+
+  if (webBotMovePromise) return webBotMovePromise;
+
+  const session = webBotSession;
+  session.botThinking = true;
+  session.botThinkReason = reason;
+  updateWebBotStatus();
+
+  webBotMovePromise = playWebBotMove()
+    .catch(error => {
+      console.error('BOZO Bot move request failed:', error);
+      if (webBotSession === session) {
+        session.botThinking = false;
         $('bot-game-message').textContent =
           error?.message || 'BOZO Bot could not move.';
       }
+      return null;
+    })
+    .finally(() => {
+      webBotMovePromise = null;
+
+      if (webBotSession === session &&
+          session.status === 'active' &&
+          !webBotIsPlayerTurn()) {
+        setTimeout(() => requestWebBotMove('post-search-recovery'), 250);
+      }
     });
-  }, delay);
+
+  return webBotMovePromise;
+}
+
+function withBotTimeout(promise, milliseconds) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`Stockfish did not answer within ${Math.round(milliseconds / 1000)} seconds.`)),
+        milliseconds
+      )
+    )
+  ]);
+}
+
+function chooseFallbackBotMove(game, strength) {
+  const legalMoves = game.moves({ verbose: true });
+  if (!legalMoves.length) return null;
+
+  const pieceValues = { p: 100, n: 300, b: 320, r: 500, q: 900, k: 0 };
+
+  const scored = legalMoves.map(move => {
+    let score = Math.random() * 8;
+
+    if (move.captured) score += pieceValues[move.captured] || 0;
+    if (move.san.includes('+')) score += 80;
+    if (move.flags?.includes('k') || move.flags?.includes('q')) score += 55;
+    if (move.piece === 'n' || move.piece === 'b') score += 25;
+    if (['d4','d5','e4','e5','c4','c5','f4','f5'].includes(move.to)) score += 22;
+
+    score += (strength.randomness || 0) * Math.random() * 180;
+    return { move, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  const windowSize =
+    strength.depth <= 4 ? Math.min(6, scored.length) :
+    strength.depth <= 6 ? Math.min(4, scored.length) :
+    Math.min(2, scored.length);
+
+  return scored[Math.floor(Math.random() * windowSize)]?.move || scored[0].move;
 }
 
 async function playWebBotMove() {
   if (!webBotSession ||
       webBotSession.status !== 'active' ||
-      webBotIsPlayerTurn() ||
-      webBotSession.botThinking) return;
+      webBotIsPlayerTurn()) return null;
 
   const session = webBotSession;
   const game = session.game;
-  session.botThinking = true;
-  updateWebBotStatus();
 
   try {
     let played = null;
@@ -2546,31 +2623,49 @@ async function playWebBotMove() {
       $('bot-game-message').textContent =
         `Stockfish is calculating at depth ${session.strength.depth}.`;
 
-      const engine = await getWebBotMoveEngine();
-      const result = await engine.analyze(game.fen(), session.strength.depth);
-      if (webBotSession !== session || session.status !== 'active') return;
+      let result = null;
 
-      let chosenUci = result.bestMove;
-      if (session.strength.randomness > 0 && Math.random() < session.strength.randomness) {
-        const legalMoves = game.moves({ verbose: true });
-        const candidates = legalMoves.filter(move => {
-          const givesAwayQueen =
-            move.captured === 'q' && move.piece !== 'q';
-          return !givesAwayQueen;
-        });
-        const pool = candidates.length ? candidates : legalMoves;
-        const random = pool[Math.floor(Math.random() * pool.length)];
+      try {
+        const engine = await getWebBotMoveEngine();
+        result = await withBotTimeout(
+          engine.analyze(game.fen(), session.strength.depth),
+          9000
+        );
+      } catch (engineError) {
+        console.warn('BOZO Bot Stockfish fallback:', engineError);
+      }
+
+      if (webBotSession !== session || session.status !== 'active') return null;
+
+      let chosenUci = result?.bestMove || null;
+
+      if (chosenUci &&
+          session.strength.randomness > 0 &&
+          Math.random() < session.strength.randomness) {
+        const random = chooseFallbackBotMove(game, session.strength);
         if (random) {
           chosenUci = `${random.from}${random.to}${random.promotion || ''}`;
         }
       }
 
-      const from = chosenUci?.slice(0, 2);
-      const to = chosenUci?.slice(2, 4);
-      const promotion = chosenUci?.slice(4, 5) || 'q';
-      played = game.move({ from, to, promotion });
+      if (chosenUci) {
+        played = game.move({
+          from: chosenUci.slice(0, 2),
+          to: chosenUci.slice(2, 4),
+          promotion: chosenUci.slice(4, 5) || 'q'
+        });
+      }
 
-      if (!played) throw new Error(`Stockfish returned an illegal move: ${chosenUci}`);
+      if (!played) {
+        const fallback = chooseFallbackBotMove(game, session.strength);
+        if (!fallback) throw new Error('BOZO Bot has no legal move.');
+        played = game.move({
+          from: fallback.from,
+          to: fallback.to,
+          promotion: fallback.promotion || 'q'
+        });
+        session.usedFallback = true;
+      }
     }
 
     session.lastMove = played;
@@ -2589,11 +2684,13 @@ async function playWebBotMove() {
     $('bot-game-message').textContent =
       error?.message || 'BOZO Bot could not move.';
   } finally {
-    if (webBotSession === session && session.botThinking) {
+    if (webBotSession === session) {
       session.botThinking = false;
       updateWebBotStatus();
     }
   }
+
+  return played;
 }
 
 function checkWebBotGameOver() {
@@ -2602,6 +2699,7 @@ function checkWebBotGameOver() {
   if (!game.game_over()) return false;
 
   webBotSession.status = 'completed';
+  stopWebBotTurnMonitor();
 
   if (game.in_checkmate()) {
     const loser = game.turn();
@@ -2665,9 +2763,7 @@ function updateWebBotStatus() {
         ? 'BOZO Bot will answer with the stored book move.'
         : 'BOZO Bot will choose a Stockfish move.';
 
-    // Recovery guard: if the UI is waiting on the bot and no search is active,
-    // ensure a bot turn is scheduled.
-    if (!webBotTurnWatchdog) scheduleWebBotMove(100);
+    // Recovery is handled by the permanent turn monitor.
   }
 }
 
@@ -2703,6 +2799,7 @@ async function updateWebBotEvaluation() {
 function resignWebBotGame() {
   if (!webBotSession || webBotSession.status !== 'active') return;
   webBotSession.status = 'completed';
+  stopWebBotTurnMonitor();
   webBotSession.resultReason = 'You resigned. BOZO Bot wins.';
   $('bot-review-button').hidden = false;
   updateWebBotStatus();
@@ -2737,9 +2834,10 @@ function restartWebBotGame() {
   $('bot-review-button').hidden = true;
   paintWebBotGame();
   updateWebBotStatus();
+  startWebBotTurnMonitor();
   updateWebBotEvaluation();
 
-  if (!webBotIsPlayerTurn()) scheduleWebBotMove(120);
+  if (!webBotIsPlayerTurn()) requestWebBotMove('restart');
 }
 
 function reviewWebBotGame() {
