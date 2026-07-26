@@ -1518,6 +1518,11 @@ class ReviewStockfish {
     this.bestResolvers = [];
     this.failure = null;
     this.searching = false;
+
+    // One Stockfish worker cannot safely answer overlapping searches.
+    // Review, the evaluation bar, and BOZO Bot all use this queue so
+    // every request finishes before the next one begins.
+    this.analysisQueue = Promise.resolve();
   }
 
   fail(error) {
@@ -1589,10 +1594,18 @@ class ReviewStockfish {
     }
   }
 
-  async analyze(fen, depth) {
+  analyze(fen, depth) {
+    const run = () => this._analyze(fen, depth);
+
+    // Continue the queue even if the previous search failed.
+    const request = this.analysisQueue.then(run, run);
+    this.analysisQueue = request.catch(() => undefined);
+    return request;
+  }
+
+  async _analyze(fen, depth) {
     await this.initialize();
     if (this.failure) throw this.failure;
-    if (this.searching) this.send('stop');
 
     this.send(`position fen ${fen}`);
     this.searching = true;
@@ -2467,10 +2480,14 @@ function handleWebBotSquare(square) {
   updateWebBotPhase();
   paintWebBotGame();
   updateWebBotStatus();
-  updateWebBotEvaluation();
 
-  if (checkWebBotGameOver()) return;
-  setTimeout(playWebBotMove, 420);
+  if (checkWebBotGameOver()) {
+    updateWebBotEvaluation();
+    return;
+  }
+
+  // Give the bot's reply priority over the optional evaluation-bar search.
+  setTimeout(playWebBotMove, 220);
 }
 
 async function playWebBotMove() {
@@ -2495,6 +2512,10 @@ async function playWebBotMove() {
       await new Promise(resolve => setTimeout(resolve, 500));
     } else {
       updateWebBotPhase();
+      $('bot-turn-badge').textContent = 'BOZO Bot thinking…';
+      $('bot-game-message').textContent =
+        `Stockfish is calculating at depth ${session.strength.depth}.`;
+
       const engine = await getReviewEngine();
       const result = await engine.analyze(game.fen(), session.strength.depth);
       if (webBotSession !== session || session.status !== 'active') return;
@@ -2525,16 +2546,20 @@ async function playWebBotMove() {
     session.lastMove = played;
     session.moves = game.history();
     updateWebBotPhase();
+    session.botThinking = false;
     paintWebBotGame();
     updateWebBotStatus();
+
+    const gameEnded = checkWebBotGameOver();
+    // Evaluation is optional and runs only after the move has appeared.
     updateWebBotEvaluation();
-    checkWebBotGameOver();
+    if (gameEnded) return;
   } catch (error) {
     console.error('BOZO Bot error:', error);
     $('bot-game-message').textContent =
       error?.message || 'BOZO Bot could not move.';
   } finally {
-    if (webBotSession === session) {
+    if (webBotSession === session && session.botThinking) {
       session.botThinking = false;
       updateWebBotStatus();
     }

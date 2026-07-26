@@ -166,3 +166,11 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Right-click arrows and highlighted squares
 - Resign, restart, and direct handoff to Game Review
 - Play Bot shortcuts throughout the Opening Library
+
+
+## Web v1.7.1 — BOZO Bot Free-Play Fix
+
+- Serializes Stockfish searches so the bot and evaluation bar cannot collide
+- Prioritizes the bot's move after leaving opening theory
+- Refreshes the evaluation only after the bot has moved
+- Adds clearer Stockfish-thinking status during free play
