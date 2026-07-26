@@ -29,6 +29,7 @@
       <button data-route="library">Opening Library</button>
       <button data-route="dashboard">Dashboard</button>
       <button data-route="challenges">Challenges</button>
+      <button data-route="friends">Friends</button>
       <button data-route="profile">Profile</button>
       <button id="owner-nav" data-route="owner" hidden>Owner's Office</button>
     </nav>
@@ -45,6 +46,7 @@
     <button data-route="library">Opening Library</button>
     <button data-route="dashboard">Dashboard</button>
     <button data-route="challenges">Challenges</button>
+    <button data-route="friends">Friends</button>
     <button data-route="profile">Profile</button>
     <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
   </div>
@@ -243,6 +245,34 @@
       </div>
     </section>
 
+
+    <section id="view-friends" class="view">
+      <div id="friends-guest" class="auth-required">
+        <img src="./assets/bozo-mascot.webp" alt="">
+        <h1>Friends</h1>
+        <p>Sign in to add players, accept requests, and launch Opening Duels together.</p>
+        <button class="button primary open-auth">Sign in</button>
+      </div>
+
+      <div id="friends-user" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">BOZO COMMUNITY</div>
+            <h1>Your chess circle.</h1>
+            <p>Add players by username, study together, and challenge them to exact openings.</p>
+          </div>
+          <button id="add-web-friend-button" class="button primary">Add friend</button>
+        </div>
+
+        <div class="challenge-tabs">
+          <button class="active" data-friend-filter="accepted">Friends</button>
+          <button data-friend-filter="incoming">Incoming</button>
+          <button data-friend-filter="outgoing">Sent</button>
+        </div>
+        <div id="web-friends-list" class="web-friends-list"></div>
+      </div>
+    </section>
+
 <section id="view-profile" class="view">
       <div id="profile-guest" class="auth-required">
         <img src="./assets/bozo-mascot.webp" alt="">
@@ -365,7 +395,58 @@
   </div>
 
   
-  <div id="challenge-create-modal" class="modal-backdrop" hidden>
+  
+  <div id="add-web-friend-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal">
+      <button id="close-add-web-friend" class="modal-close">×</button>
+      <div class="eyebrow">ADD A FRIEND</div>
+      <h2>Find a BOZO player</h2>
+      <label>Username<input id="web-friend-username" placeholder="@username"></label>
+      <button id="send-web-friend-request" class="button primary">Send friend request</button>
+      <div id="web-friend-status" class="auth-message"></div>
+    </div>
+  </div>
+
+  <div id="study-modal" class="modal-backdrop" hidden>
+    <div class="duel-game-modal study-modal">
+      <button id="close-study-modal" class="modal-close">×</button>
+      <div class="duel-game-header">
+        <div>
+          <div class="eyebrow">STUDY MODE</div>
+          <h2 id="study-title">Opening</h2>
+          <p id="study-subtitle"></p>
+        </div>
+        <span id="study-progress" class="cloud-pill">Start position</span>
+      </div>
+      <div class="study-layout">
+        <div>
+          <div id="study-board" class="web-duel-board study-board"></div>
+          <div class="study-controls">
+            <button id="study-start" class="button secondary">⏮ Start</button>
+            <button id="study-prev" class="button secondary">← Previous</button>
+            <button id="study-next" class="button primary">Next →</button>
+            <button id="study-end" class="button secondary">End ⏭</button>
+            <button id="study-flip" class="button secondary">Flip board</button>
+          </div>
+        </div>
+        <aside class="duel-sidebar">
+          <div class="duel-book-card">
+            <span>FULL LINE</span>
+            <code id="study-pgn"></code>
+          </div>
+          <div>
+            <span class="eyebrow">MOVE LIST</span>
+            <div id="study-move-list" class="study-move-list"></div>
+          </div>
+          <div class="study-tip">
+            Use Previous and Next to walk through the line without an opponent.
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+<div id="challenge-create-modal" class="modal-backdrop" hidden>
     <div class="auth-modal challenge-create-modal">
       <button id="close-challenge-create" class="modal-close">×</button>
       <div class="eyebrow">NEW OPENING DUEL</div>

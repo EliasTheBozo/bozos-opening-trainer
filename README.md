@@ -110,3 +110,15 @@ Features:
 Single-line opening cards no longer create an expandable duplicate of their
 preview. Only families with two or more stored variations show the variation
 browser. Single lines now expose a direct Challenge this line action.
+
+
+## Web v1.4.2
+
+Locks Opening Duel boards to a stable square 8×8 grid so move history and sidebar changes cannot compress the board.
+
+
+## Web v1.5
+
+- Real Friends page with requests, acceptance, removal, and challenge shortcuts
+- Study buttons on every opening line and variation
+- Read-only step-through study board with move navigation and board flipping

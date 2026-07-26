@@ -50,6 +50,7 @@ function route(name) {
   if (name === 'library') searchOpenings('');
   if (name === 'dashboard') renderDashboard();
   if (name === 'challenges') renderChallenges();
+  if (name === 'friends') renderFriends();
   if (name === 'profile') renderProfile();
   if (name === 'owner') renderOwnerGate();
 }
@@ -168,6 +169,7 @@ function renderShell() {
   renderDashboard();
   renderProfile();
   renderChallenges();
+  renderFriends();
 }
 
 function masteryStats() {
@@ -404,6 +406,10 @@ function openChallengeForOpening(name) {
   }, 80);
 }
 
+function openStudyById(openingId) {
+  openStudyOpening(openingId);
+}
+
 function renderOpeningFamily(family) {
   const lineCount = family.lines.length;
   const single = lineCount === 1;
@@ -438,14 +444,16 @@ function renderOpeningFamily(family) {
       </div>
 
       ${single ? `
-        <div class="single-line-actions">
+        <div class="single-line-actions two-actions">
+          <button class="study-button" onclick="openStudyById('${preview.id}')">Study this line</button>
           <button class="family-practice-button"
                   onclick="openChallengeForOpening('${escapeHtml(challengeName).replace(/'/g, "\\'")}')">
-            Challenge this line
+            Challenge
           </button>
         </div>
       ` : `
-        <div class="family-action-row">
+        <div class="family-action-row three-actions">
+          <button class="study-button" onclick="openStudyById('${preview.id}')">Study preview</button>
           <button class="family-practice-button"
                   onclick="openChallengeForOpening('${escapeHtml(family.name).replace(/'/g, "\\'")}')">
             Challenge family
@@ -474,10 +482,13 @@ function renderOpeningFamily(family) {
                   </div>
                   <code>${escapeHtml(line.pgn || '')}</code>
                   ${line.notes ? `<p>${escapeHtml(line.notes)}</p>` : ''}
-                  <button class="line-challenge-button"
-                          onclick="openChallengeForOpening('${escapeHtml(lineChallengeName).replace(/'/g, "\\'")}')">
-                    Challenge this variation
-                  </button>
+                  <div class="line-action-row">
+                    <button class="line-study-button" onclick="openStudyById('${line.id}')">Study</button>
+                    <button class="line-challenge-button"
+                            onclick="openChallengeForOpening('${escapeHtml(lineChallengeName).replace(/'/g, "\\'")}')">
+                      Challenge
+                    </button>
+                  </div>
                 </div>
               </div>
             `;
@@ -756,6 +767,205 @@ async function importOpeningLibrary() {
   }
 }
 
+
+
+let friendFilter = 'accepted';
+let webFriends = [];
+
+function renderFriends() {
+  const signedIn = Boolean(state.session?.user);
+  $('friends-guest').hidden = signedIn;
+  $('friends-user').hidden = !signedIn;
+  if (signedIn) loadWebFriends();
+}
+
+$$('[data-friend-filter]').forEach(button => {
+  button.addEventListener('click', () => {
+    friendFilter = button.dataset.friendFilter;
+    $$('[data-friend-filter]').forEach(b => b.classList.toggle('active', b === button));
+    paintWebFriends();
+  });
+});
+
+$('add-web-friend-button').addEventListener('click', () => {
+  $('add-web-friend-modal').hidden = false;
+  $('web-friend-status').textContent = '';
+  $('web-friend-username').value = '';
+});
+$('close-add-web-friend').addEventListener('click', () => $('add-web-friend-modal').hidden = true);
+$('send-web-friend-request').addEventListener('click', sendWebFriendRequest);
+
+async function loadWebFriends() {
+  const { data, error } = await sb.rpc('my_friends');
+  if (error) {
+    $('web-friends-list').innerHTML = `<div class="empty-state"><b>${escapeHtml(readableError(error))}</b></div>`;
+    return;
+  }
+  webFriends = data || [];
+  paintWebFriends();
+}
+
+function filteredWebFriends() {
+  if (friendFilter === 'accepted') return webFriends.filter(f => f.status === 'accepted');
+  if (friendFilter === 'incoming') return webFriends.filter(f => f.status === 'pending' && f.direction === 'incoming');
+  return webFriends.filter(f => f.status === 'pending' && f.direction === 'outgoing');
+}
+
+function paintWebFriends() {
+  const rows = filteredWebFriends();
+  const target = $('web-friends-list');
+  if (!rows.length) {
+    target.innerHTML = `<div class="empty-state"><div>👥</div><b>No ${friendFilter} connections</b><span>Add someone by their BOZO username.</span></div>`;
+    return;
+  }
+
+  target.innerHTML = rows.map(friend => `
+    <article class="friend-card">
+      <img src="${escapeHtml(friend.avatar_url || './assets/bozo-mascot.webp')}" alt="">
+      <div class="friend-card-copy">
+        <span>${escapeHtml(friend.opening_personality || 'Player')}</span>
+        <h3>${escapeHtml(friend.ign || 'Player')}</h3>
+        <p>@${escapeHtml(friend.username)}</p>
+        ${friend.bio ? `<small>${escapeHtml(friend.bio)}</small>` : ''}
+      </div>
+      <div class="friend-card-actions">
+        ${friend.status === 'accepted' ? `
+          <button class="button primary" onclick="challengeWebFriend('${escapeHtml(friend.username).replace(/'/g,"\\'")}')">Challenge</button>
+          <button class="button secondary" onclick="removeWebFriend('${friend.friendship_id}')">Remove</button>
+        ` : friend.direction === 'incoming' ? `
+          <button class="button primary" onclick="respondWebFriend('${friend.friendship_id}',true)">Accept</button>
+          <button class="button secondary" onclick="respondWebFriend('${friend.friendship_id}',false)">Decline</button>
+        ` : `<span class="friend-pending">Request sent</span>`}
+      </div>
+    </article>
+  `).join('');
+}
+
+async function sendWebFriendRequest() {
+  const username = $('web-friend-username').value.trim();
+  if (!username) return $('web-friend-status').textContent = 'Enter a username.';
+  $('web-friend-status').textContent = 'Sending…';
+  const { error } = await sb.rpc('send_friend_request', { target_username: username });
+  if (error) return $('web-friend-status').textContent = readableError(error);
+  $('add-web-friend-modal').hidden = true;
+  toast('Friend request sent');
+  friendFilter = 'outgoing';
+  await loadWebFriends();
+}
+
+async function respondWebFriend(id, accept) {
+  const { error } = await sb.rpc('respond_friend_request', {
+    friendship_id: id,
+    accept_request: accept
+  });
+  if (error) return toast(readableError(error));
+  toast(accept ? 'Friend added' : 'Request declined');
+  await loadWebFriends();
+}
+
+async function removeWebFriend(id) {
+  if (!confirm('Remove this friend?')) return;
+  const { error } = await sb.rpc('remove_friend', { friendship_id: id });
+  if (error) return toast(readableError(error));
+  toast('Friend removed');
+  await loadWebFriends();
+}
+
+function challengeWebFriend(username) {
+  route('challenges');
+  setTimeout(() => {
+    $('new-challenge-button').click();
+    $('duel-opponent').value = '@' + username;
+  }, 80);
+}
+
+let studyOpening = null;
+let studyGame = null;
+let studyMoves = [];
+let studyPly = 0;
+let studyOrientation = 'white';
+
+$('close-study-modal').addEventListener('click', closeStudy);
+$('study-start').addEventListener('click', () => setStudyPly(0));
+$('study-prev').addEventListener('click', () => setStudyPly(studyPly - 1));
+$('study-next').addEventListener('click', () => setStudyPly(studyPly + 1));
+$('study-end').addEventListener('click', () => setStudyPly(studyMoves.length));
+$('study-flip').addEventListener('click', () => {
+  studyOrientation = studyOrientation === 'white' ? 'black' : 'white';
+  paintStudy();
+});
+
+async function openStudyOpening(openingId) {
+  const { data, error } = await sb.from('openings')
+    .select('id,eco,name,variation,pgn,notes')
+    .eq('id', openingId)
+    .maybeSingle();
+
+  if (error || !data) return toast(readableError(error || new Error('Opening not found')));
+
+  studyOpening = data;
+  studyGame = new Chess();
+  const parser = new Chess();
+  const loaded = parser.load_pgn(data.pgn, { sloppy: true });
+  if (!loaded) return toast('This line could not be loaded on the study board.');
+
+  studyMoves = parser.history();
+  studyPly = 0;
+  studyOrientation = 'white';
+  $('study-title').textContent = data.name;
+  $('study-subtitle').textContent = `${data.variation || 'Main Line'} · ${data.eco || 'ECO —'}`;
+  $('study-pgn').textContent = data.pgn;
+  $('study-modal').hidden = false;
+  paintStudy();
+}
+
+function closeStudy() {
+  $('study-modal').hidden = true;
+}
+
+function setStudyPly(nextPly) {
+  studyPly = Math.max(0, Math.min(studyMoves.length, nextPly));
+  studyGame = new Chess();
+  for (let i = 0; i < studyPly; i++) {
+    studyGame.move(studyMoves[i], { sloppy: true });
+  }
+  paintStudy();
+}
+
+function paintStudy() {
+  if (!studyGame) return;
+  const ranks = studyOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = studyOrientation === 'white'
+    ? ['a','b','c','d','e','f','g','h']
+    : ['h','g','f','e','d','c','b','a'];
+  const board = fenBoard(studyGame.fen());
+  const html = [];
+
+  for (const rank of ranks) {
+    for (const file of files) {
+      const row = 8-rank;
+      const col = file.charCodeAt(0)-97;
+      html.push(`<div>${webPiece(board[row][col])}</div>`);
+    }
+  }
+
+  $('study-board').innerHTML = html.join('');
+  $('study-progress').textContent = studyPly === 0
+    ? 'Start position'
+    : `${studyPly}/${studyMoves.length} plies`;
+
+  $('study-move-list').innerHTML = studyMoves.map((move, index) => `
+    <button class="${index < studyPly ? 'played' : ''} ${index === studyPly-1 ? 'current' : ''}"
+            onclick="setStudyPly(${index+1})">
+      <b>${index+1}.</b> ${escapeHtml(move)}
+    </button>
+  `).join('');
+
+  $('study-prev').disabled = studyPly === 0;
+  $('study-start').disabled = studyPly === 0;
+  $('study-next').disabled = studyPly === studyMoves.length;
+  $('study-end').disabled = studyPly === studyMoves.length;
+}
 
 let challengeFilter = 'active';
 let webChallengeRows = [];
