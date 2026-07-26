@@ -299,7 +299,7 @@ async function searchOpenings(query) {
       button.setAttribute('aria-expanded', String(!expanded));
       body.hidden = expanded;
       button.querySelector('.family-toggle-label').textContent =
-        expanded ? `View ${body.dataset.count} lines` : 'Hide lines';
+        expanded ? `Browse variations (${body.dataset.count})` : 'Hide variations';
       button.querySelector('.family-chevron').textContent = expanded ? '⌄' : '⌃';
     });
   });
@@ -375,53 +375,115 @@ function groupOpeningFamilies(openings) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function formatPreviewMoves(pgn = '', fullMoves = 4) {
+  const safe = escapeHtml(pgn);
+  const tokens = safe.trim().split(/\s+/);
+  const rows = [];
+  let current = '';
+
+  for (const token of tokens) {
+    if (/^\d+\.$/.test(token)) {
+      if (current) rows.push(current.trim());
+      current = token;
+    } else {
+      current += ` ${token}`;
+    }
+    if (rows.length >= fullMoves) break;
+  }
+
+  if (current && rows.length < fullMoves) rows.push(current.trim());
+  return rows.slice(0, fullMoves).join('<br>');
+}
+
+function openChallengeForOpening(name) {
+  route('challenges');
+  setTimeout(() => {
+    $('new-challenge-button')?.click();
+    $('duel-opening-search').value = name;
+    searchDuelOpenings();
+  }, 80);
+}
+
 function renderOpeningFamily(family) {
   const lineCount = family.lines.length;
+  const single = lineCount === 1;
   const visibleEcos = family.ecos.slice(0, 4).join(', ');
   const extraEcos = family.ecos.length > 4 ? ` +${family.ecos.length - 4}` : '';
   const officialCount = family.lines.filter(line => line.source_type === 'official').length;
   const bozoCount = family.lines.filter(line => line.source_type === 'bozo').length;
+  const preview = family.preview;
+  const challengeName = `${preview.name}${preview.variation ? ': ' + preview.variation : ''}`;
 
   return `
-    <article class="opening-family-card">
+    <article class="opening-family-card ${single ? 'single-line-family' : ''}">
       <div class="family-card-header">
         <div>
-          <span class="family-meta">${escapeHtml(visibleEcos || 'ECO —')}${extraEcos}</span>
+          <span class="family-meta">
+            ${escapeHtml(visibleEcos || 'ECO —')}${extraEcos}
+            · ${single ? 'OPENING LINE' : 'OPENING FAMILY'}
+          </span>
           <h3>${escapeHtml(family.name)}</h3>
           <p>
-            ${lineCount.toLocaleString()} ${lineCount === 1 ? 'line' : 'lines'}
+            ${single ? '1 published line' : `${lineCount.toLocaleString()} variations`}
             ${officialCount ? ` · ${officialCount} official` : ''}
             ${bozoCount ? ` · ${bozoCount} BOZO` : ''}
           </p>
         </div>
-        <span class="family-count">${lineCount}</span>
+        ${single ? '' : `<span class="family-count">${lineCount}</span>`}
       </div>
 
       <div class="family-preview">
-        <span>${escapeHtml(family.preview.displayVariation)}</span>
-        <code>${escapeHtml((family.preview.pgn || '').slice(0,180))}${(family.preview.pgn || '').length > 180 ? '…' : ''}</code>
+        <span>${escapeHtml(preview.displayVariation)}</span>
+        <code>${formatPreviewMoves(preview.pgn || '', 4)}</code>
       </div>
 
-      <button class="family-toggle" data-family-toggle="${family.id}" aria-expanded="false">
-        <span class="family-toggle-label">View ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}</span>
-        <span class="family-chevron">⌄</span>
-      </button>
+      ${single ? `
+        <div class="single-line-actions">
+          <button class="family-practice-button"
+                  onclick="openChallengeForOpening('${escapeHtml(challengeName).replace(/'/g, "\\'")}')">
+            Challenge this line
+          </button>
+        </div>
+      ` : `
+        <div class="family-action-row">
+          <button class="family-practice-button"
+                  onclick="openChallengeForOpening('${escapeHtml(family.name).replace(/'/g, "\\'")}')">
+            Challenge family
+          </button>
+          <button class="family-toggle"
+                  data-family-toggle="${family.id}"
+                  aria-expanded="false">
+            <span class="family-toggle-label">Browse variations (${lineCount})</span>
+            <span class="family-chevron">⌄</span>
+          </button>
+        </div>
 
-      <div class="family-lines" data-family-body="${family.id}" data-count="${lineCount}" hidden>
-        ${family.lines.map((line, index) => `
-          <div class="family-line-row">
-            <div class="line-index">${index + 1}</div>
-            <div class="line-content">
-              <div class="line-heading">
-                <b>${escapeHtml(line.displayVariation)}</b>
-                <span>${escapeHtml(line.eco || 'ECO —')} · ${escapeHtml(line.source_type || 'official')}</span>
+        <div class="family-lines"
+             data-family-body="${family.id}"
+             data-count="${lineCount}"
+             hidden>
+          ${family.lines.map((line, index) => {
+            const lineChallengeName = `${line.name}${line.variation ? ': ' + line.variation : ''}`;
+            return `
+              <div class="family-line-row">
+                <div class="line-index">${index + 1}</div>
+                <div class="line-content">
+                  <div class="line-heading">
+                    <b>${escapeHtml(line.displayVariation)}</b>
+                    <span>${escapeHtml(line.eco || 'ECO —')} · ${escapeHtml(line.source_type || 'official')}</span>
+                  </div>
+                  <code>${escapeHtml(line.pgn || '')}</code>
+                  ${line.notes ? `<p>${escapeHtml(line.notes)}</p>` : ''}
+                  <button class="line-challenge-button"
+                          onclick="openChallengeForOpening('${escapeHtml(lineChallengeName).replace(/'/g, "\\'")}')">
+                    Challenge this variation
+                  </button>
+                </div>
               </div>
-              <code>${escapeHtml(line.pgn || '')}</code>
-              ${line.notes ? `<p>${escapeHtml(line.notes)}</p>` : ''}
-            </div>
-          </div>
-        `).join('')}
-      </div>
+            `;
+          }).join('')}
+        </div>
+      `}
     </article>
   `;
 }

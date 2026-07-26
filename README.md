@@ -103,3 +103,10 @@ Features:
 - Required book moves are enforced before free play
 - Checkmate, draw, and resignation completion
 - Single-line library cards no longer show a pointless dropdown
+
+
+## Web v1.4.1
+
+Single-line opening cards no longer create an expandable duplicate of their
+preview. Only families with two or more stored variations show the variation
+browser. Single lines now expose a direct Challenge this line action.

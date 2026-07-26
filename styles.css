@@ -303,3 +303,47 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
 .duel-move-list{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;max-height:260px;overflow:auto}.duel-move-list span{padding:7px;border-radius:8px;background:rgba(255,255,255,.03);font-size:10px}
 .family-action-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,.065)}.family-action-row .family-toggle{border-top:0}.family-practice-button,.line-challenge-button{border:0;background:linear-gradient(135deg,#ff9a32,#ff6818);color:#160700;font-weight:900;cursor:pointer}.family-practice-button{padding:13px 21px}.single-line-actions{border-top:1px solid rgba(255,255,255,.065)}.single-line-actions .family-practice-button{width:100%}.line-challenge-button{margin-top:10px;padding:7px 10px;border-radius:8px;font-size:8px}
 @media(max-width:850px){.web-challenge-list{grid-template-columns:1fr}.duel-game-layout{grid-template-columns:1fr}.duel-game-modal{padding:16px}.family-action-row{grid-template-columns:1fr}}
+
+
+/* WEB v1.4.1 — SINGLE-LINE CARD CLEANUP */
+.single-line-family .family-preview {
+  margin-bottom:0;
+}
+
+.single-line-actions {
+  display:grid;
+  border-top:1px solid rgba(255,255,255,.065);
+}
+
+.single-line-actions .family-practice-button {
+  width:100%;
+  min-height:48px;
+}
+
+.single-line-family .family-count,
+.single-line-family .family-toggle,
+.single-line-family .family-lines {
+  display:none !important;
+}
+
+.family-action-row {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  border-top:1px solid rgba(255,255,255,.065);
+}
+
+.family-action-row .family-toggle {
+  border-top:0;
+  border-left:1px solid rgba(255,255,255,.065);
+}
+
+@media(max-width:620px) {
+  .family-action-row {
+    grid-template-columns:1fr;
+  }
+
+  .family-action-row .family-toggle {
+    border-left:0;
+    border-top:1px solid rgba(255,255,255,.065);
+  }
+}
