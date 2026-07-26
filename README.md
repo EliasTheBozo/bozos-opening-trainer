@@ -212,3 +212,26 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Updates the local mover immediately from the server response
 - Keeps manual Refresh without recreating subscriptions
 - Cache-busts app.js?v=1.7.5
+
+
+## Web v1.7.6 — Bot Crash and Hanging-Piece Fix
+
+- Fixes `played is not defined`
+- Keeps the played move in function scope
+- Resets fallback status for each bot turn
+- Uses a one-ply material-safety check for emergency moves
+- Penalizes fallback moves that immediately hang a piece
+- Makes Club and stronger fallback choices deterministic
+- Cache-busts app.js?v=1.7.6
+
+
+## Web v1.7.7 — Game Review Timeout Fix
+
+- Fixes the intermittent uciok race condition
+- Registers UCI listeners before sending commands
+- Adds messageerror handling for the Stockfish worker
+- Adds per-position analysis timeouts
+- Uses ucinewgame instead of rebuilding healthy WASM workers
+- Retries engine initialization once before failing
+- Resets a broken worker after any engine-related review failure
+- Cache-busts app.js?v=1.7.7

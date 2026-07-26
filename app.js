@@ -1603,14 +1603,23 @@ class ReviewStockfish {
     this.worker.addEventListener('error', event => {
       this.fail(new Error(event?.message || 'Stockfish worker failed to load.'));
     });
+    this.worker.addEventListener('messageerror', () => {
+      this.fail(new Error('Stockfish returned an unreadable worker message.'));
+    });
 
+    // Register each listener BEFORE sending its command. Stockfish can answer
+    // immediately, and the old order occasionally missed uciok/readyok.
+    const uciReady = this.waitFor('uciok', 30000);
     this.send('uci');
-    await this.waitFor('uciok');
+    await uciReady;
+
     this.send('setoption name Threads value 1');
     this.send('setoption name Hash value 32');
     this.send('setoption name MultiPV value 1');
+
+    const engineReady = this.waitFor('readyok', 30000);
     this.send('isready');
-    await this.waitFor('readyok');
+    await engineReady;
   }
 
   handle(message) {
@@ -1668,14 +1677,66 @@ class ReviewStockfish {
       if (pvMatch) pv = pvMatch[1].trim().split(/\s+/);
     });
 
+    const searchTimeout = Math.max(20000, Number(depth || 10) * 2500);
+
     const bestMove = await new Promise((resolve, reject) => {
+      let settled = false;
+
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+
+        try {
+          this.send('stop');
+        } catch (_) {}
+
+        const pendingIndex = this.bestResolvers.findIndex(
+          item => item.resolve === wrappedResolve
+        );
+        if (pendingIndex >= 0) this.bestResolvers.splice(pendingIndex, 1);
+
+        unsubscribeInfo();
+        this.searching = false;
+        reject(new Error(
+          `Stockfish analysis timed out at depth ${depth}.`
+        ));
+      }, searchTimeout);
+
+      const wrappedResolve = move => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        resolve(move);
+      };
+
+      const wrappedReject = error => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        reject(error);
+      };
+
       const unsubscribe = () => unsubscribeInfo();
-      this.bestResolvers.push({ resolve, reject, unsubscribe });
+      this.bestResolvers.push({
+        resolve: wrappedResolve,
+        reject: wrappedReject,
+        unsubscribe
+      });
+
       this.send(`go depth ${depth}`);
     });
 
     unsubscribeInfo();
     return { cp, mate, bestMove, pv, depthSeen };
+  }
+
+  async newGame() {
+    await this.initialize();
+
+    const ready = this.waitFor('readyok', 30000);
+    this.send('ucinewgame');
+    this.send('isready');
+    await ready;
   }
 
   terminate() {
@@ -1869,7 +1930,6 @@ async function startGameReview() {
   const button = $('start-game-review');
   const pgn = $('review-pgn-input').value.trim();
 
-  resetManagedStockfish();
   message.textContent = '';
   if (!pgn) {
     message.textContent = 'Paste or upload a PGN first.';
@@ -1890,6 +1950,18 @@ async function startGameReview() {
   $('review-results').hidden = true;
 
   try {
+    let engine;
+
+    try {
+      engine = await getReviewEngine();
+      await engine.newGame();
+    } catch (firstEngineError) {
+      console.warn('Restarting Stockfish before review:', firstEngineError);
+      resetManagedStockfish();
+      engine = await getReviewEngine();
+      await engine.newGame();
+    }
+
     const openingMatch = await detectReviewOpening(parsed.sans);
     const depth = Number($('review-depth').value);
     const maxPlies = Number($('review-max-plies').value);
@@ -1921,6 +1993,12 @@ async function startGameReview() {
     $('review-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     console.error(error);
+
+    if (/Stockfish|worker|uciok|readyok|timed out/i.test(error?.message || '')) {
+      resetManagedStockfish();
+      $('review-engine-state').textContent = 'Engine reset · try again';
+    }
+
     message.textContent = error?.message || 'Game review failed.';
   } finally {
     button.disabled = false;
@@ -2644,33 +2722,83 @@ function withBotTimeout(promise, milliseconds) {
   ]);
 }
 
+function botMaterialValue(piece) {
+  return ({ p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 })[piece] || 0;
+}
+
+function fallbackMoveSafety(game, move) {
+  const clone = new Chess(game.fen());
+  const played = clone.move({
+    from: move.from,
+    to: move.to,
+    promotion: move.promotion || 'q'
+  });
+
+  if (!played) return -100000;
+
+  let worstReplyLoss = 0;
+  const replies = clone.moves({ verbose: true });
+
+  for (const reply of replies) {
+    let loss = 0;
+
+    if (reply.captured) {
+      loss += botMaterialValue(reply.captured);
+    }
+
+    // Strongly penalize replies that capture the piece just moved.
+    if (reply.to === move.to && reply.captured) {
+      loss += botMaterialValue(move.piece) * 0.9;
+    }
+
+    if (reply.san.includes('#')) loss += 20000;
+    else if (reply.san.includes('+')) loss += 90;
+
+    worstReplyLoss = Math.max(worstReplyLoss, loss);
+  }
+
+  return -worstReplyLoss;
+}
+
 function chooseFallbackBotMove(game, strength) {
   const legalMoves = game.moves({ verbose: true });
   if (!legalMoves.length) return null;
 
-  const pieceValues = { p: 100, n: 300, b: 320, r: 500, q: 900, k: 0 };
-
   const scored = legalMoves.map(move => {
-    let score = Math.random() * 8;
+    let score = fallbackMoveSafety(game, move);
 
-    if (move.captured) score += pieceValues[move.captured] || 0;
-    if (move.san.includes('+')) score += 80;
-    if (move.flags?.includes('k') || move.flags?.includes('q')) score += 55;
-    if (move.piece === 'n' || move.piece === 'b') score += 25;
-    if (['d4','d5','e4','e5','c4','c5','f4','f5'].includes(move.to)) score += 22;
+    // Immediate material gains.
+    if (move.captured) score += botMaterialValue(move.captured);
 
-    score += (strength.randomness || 0) * Math.random() * 180;
+    // Useful chess priorities.
+    if (move.san.includes('#')) score += 50000;
+    else if (move.san.includes('+')) score += 120;
+    if (move.flags?.includes('k') || move.flags?.includes('q')) score += 90;
+    if (move.piece === 'n' || move.piece === 'b') score += 24;
+    if (['d4','d5','e4','e5','c4','c5','f4','f5'].includes(move.to)) score += 18;
+
+    // Discourage undeveloping pieces and early queen wandering.
+    const startingSquares = ['a1','b1','c1','d1','e1','f1','g1','h1',
+                             'a8','b8','c8','d8','e8','f8','g8','h8'];
+    if (startingSquares.includes(move.to) && !startingSquares.includes(move.from)) {
+      score -= 35;
+    }
+    if (move.piece === 'q' && game.history().length < 16) score -= 25;
+
+    // Only weak levels receive meaningful randomness.
+    score += (strength.randomness || 0) * Math.random() * 80;
+
     return { move, score };
   });
 
   scored.sort((a, b) => b.score - a.score);
 
-  const windowSize =
-    strength.depth <= 4 ? Math.min(6, scored.length) :
-    strength.depth <= 6 ? Math.min(4, scored.length) :
-    Math.min(2, scored.length);
+  const choiceWindow =
+    strength.depth <= 5 ? Math.min(4, scored.length) :
+    strength.depth <= 7 ? Math.min(2, scored.length) :
+    1;
 
-  return scored[Math.floor(Math.random() * windowSize)]?.move || scored[0].move;
+  return scored[Math.floor(Math.random() * choiceWindow)]?.move || scored[0].move;
 }
 
 async function playWebBotMove() {
@@ -2680,9 +2808,12 @@ async function playWebBotMove() {
 
   const session = webBotSession;
   const game = session.game;
+  let played = null;
+
+  // This flag describes only the current bot move.
+  session.usedFallback = false;
 
   try {
-    let played = null;
     const currentPly = game.history().length;
     const expectedSan = webBotBookMoveAtPly(currentPly);
 
@@ -2761,11 +2892,12 @@ async function playWebBotMove() {
     const gameEnded = checkWebBotGameOver();
     $('bot-eval-label').textContent =
       session.usedFallback ? 'Fallback' : 'Engine';
-    if (gameEnded) return;
+    if (gameEnded) return played;
   } catch (error) {
     console.error('BOZO Bot error:', error);
     $('bot-game-message').textContent =
       error?.message || 'BOZO Bot could not move.';
+    throw error;
   } finally {
     if (webBotSession === session) {
       session.botThinking = false;
@@ -2844,7 +2976,9 @@ function updateWebBotStatus() {
     $('bot-game-message').textContent =
       session.phase === 'book'
         ? 'BOZO Bot will answer with the stored book move.'
-        : 'BOZO Bot will choose a Stockfish move.';
+        : session.usedFallback
+          ? 'The last move used the emergency safety fallback.'
+          : 'BOZO Bot will choose a Stockfish move.';
 
     // Recovery is handled by the permanent turn monitor.
   }
