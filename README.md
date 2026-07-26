@@ -235,3 +235,14 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Retries engine initialization once before failing
 - Resets a broken worker after any engine-related review failure
 - Cache-busts app.js?v=1.7.7
+
+
+## Web v1.8.1 — Evaluation Bar and Practical Coach
+
+- Replaces numerical evaluation display with a vertical bar beside the board
+- Uses plain-language position descriptions
+- Sends both the played move and stronger alternative to BOZO Coach
+- Converts the engine continuation into readable SAN
+- Adds side-by-side move comparison
+- Adds a concrete multi-step practical plan
+- Cache-busts app.js?v=1.8.1

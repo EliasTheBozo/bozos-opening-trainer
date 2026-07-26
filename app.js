@@ -1468,6 +1468,10 @@ $('review-next').addEventListener('click', () => setReviewStep(reviewStepIndex +
 $('review-end').addEventListener('click', () => setReviewStep(reviewData?.rows.length || 0));
 $('review-flip').addEventListener('click', () => {
   reviewOrientation = reviewOrientation === 'white' ? 'black' : 'white';
+  $('review-eval-top-label').textContent =
+    reviewOrientation === 'white' ? 'Black' : 'White';
+  $('review-eval-bottom-label').textContent =
+    reviewOrientation === 'white' ? 'White' : 'Black';
   paintGameReview();
   if (reviewCoachExplanation) drawReviewCoachAnnotations(
     reviewCoachExplanation.arrows || [],
@@ -1841,6 +1845,33 @@ function reviewUciToSan(fen, uci) {
   return move?.san || uci;
 }
 
+function reviewPvToSan(fen, uciMoves = [], maximumMoves = 6) {
+  const game = new Chess(fen);
+  const sans = [];
+
+  for (const uci of (uciMoves || []).slice(0, maximumMoves)) {
+    if (!uci || uci.length < 4) break;
+
+    const move = game.move({
+      from: uci.slice(0, 2),
+      to: uci.slice(2, 4),
+      promotion: uci[4] || 'q'
+    });
+
+    if (!move) break;
+    sans.push(move.san);
+  }
+
+  return sans;
+}
+
+function reviewBestMovePosition(fen, bestMoveSan) {
+  if (!fen || !bestMoveSan || bestMoveSan === '—') return '';
+  const game = new Chess(fen);
+  const move = game.move(bestMoveSan, { sloppy: true });
+  return move ? game.fen() : '';
+}
+
 async function computeWebsiteReview(sans, depth, maxPlies, bookDepth, onProgress) {
   const engine = await getReviewEngine();
   const game = new Chess();
@@ -1893,7 +1924,9 @@ async function computeWebsiteReview(sans, depth, maxPlies, bookDepth, onProgress
       cls: classification.cls,
       isBook,
       engineBest: engineBestBefore,
+      bestMoveFen: reviewBestMovePosition(previousFen, engineBestBefore),
       principalVariation: pvBefore.slice(0, 8),
+      principalVariationSan: reviewPvToSan(previousFen, pvBefore, 6),
       wasTop: reviewCleanSan(engineBestBefore) === reviewCleanSan(played.san)
     });
 
@@ -2121,13 +2154,41 @@ function formatReviewEval(cp, mate) {
   return `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(2)}`;
 }
 
+function reviewPositionDescription(cp = 0, mate = null) {
+  if (mate != null) {
+    return mate > 0
+      ? `White has a forced mate in ${Math.abs(mate)}`
+      : `Black has a forced mate in ${Math.abs(mate)}`;
+  }
+
+  const absolute = Math.abs(cp);
+  const side = cp > 0 ? 'White' : cp < 0 ? 'Black' : '';
+
+  if (absolute < 25) return 'Equal';
+  if (absolute < 75) return `${side} is slightly better`;
+  if (absolute < 160) return `${side} has a clear edge`;
+  if (absolute < 300) return `${side} is much better`;
+  return `${side} is winning`;
+}
+
 function paintReviewEvaluation(cp = 0, mate = null) {
   const bounded = mate != null
     ? (mate > 0 ? 1000 : -1000)
     : Math.max(-1000, Math.min(1000, cp));
-  const whitePercent = Math.max(5, Math.min(95, 50 + bounded / 20));
-  $('review-eval-white').style.width = `${whitePercent}%`;
-  $('review-eval-label').textContent = formatReviewEval(cp, mate);
+
+  // Logistic scaling keeps small advantages visible without allowing a
+  // large score to completely erase one side of the bar.
+  const whitePercent = Math.max(
+    4,
+    Math.min(96, 100 / (1 + Math.exp(-bounded / 170)))
+  );
+  const blackPercent = 100 - whitePercent;
+  const description = reviewPositionDescription(cp, mate);
+
+  $('review-eval-white-zone').style.height = `${whitePercent}%`;
+  $('review-eval-black-zone').style.height = `${blackPercent}%`;
+  $('review-vertical-eval').setAttribute('aria-label', description);
+  $('review-vertical-eval').title = description;
 }
 
 function updateReviewSelectedMove() {
@@ -2139,7 +2200,7 @@ function updateReviewSelectedMove() {
     $('review-classification').className = 'review-classification';
     $('review-selected-summary').textContent =
       'Choose a move to inspect its evaluation and alternatives.';
-    $('review-move-eval').textContent = '0.00';
+    $('review-move-eval').textContent = 'Equal';
     $('review-move-accuracy').textContent = '—';
     $('review-move-loss').textContent = '—';
     $('review-engine-best').textContent = '—';
@@ -2156,7 +2217,7 @@ function updateReviewSelectedMove() {
     : row.wasTop
       ? 'The played move matched Stockfish’s first choice.'
       : `Stockfish preferred ${row.engineBest}.`;
-  $('review-move-eval').textContent = formatReviewEval(row.whiteCp, row.mate);
+  $('review-move-eval').textContent = reviewPositionDescription(row.whiteCp, row.mate);
   $('review-move-accuracy').textContent = `${Math.round(row.accuracy * 10) / 10}%`;
   $('review-move-loss').textContent = `${row.rawEngineLoss}cp`;
   $('review-engine-best').textContent = row.engineBest || '—';
@@ -2208,7 +2269,8 @@ async function askReviewCoach() {
         moveNumber: Math.ceil(row.ply / 2),
         opening: opening?.name || 'Unknown opening',
         variation: opening?.variation || 'Imported game',
-        question: question || `Why was this move classified as ${row.label}?`,
+        question: question ||
+          `Compare ${row.san} with ${row.engineBest}. Explain the practical difference and give me a plan for the next few moves.`,
         moveHistory: reviewData.rows.slice(0, row.ply).map(item => item.san),
         evaluationBefore: reviewStepIndex > 1
           ? reviewData.rows[reviewStepIndex - 2].whiteCp
@@ -2216,7 +2278,10 @@ async function askReviewCoach() {
         evaluationAfter: row.whiteCp,
         evaluationUnit: 'centipawns from White perspective',
         bestMove: row.engineBest,
+        bestMoveFen: row.bestMoveFen,
         principalVariation: row.principalVariation,
+        principalVariationSan: row.principalVariationSan,
+        playedPositionDescription: reviewPositionDescription(row.whiteCp, row.mate),
         classification: row.label,
         centipawnLoss: row.rawEngineLoss,
         moveAccuracy: Math.round(row.accuracy * 10) / 10,
@@ -2247,7 +2312,7 @@ async function askReviewCoach() {
     )}</div>`;
   } finally {
     button.disabled = false;
-    button.textContent = 'Explain selected move';
+    button.textContent = 'Compare and explain';
   }
 }
 
@@ -2255,21 +2320,56 @@ function renderReviewCoachExplanation(explanation) {
   const purposes = Array.isArray(explanation.purpose)
     ? explanation.purpose.filter(Boolean)
     : [];
+  const practicalPlan = Array.isArray(explanation.practicalPlan)
+    ? explanation.practicalPlan.filter(Boolean)
+    : [];
 
   $('review-coach-answer').innerHTML = `
     <p class="coach-summary">${escapeHtml(explanation.summary || '')}</p>
+
+    ${explanation.comparison ? `
+      <div class="coach-comparison">
+        <b>Move comparison</b>
+        <p>${escapeHtml(explanation.comparison)}</p>
+      </div>
+    ` : ''}
+
+    <div class="coach-two-moves">
+      ${explanation.playedMoveIdea ? `
+        <div>
+          <span>Your move</span>
+          <p>${escapeHtml(explanation.playedMoveIdea)}</p>
+        </div>
+      ` : ''}
+      ${explanation.betterMoveIdea ? `
+        <div>
+          <span>Better move</span>
+          <p>${escapeHtml(explanation.betterMoveIdea)}</p>
+        </div>
+      ` : ''}
+    </div>
+
+    ${practicalPlan.length ? `
+      <div class="coach-section coach-practical-plan">
+        <b>Practical plan</b>
+        <ol>${practicalPlan.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ol>
+      </div>
+    ` : ''}
+
     ${purposes.length ? `
       <div class="coach-section">
-        <b>What happened</b>
+        <b>Key ideas</b>
         <ul>${purposes.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
       </div>
     ` : ''}
+
     ${explanation.watchFor ? `
       <div class="coach-warning">
         <b>Watch for:</b>
         <span>${escapeHtml(explanation.watchFor)}</span>
       </div>
     ` : ''}
+
     ${explanation.suggestedQuestion ? `
       <button class="coach-follow-up"
               data-review-follow-up="${escapeHtml(explanation.suggestedQuestion)}">

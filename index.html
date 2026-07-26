@@ -370,12 +370,24 @@
 
         <div class="review-workspace">
           <div class="review-board-column">
-            <div class="review-board-shell">
-              <div id="game-review-board" class="web-duel-board review-board"></div>
-              <svg id="game-review-arrow-layer"
-                   class="board-arrow-layer"
-                   viewBox="0 0 800 800"
-                   aria-hidden="true"></svg>
+            <div class="review-board-frame">
+              <div class="review-vertical-eval"
+                   id="review-vertical-eval"
+                   role="img"
+                   aria-label="Equal position">
+                <div id="review-eval-black-zone" class="review-eval-black-zone"></div>
+                <div id="review-eval-white-zone" class="review-eval-white-zone"></div>
+                <span id="review-eval-top-label" class="review-eval-side-label">Black</span>
+                <span id="review-eval-bottom-label" class="review-eval-side-label">White</span>
+              </div>
+
+              <div class="review-board-shell">
+                <div id="game-review-board" class="web-duel-board review-board"></div>
+                <svg id="game-review-arrow-layer"
+                     class="board-arrow-layer"
+                     viewBox="0 0 800 800"
+                     aria-hidden="true"></svg>
+              </div>
             </div>
 
             <div class="review-board-controls">
@@ -386,14 +398,7 @@
               <button id="review-flip" class="button secondary">Flip board</button>
             </div>
 
-            <div class="review-eval-row">
-              <span>Black</span>
-              <div class="review-eval-track">
-                <div id="review-eval-white" class="review-eval-white"></div>
-              </div>
-              <b id="review-eval-label">0.00</b>
-              <span>White</span>
-            </div>
+
           </div>
 
           <aside class="review-side-column">
@@ -405,7 +410,7 @@
               <span id="review-classification" class="review-classification">—</span>
               <p id="review-selected-summary">Choose a move to inspect its evaluation and alternatives.</p>
               <div class="review-move-facts">
-                <div><span>Evaluation</span><b id="review-move-eval">0.00</b></div>
+                <div><span>Position</span><b id="review-move-eval">Equal</b></div>
                 <div><span>Accuracy</span><b id="review-move-accuracy">—</b></div>
                 <div><span>Loss</span><b id="review-move-loss">—</b></div>
                 <div><span>Engine choice</span><b id="review-engine-best">—</b></div>
@@ -432,10 +437,10 @@
                 Ask a question
                 <input id="review-coach-question"
                        maxlength="300"
-                       placeholder="Why was this move inaccurate?">
+                       placeholder="Compare my move with the better move. What should I do next?">
               </label>
               <div class="coach-actions">
-                <button id="ask-review-coach" class="button primary">Explain selected move</button>
+                <button id="ask-review-coach" class="button primary">Compare and explain</button>
                 <button id="clear-review-coach" class="button secondary">Clear</button>
               </div>
             </section>
@@ -842,6 +847,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=1.8.0"></script>
+  <script src="./app.js?v=1.8.1"></script>
 </body>
 </html>
