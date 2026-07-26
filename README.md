@@ -246,3 +246,13 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Adds side-by-side move comparison
 - Adds a concrete multi-step practical plan
 - Cache-busts app.js?v=1.8.1
+
+
+## Web v1.8.2 — Contextual Coach Narrative
+
+- Sends the moves leading up to and following the selected move
+- Detects the broad phase of the game
+- Adds How We Got Here and What Changed sections
+- Explains whether a move continued, changed, or abandoned the earlier plan
+- Compares the real game continuation with the stronger continuation
+- Cache-busts app.js?v=1.8.2

@@ -1872,6 +1872,53 @@ function reviewBestMovePosition(fen, bestMoveSan) {
   return move ? game.fen() : '';
 }
 
+function reviewGamePhase(ply, totalPlies, fen = '') {
+  if (ply <= 20) return 'opening';
+
+  const boardPart = String(fen || '').split(' ')[0];
+  const queens = (boardPart.match(/[qQ]/g) || []).length;
+  const rooks = (boardPart.match(/[rR]/g) || []).length;
+  const minors = (boardPart.match(/[nNbB]/g) || []).length;
+
+  if (queens === 0 && (rooks <= 2 || minors <= 2)) return 'endgame';
+  if (ply >= Math.max(40, totalPlies * 0.72)) return 'late middlegame';
+  return 'middlegame';
+}
+
+function reviewMoveWindow(rows, selectedIndex, beforeCount = 6, afterCount = 6) {
+  const start = Math.max(0, selectedIndex - beforeCount);
+  const end = Math.min(rows.length, selectedIndex + afterCount + 1);
+
+  return rows.slice(start, end).map((row, localIndex) => ({
+    ply: row.ply,
+    moveNumber: Math.ceil(row.ply / 2),
+    side: row.ply % 2 === 1 ? 'White' : 'Black',
+    san: row.san,
+    classification: row.label,
+    isSelected: start + localIndex === selectedIndex
+  }));
+}
+
+function reviewHistoryToMoveText(history = []) {
+  const output = [];
+  for (let index = 0; index < history.length; index += 2) {
+    const moveNumber = Math.floor(index / 2) + 1;
+    const white = history[index] || '';
+    const black = history[index + 1] || '';
+    output.push(`${moveNumber}. ${white}${black ? ` ${black}` : ''}`);
+  }
+  return output.join(' ');
+}
+
+function reviewPlanContinuityPrompt(row, priorMoves, laterMoves) {
+  return [
+    `Recent moves before the selected move: ${priorMoves.join(' ') || 'not supplied'}.`,
+    `The game continued after it with: ${laterMoves.join(' ') || 'not supplied'}.`,
+    `Explain whether ${row.san} continued the player's previous plan, changed plans, or abandoned it.`,
+    `Explain whether that change was justified by the position.`
+  ].join(' ');
+}
+
 async function computeWebsiteReview(sans, depth, maxPlies, bookDepth, onProgress) {
   const engine = await getReviewEngine();
   const game = new Chess();
@@ -2258,6 +2305,24 @@ async function askReviewCoach() {
   try {
     const question = $('review-coach-question').value.trim();
     const opening = reviewData.openingMatch?.opening;
+    const selectedIndex = reviewStepIndex - 1;
+    const contextBeforeMoves = reviewData.rows
+      .slice(Math.max(0, selectedIndex - 10), selectedIndex)
+      .map(item => item.san);
+    const actualContinuation = reviewData.rows
+      .slice(selectedIndex + 1, selectedIndex + 9)
+      .map(item => item.san);
+    const contextWindow = reviewMoveWindow(
+      reviewData.rows,
+      selectedIndex,
+      6,
+      6
+    );
+    const gamePhase = reviewGamePhase(
+      row.ply,
+      reviewData.rows.length,
+      row.fen
+    );
 
     const { data, error } = await sb.functions.invoke('explain-move', {
       body: {
@@ -2269,8 +2334,20 @@ async function askReviewCoach() {
         moveNumber: Math.ceil(row.ply / 2),
         opening: opening?.name || 'Unknown opening',
         variation: opening?.variation || 'Imported game',
+        gamePhase,
+        selectedSide: row.ply % 2 === 1 ? 'White' : 'Black',
+        selectedMoveNumber: Math.ceil(row.ply / 2),
+        contextWindow,
+        contextBeforeMoves,
+        contextBeforeText: reviewHistoryToMoveText(contextBeforeMoves),
+        actualContinuation,
+        planContinuityPrompt: reviewPlanContinuityPrompt(
+          row,
+          contextBeforeMoves,
+          actualContinuation
+        ),
         question: question ||
-          `Compare ${row.san} with ${row.engineBest}. Explain the practical difference and give me a plan for the next few moves.`,
+          `Compare ${row.san} with ${row.engineBest}. Explain how the preceding moves led to this decision, what changed afterward, and give me a practical plan.`,
         moveHistory: reviewData.rows.slice(0, row.ply).map(item => item.san),
         evaluationBefore: reviewStepIndex > 1
           ? reviewData.rows[reviewStepIndex - 2].whiteCp
@@ -2326,6 +2403,27 @@ function renderReviewCoachExplanation(explanation) {
 
   $('review-coach-answer').innerHTML = `
     <p class="coach-summary">${escapeHtml(explanation.summary || '')}</p>
+
+    ${explanation.howWeGotHere ? `
+      <div class="coach-narrative coach-before-story">
+        <b>How we got here</b>
+        <p>${escapeHtml(explanation.howWeGotHere)}</p>
+      </div>
+    ` : ''}
+
+    ${explanation.whatChanged ? `
+      <div class="coach-narrative coach-after-story">
+        <b>What changed after this move</b>
+        <p>${escapeHtml(explanation.whatChanged)}</p>
+      </div>
+    ` : ''}
+
+    ${explanation.planContinuity ? `
+      <div class="coach-plan-continuity">
+        <span>Plan check</span>
+        <p>${escapeHtml(explanation.planContinuity)}</p>
+      </div>
+    ` : ''}
 
     ${explanation.comparison ? `
       <div class="coach-comparison">
