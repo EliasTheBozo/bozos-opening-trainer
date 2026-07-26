@@ -1424,8 +1424,8 @@ const FriendDuelClock = (() => {
    GAME REVIEW — STOCKFISH + BOZO COACH
    ============================================================ */
 
-const REVIEW_STOCKFISH_JS = './assets/stockfish.worker.js';
-const REVIEW_STOCKFISH_WASM = './assets/stockfish.wasm';
+const REVIEW_STOCKFISH_JS = './assets/stockfish-18-lite-single.js';
+const REVIEW_STOCKFISH_WASM = './assets/stockfish-18-lite-single.wasm';
 const REVIEW_MATE_SCORE = 100000;
 
 let reviewEngine = null;
@@ -1595,9 +1595,6 @@ class ReviewStockfish {
   async initialize() {
     if (this.worker) return;
     const scriptUrl = new URL(REVIEW_STOCKFISH_JS, document.baseURI);
-    const wasmUrl = new URL(REVIEW_STOCKFISH_WASM, document.baseURI);
-    scriptUrl.hash = encodeURIComponent(wasmUrl.href);
-
     this.worker = new Worker(scriptUrl.href);
     this.worker.addEventListener('message', event => this.handle(String(event.data)));
     this.worker.addEventListener('error', event => {
@@ -1613,8 +1610,7 @@ class ReviewStockfish {
     this.send('uci');
     await uciReady;
 
-    this.send('setoption name Threads value 1');
-    this.send('setoption name Hash value 32');
+        this.send('setoption name Hash value 32');
     this.send('setoption name MultiPV value 1');
 
     const engineReady = this.waitFor('readyok', 30000);
