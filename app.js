@@ -1665,6 +1665,13 @@ async function getReviewEngine() {
   return reviewEngineReady;
 }
 
+async function getWebBotMoveEngine() {
+  if (webBotMoveEngine) return webBotMoveEngine;
+  webBotMoveEngine = new ReviewStockfish();
+  await webBotMoveEngine.initialize();
+  return webBotMoveEngine;
+}
+
 function whiteReviewEval(result, turn) {
   let cp;
   if (result.mate != null) {
@@ -2221,6 +2228,8 @@ const BOT_STRENGTHS = {
 let webBotSession = null;
 let webBotSelectedSquare = null;
 let webBotAnalysisToken = 0;
+let webBotMoveEngine = null;
+let webBotTurnWatchdog = null;
 let botUserArrows = [];
 let botArrowStart = null;
 let botRightMouseDown = false;
@@ -2293,10 +2302,9 @@ async function startWebBotGameFromSetup() {
 
     paintWebBotGame();
     updateWebBotStatus();
-    updateWebBotEvaluation();
 
     if (!webBotIsPlayerTurn()) {
-      setTimeout(playWebBotMove, 450);
+      scheduleWebBotMove(120);
     }
   } catch (error) {
     console.error(error);
@@ -2309,6 +2317,8 @@ async function startWebBotGameFromSetup() {
 }
 
 function closeWebBotGame() {
+  clearTimeout(webBotTurnWatchdog);
+  webBotTurnWatchdog = null;
   $('bot-game-modal').hidden = true;
   webBotAnalysisToken++;
   webBotSession = null;
@@ -2487,7 +2497,27 @@ function handleWebBotSquare(square) {
   }
 
   // Give the bot's reply priority over the optional evaluation-bar search.
-  setTimeout(playWebBotMove, 220);
+  scheduleWebBotMove(60);
+}
+
+function scheduleWebBotMove(delay = 80) {
+  clearTimeout(webBotTurnWatchdog);
+  webBotTurnWatchdog = setTimeout(() => {
+    webBotTurnWatchdog = null;
+    if (!webBotSession ||
+        webBotSession.status !== 'active' ||
+        webBotIsPlayerTurn() ||
+        webBotSession.botThinking) return;
+
+    playWebBotMove().catch(error => {
+      console.error('Scheduled BOZO Bot move failed:', error);
+      if (webBotSession) {
+        webBotSession.botThinking = false;
+        $('bot-game-message').textContent =
+          error?.message || 'BOZO Bot could not move.';
+      }
+    });
+  }, delay);
 }
 
 async function playWebBotMove() {
@@ -2516,7 +2546,7 @@ async function playWebBotMove() {
       $('bot-game-message').textContent =
         `Stockfish is calculating at depth ${session.strength.depth}.`;
 
-      const engine = await getReviewEngine();
+      const engine = await getWebBotMoveEngine();
       const result = await engine.analyze(game.fen(), session.strength.depth);
       if (webBotSession !== session || session.status !== 'active') return;
 
@@ -2634,6 +2664,10 @@ function updateWebBotStatus() {
       session.phase === 'book'
         ? 'BOZO Bot will answer with the stored book move.'
         : 'BOZO Bot will choose a Stockfish move.';
+
+    // Recovery guard: if the UI is waiting on the bot and no search is active,
+    // ensure a bot turn is scheduled.
+    if (!webBotTurnWatchdog) scheduleWebBotMove(100);
   }
 }
 
@@ -2705,7 +2739,7 @@ function restartWebBotGame() {
   updateWebBotStatus();
   updateWebBotEvaluation();
 
-  if (!webBotIsPlayerTurn()) setTimeout(playWebBotMove, 450);
+  if (!webBotIsPlayerTurn()) scheduleWebBotMove(120);
 }
 
 function reviewWebBotGame() {

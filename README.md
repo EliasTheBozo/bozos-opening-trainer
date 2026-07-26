@@ -174,3 +174,8 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Prioritizes the bot's move after leaving opening theory
 - Refreshes the evaluation only after the bot has moved
 - Adds clearer Stockfish-thinking status during free play
+
+## Web v1.7.2 — Dedicated BOZO Bot Engine
+- Uses a separate Stockfish worker for bot moves
+- Adds a bot-turn watchdog to recover missed free-play handoffs
+- Prevents the review evaluation worker from delaying bot moves
