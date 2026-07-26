@@ -915,8 +915,39 @@ function groupMovesByTurn(moves = []) {
 }
 
 
+function duelMoveSan(entry) {
+  if (typeof entry === 'string') return entry;
+  if (!entry || typeof entry !== 'object') return '';
+
+  return String(
+    entry.san ??
+    entry.move_san ??
+    entry.move ??
+    entry.notation ??
+    ''
+  );
+}
+
+function normalizeDuelMoveHistory(history = []) {
+  if (!Array.isArray(history)) return [];
+  return history.map(duelMoveSan).filter(Boolean);
+}
+
+function duelStateSignature(duel) {
+  if (!duel) return '';
+  return JSON.stringify({
+    status: duel.status,
+    turn_user_id: duel.turn_user_id,
+    result: duel.result,
+    resulting_fen: duel.resulting_fen || duel.current_fen || duel.fen || '',
+    moves: normalizeDuelMoveHistory(duel.move_history)
+  });
+}
+
+
 function renderDuelMoveRows(moves = []) {
-  return groupMovesByTurn(moves).map(row => `
+  const normalizedMoves = normalizeDuelMoveHistory(moves);
+  return groupMovesByTurn(normalizedMoves).map(row => `
     <div class="grouped-move-row duel-history-row">
       <span class="move-number">${row.turn}.</span>
       <span>${escapeHtml(row.white)}</span>
@@ -1646,6 +1677,23 @@ class ReviewStockfish {
     unsubscribeInfo();
     return { cp, mate, bestMove, pv, depthSeen };
   }
+
+  terminate() {
+    try {
+      if (this.searching && this.worker) this.worker.postMessage('stop');
+    } catch (_) {}
+
+    try {
+      this.worker?.terminate();
+    } catch (_) {}
+
+    this.worker = null;
+    this.failure = null;
+    this.searching = false;
+    this.listeners.clear();
+    this.bestResolvers = [];
+    this.analysisQueue = Promise.resolve();
+  }
 }
 
 async function getReviewEngine() {
@@ -1657,6 +1705,9 @@ async function getReviewEngine() {
     $('review-engine-state').textContent = 'Stockfish 18 ready';
     return reviewEngine;
   })().catch(error => {
+    try {
+      reviewEngine?.terminate();
+    } catch (_) {}
     reviewEngineReady = null;
     reviewEngine = null;
     $('review-engine-state').textContent = 'Engine failed';
@@ -1665,11 +1716,29 @@ async function getReviewEngine() {
   return reviewEngineReady;
 }
 
+function resetManagedStockfish() {
+  try {
+    reviewEngine?.terminate();
+  } catch (_) {}
+
+  try {
+    if (webBotMoveEngine && webBotMoveEngine !== reviewEngine) {
+      webBotMoveEngine.terminate();
+    }
+  } catch (_) {}
+
+  reviewEngine = null;
+  reviewEngineReady = null;
+  webBotMoveEngine = null;
+
+  const label = $('review-engine-state');
+  if (label) label.textContent = 'Engine will restart';
+}
+
 async function getWebBotMoveEngine() {
-  if (webBotMoveEngine) return webBotMoveEngine;
-  webBotMoveEngine = new ReviewStockfish();
-  await webBotMoveEngine.initialize();
-  return webBotMoveEngine;
+  // One managed Stockfish worker is shared by BOZO Bot and Review.
+  // The evaluation bar stays paused during bot play.
+  return getReviewEngine();
 }
 
 function whiteReviewEval(result, turn) {
@@ -1800,6 +1869,7 @@ async function startGameReview() {
   const button = $('start-game-review');
   const pgn = $('review-pgn-input').value.trim();
 
+  resetManagedStockfish();
   message.textContent = '';
   if (!pgn) {
     message.textContent = 'Paste or upload a PGN first.';
@@ -2218,11 +2288,11 @@ function drawReviewCoachAnnotations(arrows = [], highlights = []) {
    ============================================================ */
 
 const BOT_STRENGTHS = {
-  beginner: { label: 'Beginner', depth: 4, randomness: 0.48 },
-  casual: { label: 'Casual', depth: 6, randomness: 0.28 },
-  club: { label: 'Club', depth: 9, randomness: 0.12 },
-  advanced: { label: 'Advanced', depth: 12, randomness: 0.04 },
-  master: { label: 'BOZO Master', depth: 15, randomness: 0 }
+  beginner: { label: 'Beginner', depth: 5, randomness: 0.24 },
+  casual: { label: 'Casual', depth: 7, randomness: 0.08 },
+  club: { label: 'Club', depth: 11, randomness: 0 },
+  advanced: { label: 'Advanced', depth: 14, randomness: 0 },
+  master: { label: 'BOZO Master', depth: 17, randomness: 0 }
 };
 
 let webBotSession = null;
@@ -2305,7 +2375,8 @@ async function startWebBotGameFromSetup() {
     paintWebBotGame();
     updateWebBotStatus();
     startWebBotTurnMonitor();
-    updateWebBotEvaluation();
+    $('bot-eval-label').textContent = 'Paused';
+    $('bot-eval-white').style.width = '50%';
 
     if (!webBotIsPlayerTurn()) {
       requestWebBotMove('game-start');
@@ -2330,6 +2401,8 @@ function closeWebBotGame() {
   webBotSession = null;
   webBotSelectedSquare = null;
   botUserArrows = [];
+
+  resetManagedStockfish();
 }
 
 function webBotIsPlayerTurn() {
@@ -2624,15 +2697,24 @@ async function playWebBotMove() {
         `Stockfish is calculating at depth ${session.strength.depth}.`;
 
       let result = null;
+      const searchTimeout = Math.max(14000, session.strength.depth * 1500);
 
-      try {
-        const engine = await getWebBotMoveEngine();
-        result = await withBotTimeout(
-          engine.analyze(game.fen(), session.strength.depth),
-          9000
-        );
-      } catch (engineError) {
-        console.warn('BOZO Bot Stockfish fallback:', engineError);
+      for (let attempt = 1; attempt <= 2 && !result; attempt++) {
+        try {
+          const engine = await getWebBotMoveEngine();
+          result = await withBotTimeout(
+            engine.analyze(game.fen(), session.strength.depth),
+            searchTimeout
+          );
+        } catch (engineError) {
+          console.warn(`BOZO Bot Stockfish attempt ${attempt} failed:`, engineError);
+          resetManagedStockfish();
+
+          if (attempt === 1) {
+            $('bot-game-message').textContent =
+              'Restarting Stockfish and recalculating…';
+          }
+        }
       }
 
       if (webBotSession !== session || session.status !== 'active') return null;
@@ -2665,6 +2747,7 @@ async function playWebBotMove() {
           promotion: fallback.promotion || 'q'
         });
         session.usedFallback = true;
+        console.warn('BOZO Bot used its emergency fallback move.');
       }
     }
 
@@ -2676,8 +2759,8 @@ async function playWebBotMove() {
     updateWebBotStatus();
 
     const gameEnded = checkWebBotGameOver();
-    // Evaluation is optional and runs only after the move has appeared.
-    updateWebBotEvaluation();
+    $('bot-eval-label').textContent =
+      session.usedFallback ? 'Fallback' : 'Engine';
     if (gameEnded) return;
   } catch (error) {
     console.error('BOZO Bot error:', error);
@@ -2774,26 +2857,9 @@ function renderWebBotMoveList() {
 
 async function updateWebBotEvaluation() {
   if (!webBotSession) return;
-  const session = webBotSession;
-  const token = ++webBotAnalysisToken;
-
-  try {
-    const engine = await getReviewEngine();
-    const result = await engine.analyze(session.game.fen(), 7);
-    if (token !== webBotAnalysisToken || webBotSession !== session) return;
-
-    const cp = whiteReviewEval(result, session.game.turn());
-    const bounded = result.mate != null
-      ? (result.mate > 0 ? 1000 : -1000)
-      : Math.max(-1000, Math.min(1000, cp));
-    const whitePercent = Math.max(5, Math.min(95, 50 + bounded / 20));
-    $('bot-eval-white').style.width = `${whitePercent}%`;
-    $('bot-eval-label').textContent = formatReviewEval(cp, result.mate);
-  } catch (error) {
-    if (token === webBotAnalysisToken) {
-      $('bot-eval-label').textContent = '?';
-    }
-  }
+  $('bot-eval-white').style.width = '50%';
+  $('bot-eval-label').textContent =
+    webBotSession.botThinking ? 'Thinking' : 'Paused';
 }
 
 function resignWebBotGame() {
@@ -2832,10 +2898,12 @@ function restartWebBotGame() {
   webBotSelectedSquare = null;
   botUserArrows = [];
   $('bot-review-button').hidden = true;
+  resetManagedStockfish();
   paintWebBotGame();
   updateWebBotStatus();
   startWebBotTurnMonitor();
-  updateWebBotEvaluation();
+  $('bot-eval-label').textContent = 'Paused';
+  $('bot-eval-white').style.width = '50%';
 
   if (!webBotIsPlayerTurn()) requestWebBotMove('restart');
 }
@@ -2937,6 +3005,9 @@ let activeWebDuel = null;
 let webDuelGame = null;
 let selectedWebSquare = null;
 let duelRealtimeChannel = null;
+let duelPollingTimer = null;
+let duelRefreshInFlight = false;
+let duelLastSignature = '';
 
 function renderChallenges() {
   const signedIn = Boolean(state.session?.user);
@@ -2979,7 +3050,11 @@ $$('[data-new-game-mode]').forEach(button => {
 
 $('close-challenge-create').addEventListener('click', () => $('challenge-create-modal').hidden = true);
 $('close-challenge-game').addEventListener('click', closeWebDuel);
-$('duel-refresh-button').addEventListener('click', () => openWebDuel(activeWebDuel?.id));
+$('duel-refresh-button').addEventListener('click', async () => {
+  if (!activeWebDuel?.id) return;
+  const changed = await refreshOpenWebDuel(activeWebDuel.id, { force: true });
+  toast(changed ? 'Board refreshed' : 'Board is already current');
+});
 $('duel-resign-button').addEventListener('click', resignWebDuel);
 
 let openingSearchTimer;
@@ -3115,36 +3190,116 @@ async function cancelWebChallenge(id) {
   await loadChallenges();
 }
 
-async function openWebDuel(id) {
-  const { data, error } = await sb.rpc('my_opening_challenges');
-  if (error) return toast(readableError(error));
-  activeWebDuel = (data || []).find(c => c.id === id);
-  if (!activeWebDuel) return toast('Duel not found');
+async function fetchWebDuel(id) {
+  if (duelRefreshInFlight) return null;
+  duelRefreshInFlight = true;
 
-  webDuelGame = new Chess();
-  for (const move of (activeWebDuel.move_history || [])) {
-    const result = webDuelGame.move(move.san, { sloppy:true });
-    if (!result) console.warn('Could not replay', move.san);
+  try {
+    const { data, error } = await sb.rpc('my_opening_challenges');
+    if (error) throw error;
+    return (data || []).find(challenge => challenge.id === id) || null;
+  } finally {
+    duelRefreshInFlight = false;
+  }
+}
+
+function replayWebDuelPosition(duel) {
+  const game = new Chess();
+  const moves = normalizeDuelMoveHistory(duel?.move_history);
+
+  for (const san of moves) {
+    const result = game.move(san, { sloppy: true });
+    if (!result) {
+      console.warn('Could not replay duel move:', san);
+      break;
+    }
   }
 
-  $('challenge-game-modal').hidden = false;
-  $('duel-game-title').textContent = activeWebDuel.opening_name;
-  $('duel-game-subtitle').textContent = `${activeWebDuel.variation_name || 'Main Line'} · vs ${challengeOpponentName(activeWebDuel)}`;
-  $('duel-book-name').textContent = activeWebDuel.variation_name || 'Main Line';
-  $('duel-book-pgn').textContent = activeWebDuel.line_pgn;
-  selectedWebSquare = null;
-  paintWebDuel();
+  return game;
+}
 
-  if (duelRealtimeChannel) sb.removeChannel(duelRealtimeChannel);
-  duelRealtimeChannel = sb.channel(`duel-${id}`)
-    .on('postgres_changes',{
-      event:'UPDATE',schema:'public',table:'opening_challenges',filter:`id=eq.${id}`
-    }, () => openWebDuel(id))
-    .subscribe();
+async function refreshOpenWebDuel(id, { force = false } = {}) {
+  const duel = await fetchWebDuel(id);
+  if (!duel) {
+    if (force) toast('Duel not found');
+    return false;
+  }
+
+  const signature = duelStateSignature(duel);
+  if (!force && signature === duelLastSignature) return false;
+
+  activeWebDuel = duel;
+  webDuelGame = replayWebDuelPosition(duel);
+  duelLastSignature = signature;
+  selectedWebSquare = null;
+
+  $('duel-game-title').textContent = duel.opening_name;
+  $('duel-game-subtitle').textContent =
+    `${duel.variation_name || 'Main Line'} · vs ${challengeOpponentName(duel)}`;
+  $('duel-book-name').textContent = duel.variation_name || 'Main Line';
+  $('duel-book-pgn').textContent = duel.line_pgn || '';
+
+  paintWebDuel();
+  return true;
+}
+
+function startWebDuelPolling(id) {
+  stopWebDuelPolling();
+
+  duelPollingTimer = setInterval(() => {
+    if ($('challenge-game-modal').hidden) return;
+    refreshOpenWebDuel(id).catch(error =>
+      console.warn('Duel polling refresh failed:', error)
+    );
+  }, 1200);
+}
+
+function stopWebDuelPolling() {
+  if (duelPollingTimer) clearInterval(duelPollingTimer);
+  duelPollingTimer = null;
+}
+
+async function openWebDuel(id) {
+  $('challenge-game-modal').hidden = false;
+
+  const loaded = await refreshOpenWebDuel(id, { force: true });
+  if (!loaded) {
+    $('challenge-game-modal').hidden = true;
+    return;
+  }
+
+  if (duelRealtimeChannel) {
+    sb.removeChannel(duelRealtimeChannel);
+    duelRealtimeChannel = null;
+  }
+
+  duelRealtimeChannel = sb.channel(`duel-${id}-${Date.now()}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'opening_challenges',
+        filter: `id=eq.${id}`
+      },
+      () => {
+        refreshOpenWebDuel(id, { force: true }).catch(error =>
+          console.warn('Realtime duel refresh failed:', error)
+        );
+      }
+    )
+    .subscribe(status => {
+      console.info('Duel realtime status:', status);
+    });
+
+  startWebDuelPolling(id);
 }
 
 function closeWebDuel() {
   $('challenge-game-modal').hidden = true;
+  stopWebDuelPolling();
+  duelLastSignature = '';
+
   if (duelRealtimeChannel) {
     sb.removeChannel(duelRealtimeChannel);
     duelRealtimeChannel = null;
@@ -3177,9 +3332,12 @@ function paintWebDuel() {
   $('duel-turn-badge').textContent = c.status === 'completed'
     ? `Finished · ${c.result || ''}`
     : myTurn ? '● your turn' : 'waiting for opponent';
+  const normalizedMoves = normalizeDuelMoveHistory(c.move_history);
   $('duel-game-message').textContent = myTurn
-    ? ((c.move_history || []).length < c.required_plies ? 'Book moves are enforced.' : 'The game is now out of book.')
-    : '';
+    ? (normalizedMoves.length < c.required_plies
+        ? 'Book moves are enforced.'
+        : 'The game is now out of book.')
+    : 'Waiting for your opponent’s move…';
 
   const orientation = myDuelColor(c);
   const ranks = orientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
@@ -3197,7 +3355,7 @@ function paintWebDuel() {
   $('web-duel-board').innerHTML=html.join('');
   $('web-duel-board').querySelectorAll('button').forEach(b => b.addEventListener('click', () => clickWebDuelSquare(b.dataset.square)));
 
-  const moves=c.move_history || [];
+  const moves = normalizeDuelMoveHistory(c.move_history);
   $('duel-move-list').innerHTML = renderDuelMoveRows(moves);
 }
 
@@ -3227,8 +3385,13 @@ async function clickWebDuelSquare(square) {
     paintWebDuel();
     return toast(readableError(error));
   }
-  activeWebDuel=data;
-  selectedWebSquare=null;
+  activeWebDuel = data;
+  duelLastSignature = duelStateSignature(data);
+  selectedWebSquare = null;
+
+  // Rebuild from the server response so both clients use the same canonical history.
+  webDuelGame = replayWebDuelPosition(activeWebDuel);
+  paintWebDuel();
 
   if (webDuelGame.in_checkmate()) {
     await sb.rpc('finish_opening_challenge',{
@@ -3240,7 +3403,7 @@ async function clickWebDuelSquare(square) {
       challenge_id:activeWebDuel.id,finish_reason:'draw',game_result:'1/2-1/2'
     });
   }
-  await openWebDuel(activeWebDuel.id);
+  await refreshOpenWebDuel(activeWebDuel.id, { force: true });
 }
 
 async function resignWebDuel() {
@@ -3253,6 +3416,21 @@ async function resignWebDuel() {
   await loadChallenges();
   toast('You resigned the duel');
 }
+
+
+window.addEventListener('focus', () => {
+  if (activeWebDuel?.id && !$('challenge-game-modal').hidden) {
+    refreshOpenWebDuel(activeWebDuel.id, { force: true }).catch(() => {});
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden &&
+      activeWebDuel?.id &&
+      !$('challenge-game-modal').hidden) {
+    refreshOpenWebDuel(activeWebDuel.id, { force: true }).catch(() => {});
+  }
+});
 
 function escapeHtml(value='') {
   return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));

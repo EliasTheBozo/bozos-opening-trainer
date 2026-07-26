@@ -189,3 +189,26 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Guaranteed legal fallback move
 - No recursive status scheduling
 - Cache-busted app.js?v=1.7.3
+
+
+## Web v1.7.4 — Managed Stockfish
+
+- Uses one managed Stockfish worker across BOZO Bot and Review
+- Pauses the live bot evaluation bar to protect move quality
+- Raises Club depth to 11 and removes random Club moves
+- Retries failed Stockfish searches with a fresh worker
+- Recreates Stockfish before every Game Review
+- Terminates bot workers before entering Review
+- Cache-busts app.js?v=1.7.4
+
+
+## Web v1.7.5 — Live Duel Synchronization
+
+- Fixes `[object Object]` in multiplayer move history
+- Normalizes string and object move-history formats
+- Rebuilds each board from canonical server move history
+- Uses Supabase Realtime plus a 1.2-second polling fallback
+- Refreshes duels when the browser regains focus
+- Updates the local mover immediately from the server response
+- Keeps manual Refresh without recreating subscriptions
+- Cache-busts app.js?v=1.7.5
