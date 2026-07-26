@@ -278,3 +278,28 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
   .line-heading { display:block; }
   .line-heading span { display:block; margin-top:4px; }
 }
+
+/* WEB v1.4 — OPENING DUELS */
+.challenge-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.challenge-tabs button{padding:10px 14px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.025);color:var(--muted);font-weight:850}
+.challenge-tabs button.active{background:rgba(168,85,247,.2);color:#fff;border-color:#a855f7}
+.web-challenge-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.web-duel-card{padding:20px;border:1px solid var(--border);border-radius:18px;background:linear-gradient(145deg,rgba(50,23,66,.82),rgba(20,9,27,.97))}
+.web-duel-card-head{display:flex;justify-content:space-between;gap:12px}
+.web-duel-card-head span{color:#7fffd4;font-size:8px;font-weight:900}.web-duel-card-head h3{margin:6px 0}
+.web-duel-card p,.web-duel-card small{color:var(--muted)}
+.duel-status{padding:6px 9px;border-radius:999px;height:max-content;font-size:8px;font-weight:900;text-transform:uppercase}
+.duel-status.active{background:rgba(85,227,157,.13);color:#85ffc0}.duel-status.pending{background:rgba(255,211,77,.12);color:#ffd34d}.duel-status.completed{background:rgba(77,215,255,.12);color:#4dd7ff}
+.duel-progress{height:7px;background:rgba(255,255,255,.06);border-radius:999px;margin:13px 0 6px;overflow:hidden}.duel-progress i{display:block;height:100%;background:linear-gradient(90deg,#7c3aed,#ff9a32)}
+.duel-card-actions{display:flex;gap:8px;margin-top:14px}
+.challenge-create-modal h2{font-size:32px;margin:8px 0 18px}
+.duel-opening-results{display:grid;gap:7px;max-height:220px;overflow:auto;margin-bottom:12px}
+.duel-opening-results button{text-align:left;padding:10px;border:1px solid var(--border);border-radius:11px;background:rgba(255,255,255,.025);color:#fff}.duel-opening-results b,.duel-opening-results span,.duel-opening-results code{display:block}.duel-opening-results span,.duel-opening-results code{color:var(--muted);font-size:8px;margin-top:3px}
+.duel-game-modal{position:relative;width:min(1000px,96vw);max-height:94vh;overflow:auto;padding:24px;border:1px solid var(--border);border-radius:23px;background:linear-gradient(145deg,#291336,#100616);box-shadow:var(--shadow)}
+.duel-game-header{display:flex;justify-content:space-between;gap:20px;align-items:start}.duel-game-header h2{margin:6px 0 3px}.duel-game-header p{margin:0;color:var(--muted)}
+.duel-game-layout{display:grid;grid-template-columns:minmax(330px,620px) 1fr;gap:20px;margin-top:18px}
+.web-duel-board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border:3px solid #ff9a32;border-radius:10px;overflow:hidden}.web-duel-board button{border:0;font-size:clamp(24px,4vw,56px);display:grid;place-items:center;cursor:pointer}.web-duel-board button:nth-child(16n+1),.web-duel-board button:nth-child(16n+3),.web-duel-board button:nth-child(16n+5),.web-duel-board button:nth-child(16n+7),.web-duel-board button:nth-child(16n+10),.web-duel-board button:nth-child(16n+12),.web-duel-board button:nth-child(16n+14),.web-duel-board button:nth-child(16n+16){background:#e7ddbd}.web-duel-board button{background:#765666}.web-duel-board button.selected{box-shadow:inset 0 0 0 5px #ffd34d}
+.duel-actions{display:flex;gap:8px;margin-top:10px}.duel-sidebar{display:grid;align-content:start;gap:18px}.duel-book-card{padding:15px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025)}.duel-book-card span,.duel-book-card b,.duel-book-card code{display:block}.duel-book-card span{color:#ffd34d;font-size:8px;font-weight:900}.duel-book-card b{margin:6px 0}.duel-book-card code{color:var(--muted);font-size:9px;line-height:1.5;white-space:normal}
+.duel-move-list{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;max-height:260px;overflow:auto}.duel-move-list span{padding:7px;border-radius:8px;background:rgba(255,255,255,.03);font-size:10px}
+.family-action-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,.065)}.family-action-row .family-toggle{border-top:0}.family-practice-button,.line-challenge-button{border:0;background:linear-gradient(135deg,#ff9a32,#ff6818);color:#160700;font-weight:900;cursor:pointer}.family-practice-button{padding:13px 21px}.single-line-actions{border-top:1px solid rgba(255,255,255,.065)}.single-line-actions .family-practice-button{width:100%}.line-challenge-button{margin-top:10px;padding:7px 10px;border-radius:8px;font-size:8px}
+@media(max-width:850px){.web-challenge-list{grid-template-columns:1fr}.duel-game-layout{grid-template-columns:1fr}.duel-game-modal{padding:16px}.family-action-row{grid-template-columns:1fr}}

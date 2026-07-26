@@ -49,6 +49,7 @@ function route(name) {
 
   if (name === 'library') searchOpenings('');
   if (name === 'dashboard') renderDashboard();
+  if (name === 'challenges') renderChallenges();
   if (name === 'profile') renderProfile();
   if (name === 'owner') renderOwnerGate();
 }
@@ -166,6 +167,7 @@ function renderShell() {
 
   renderDashboard();
   renderProfile();
+  renderChallenges();
 }
 
 function masteryStats() {
@@ -690,6 +692,309 @@ async function importOpeningLibrary() {
   } finally {
     button.disabled = false;
   }
+}
+
+
+let challengeFilter = 'active';
+let webChallengeRows = [];
+let activeWebDuel = null;
+let webDuelGame = null;
+let selectedWebSquare = null;
+let duelRealtimeChannel = null;
+
+function renderChallenges() {
+  const signedIn = Boolean(state.session?.user);
+  $('challenges-guest').hidden = signedIn;
+  $('challenges-user').hidden = !signedIn;
+  if (signedIn) loadChallenges();
+}
+
+$$('[data-challenge-filter]').forEach(button => {
+  button.addEventListener('click', () => {
+    challengeFilter = button.dataset.challengeFilter;
+    $$('[data-challenge-filter]').forEach(b => b.classList.toggle('active', b === button));
+    paintChallengeList();
+  });
+});
+
+$('new-challenge-button').addEventListener('click', () => {
+  $('challenge-create-modal').hidden = false;
+  $('duel-opening-results').innerHTML = '';
+  $('duel-opening-id').value = '';
+});
+$('close-challenge-create').addEventListener('click', () => $('challenge-create-modal').hidden = true);
+$('close-challenge-game').addEventListener('click', closeWebDuel);
+$('duel-refresh-button').addEventListener('click', () => openWebDuel(activeWebDuel?.id));
+$('duel-resign-button').addEventListener('click', resignWebDuel);
+
+let openingSearchTimer;
+$('duel-opening-search').addEventListener('input', () => {
+  clearTimeout(openingSearchTimer);
+  openingSearchTimer = setTimeout(searchDuelOpenings, 260);
+});
+$('send-opening-duel').addEventListener('click', sendWebChallenge);
+
+async function searchDuelOpenings() {
+  const query = $('duel-opening-search').value.trim();
+  if (query.length < 2) return $('duel-opening-results').innerHTML = '';
+  const { data, error } = await sb.from('openings')
+    .select('id,eco,name,variation,pgn')
+    .eq('status','published')
+    .or(`name.ilike.%${query}%,variation.ilike.%${query}%,eco.ilike.%${query}%`)
+    .order('name').limit(20);
+  if (error) return $('duel-opening-results').textContent = readableError(error);
+  $('duel-opening-results').innerHTML = (data || []).map(o => `
+    <button data-duel-opening-id="${o.id}">
+      <b>${escapeHtml(o.name)}</b>
+      <span>${escapeHtml(o.variation || 'Main Line')} · ${escapeHtml(o.eco || 'ECO —')}</span>
+      <code>${escapeHtml((o.pgn || '').slice(0,120))}</code>
+    </button>`).join('');
+  $('duel-opening-results').querySelectorAll('button').forEach((button, i) => {
+    button.addEventListener('click', () => {
+      const opening = data[i];
+      $('duel-opening-id').value = opening.id;
+      $('duel-opening-search').value = `${opening.name}${opening.variation ? ': ' + opening.variation : ''}`;
+      $('duel-opening-results').innerHTML = '';
+    });
+  });
+}
+
+async function sendWebChallenge() {
+  const openingId = $('duel-opening-id').value;
+  const opponent = $('duel-opponent').value.trim();
+  if (!opponent || !openingId) {
+    $('duel-create-status').textContent = 'Choose an opponent and a cloud opening line.';
+    return;
+  }
+  $('duel-create-status').textContent = 'Sending…';
+  const { error } = await sb.rpc('create_opening_challenge', {
+    opponent_username: opponent,
+    selected_opening_id: openingId,
+    selected_color: $('duel-color').value,
+    selected_required_plies: Number($('duel-required-plies').value),
+    selected_time_control: 'correspondence'
+  });
+  if (error) return $('duel-create-status').textContent = readableError(error);
+  $('challenge-create-modal').hidden = true;
+  toast('Opening Duel sent');
+  challengeFilter = 'sent';
+  await loadChallenges();
+}
+
+async function loadChallenges() {
+  const { data, error } = await sb.rpc('my_opening_challenges');
+  if (error) {
+    $('web-challenge-list').innerHTML = `<div class="empty-state"><b>${escapeHtml(readableError(error))}</b></div>`;
+    return;
+  }
+  webChallengeRows = data || [];
+  paintChallengeList();
+}
+
+function challengeOpponentName(c) {
+  const me = state.session.user.id;
+  return c.challenger_id === me
+    ? `${c.opponent_ign} (@${c.opponent_username})`
+    : `${c.challenger_ign} (@${c.challenger_username})`;
+}
+
+function challengeColor(c) {
+  const me = state.session.user.id;
+  const challengerIsWhite = c.challenger_color === 'white';
+  const iAmChallenger = c.challenger_id === me;
+  return (challengerIsWhite === iAmChallenger) ? 'White' : 'Black';
+}
+
+function filteredChallenges() {
+  const uid = state.session.user.id;
+  return webChallengeRows.filter(c => {
+    if (challengeFilter === 'active') return c.status === 'active';
+    if (challengeFilter === 'incoming') return c.status === 'pending' && c.opponent_id === uid;
+    if (challengeFilter === 'sent') return c.status === 'pending' && c.challenger_id === uid;
+    return ['completed','declined','cancelled'].includes(c.status);
+  });
+}
+
+function paintChallengeList() {
+  const rows = filteredChallenges();
+  const target = $('web-challenge-list');
+  if (!rows.length) {
+    target.innerHTML = `<div class="empty-state"><div>⚔</div><b>No ${challengeFilter} duels</b><span>Challenge someone to an exact opening or sideline.</span></div>`;
+    return;
+  }
+  target.innerHTML = rows.map(c => {
+    const incoming = c.status === 'pending' && c.opponent_id === state.session.user.id;
+    const sent = c.status === 'pending' && c.challenger_id === state.session.user.id;
+    const active = c.status === 'active';
+    const moveCount = (c.move_history || []).length;
+    return `<article class="web-duel-card">
+      <div class="web-duel-card-head">
+        <div><span>${escapeHtml(c.variation_name || 'Main Line')}</span><h3>${escapeHtml(c.opening_name)}</h3></div>
+        <div class="duel-status ${c.status}">${escapeHtml(c.status)}</div>
+      </div>
+      <p>vs ${escapeHtml(challengeOpponentName(c))} · You play ${challengeColor(c)}</p>
+      <div class="duel-progress"><i style="width:${Math.min(100,(moveCount/c.required_plies)*100)}%"></i></div>
+      <small>${moveCount}/${c.required_plies} required book plies completed</small>
+      <div class="duel-card-actions">
+        ${incoming ? `<button class="button primary" onclick="respondWebChallenge('${c.id}',true)">Accept</button><button class="button secondary" onclick="respondWebChallenge('${c.id}',false)">Decline</button>` : ''}
+        ${sent ? `<button class="button secondary" onclick="cancelWebChallenge('${c.id}')">Cancel</button>` : ''}
+        ${active ? `<button class="button primary" onclick="openWebDuel('${c.id}')">Open board</button>` : ''}
+      </div>
+    </article>`;
+  }).join('');
+}
+
+async function respondWebChallenge(id, accept) {
+  const { error } = await sb.rpc('respond_opening_challenge',{challenge_id:id,accept_challenge:accept});
+  if (error) return toast(readableError(error));
+  toast(accept ? 'Challenge accepted' : 'Challenge declined');
+  await loadChallenges();
+}
+async function cancelWebChallenge(id) {
+  const { error } = await sb.rpc('cancel_opening_challenge',{challenge_id:id});
+  if (error) return toast(readableError(error));
+  toast('Challenge cancelled');
+  await loadChallenges();
+}
+
+async function openWebDuel(id) {
+  const { data, error } = await sb.rpc('my_opening_challenges');
+  if (error) return toast(readableError(error));
+  activeWebDuel = (data || []).find(c => c.id === id);
+  if (!activeWebDuel) return toast('Duel not found');
+
+  webDuelGame = new Chess();
+  for (const move of (activeWebDuel.move_history || [])) {
+    const result = webDuelGame.move(move.san, { sloppy:true });
+    if (!result) console.warn('Could not replay', move.san);
+  }
+
+  $('challenge-game-modal').hidden = false;
+  $('duel-game-title').textContent = activeWebDuel.opening_name;
+  $('duel-game-subtitle').textContent = `${activeWebDuel.variation_name || 'Main Line'} · vs ${challengeOpponentName(activeWebDuel)}`;
+  $('duel-book-name').textContent = activeWebDuel.variation_name || 'Main Line';
+  $('duel-book-pgn').textContent = activeWebDuel.line_pgn;
+  selectedWebSquare = null;
+  paintWebDuel();
+
+  if (duelRealtimeChannel) sb.removeChannel(duelRealtimeChannel);
+  duelRealtimeChannel = sb.channel(`duel-${id}`)
+    .on('postgres_changes',{
+      event:'UPDATE',schema:'public',table:'opening_challenges',filter:`id=eq.${id}`
+    }, () => openWebDuel(id))
+    .subscribe();
+}
+
+function closeWebDuel() {
+  $('challenge-game-modal').hidden = true;
+  if (duelRealtimeChannel) {
+    sb.removeChannel(duelRealtimeChannel);
+    duelRealtimeChannel = null;
+  }
+}
+
+function webPiece(symbol) {
+  return {p:'♟',r:'♜',n:'♞',b:'♝',q:'♛',k:'♚',P:'♙',R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔'}[symbol] || '';
+}
+
+function fenBoard(fen) {
+  const boardPart = (fen === 'start' ? new Chess().fen() : fen).split(' ')[0];
+  return boardPart.split('/').map(rank => {
+    const squares=[];
+    for (const ch of rank) {
+      if (/\d/.test(ch)) for(let i=0;i<Number(ch);i++) squares.push('');
+      else squares.push(ch);
+    }
+    return squares;
+  });
+}
+
+function myDuelColor(c) {
+  return challengeColor(c).toLowerCase();
+}
+
+function paintWebDuel() {
+  const c = activeWebDuel;
+  const myTurn = c.turn_user_id === state.session.user.id;
+  $('duel-turn-badge').textContent = c.status === 'completed'
+    ? `Finished · ${c.result || ''}`
+    : myTurn ? '● your turn' : 'waiting for opponent';
+  $('duel-game-message').textContent = myTurn
+    ? ((c.move_history || []).length < c.required_plies ? 'Book moves are enforced.' : 'The game is now out of book.')
+    : '';
+
+  const orientation = myDuelColor(c);
+  const ranks = orientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = orientation === 'white' ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
+  const board = fenBoard(webDuelGame.fen());
+  const html=[];
+  for (const rankNum of ranks) {
+    for (const file of files) {
+      const row=8-rankNum, col=file.charCodeAt(0)-97;
+      const square=`${file}${rankNum}`;
+      const piece=board[row][col];
+      html.push(`<button data-square="${square}" class="${selectedWebSquare===square?'selected':''}">${webPiece(piece)}</button>`);
+    }
+  }
+  $('web-duel-board').innerHTML=html.join('');
+  $('web-duel-board').querySelectorAll('button').forEach(b => b.addEventListener('click', () => clickWebDuelSquare(b.dataset.square)));
+
+  const moves=c.move_history || [];
+  $('duel-move-list').innerHTML = moves.length ? moves.map((m,i) =>
+    `<span><b>${i+1}.</b> ${escapeHtml(m.san)}</span>`).join('') : '<small>No moves yet.</small>';
+}
+
+async function clickWebDuelSquare(square) {
+  if (!activeWebDuel || activeWebDuel.status !== 'active') return;
+  if (activeWebDuel.turn_user_id !== state.session.user.id) return toast('It is not your turn.');
+
+  if (!selectedWebSquare) {
+    const piece=webDuelGame.get(square);
+    if (!piece || piece.color !== (myDuelColor(activeWebDuel)==='white'?'w':'b')) return;
+    selectedWebSquare=square; paintWebDuel(); return;
+  }
+
+  let move=webDuelGame.move({from:selectedWebSquare,to:square,promotion:'q'});
+  if (!move) {
+    selectedWebSquare=null; paintWebDuel(); return;
+  }
+
+  const { data, error } = await sb.rpc('play_opening_challenge_move',{
+    challenge_id:activeWebDuel.id,
+    move_san:move.san,
+    resulting_fen:webDuelGame.fen()
+  });
+  if (error) {
+    webDuelGame.undo();
+    selectedWebSquare=null;
+    paintWebDuel();
+    return toast(readableError(error));
+  }
+  activeWebDuel=data;
+  selectedWebSquare=null;
+
+  if (webDuelGame.in_checkmate()) {
+    await sb.rpc('finish_opening_challenge',{
+      challenge_id:activeWebDuel.id,finish_reason:'checkmate',
+      game_result:webDuelGame.turn()==='w'?'0-1':'1-0'
+    });
+  } else if (webDuelGame.in_draw()) {
+    await sb.rpc('finish_opening_challenge',{
+      challenge_id:activeWebDuel.id,finish_reason:'draw',game_result:'1/2-1/2'
+    });
+  }
+  await openWebDuel(activeWebDuel.id);
+}
+
+async function resignWebDuel() {
+  if (!activeWebDuel || !confirm('Resign this Opening Duel?')) return;
+  const { error } = await sb.rpc('finish_opening_challenge',{
+    challenge_id:activeWebDuel.id,finish_reason:'resign',game_result:null
+  });
+  if (error) return toast(readableError(error));
+  closeWebDuel();
+  await loadChallenges();
+  toast('You resigned the duel');
 }
 
 function escapeHtml(value='') {

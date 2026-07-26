@@ -9,6 +9,7 @@
   <link rel="icon" href="./assets/bozo-mascot.webp">
   <link rel="stylesheet" href="./styles.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 </head>
 <body>
   <div class="background-glow glow-one"></div>
@@ -27,6 +28,7 @@
       <button data-route="home">Home</button>
       <button data-route="library">Opening Library</button>
       <button data-route="dashboard">Dashboard</button>
+      <button data-route="challenges">Challenges</button>
       <button data-route="profile">Profile</button>
       <button id="owner-nav" data-route="owner" hidden>Owner's Office</button>
     </nav>
@@ -42,6 +44,7 @@
     <button data-route="home">Home</button>
     <button data-route="library">Opening Library</button>
     <button data-route="dashboard">Dashboard</button>
+    <button data-route="challenges">Challenges</button>
     <button data-route="profile">Profile</button>
     <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
   </div>
@@ -211,7 +214,36 @@
       </div>
     </section>
 
-    <section id="view-profile" class="view">
+    
+    <section id="view-challenges" class="view">
+      <div id="challenges-guest" class="auth-required">
+        <img src="./assets/bozo-mascot.webp" alt="">
+        <h1>Opening Duels</h1>
+        <p>Sign in to challenge another player to one exact opening or sideline.</p>
+        <button class="button primary open-auth">Sign in</button>
+      </div>
+
+      <div id="challenges-user" hidden>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow">OPENING DUELS</div>
+            <h1>Prove your theory.</h1>
+            <p>Choose a cloud line, send it to another player, and play the position together.</p>
+          </div>
+          <button id="new-challenge-button" class="button primary">New challenge</button>
+        </div>
+
+        <div class="challenge-tabs">
+          <button class="active" data-challenge-filter="active">Active</button>
+          <button data-challenge-filter="incoming">Incoming</button>
+          <button data-challenge-filter="sent">Sent</button>
+          <button data-challenge-filter="completed">Completed</button>
+        </div>
+        <div id="web-challenge-list" class="web-challenge-list"></div>
+      </div>
+    </section>
+
+<section id="view-profile" class="view">
       <div id="profile-guest" class="auth-required">
         <img src="./assets/bozo-mascot.webp" alt="">
         <h1>Your BOZO profile</h1>
@@ -332,7 +364,70 @@
     </div>
   </div>
 
-  <div id="toast" class="toast" hidden></div>
+  
+  <div id="challenge-create-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal challenge-create-modal">
+      <button id="close-challenge-create" class="modal-close">×</button>
+      <div class="eyebrow">NEW OPENING DUEL</div>
+      <h2>Choose the battleground</h2>
+      <label>Opponent username<input id="duel-opponent" placeholder="@username"></label>
+      <label>Opening or sideline
+        <input id="duel-opening-search" placeholder="Search Polish, Alekhine, Italian…">
+      </label>
+      <div id="duel-opening-results" class="duel-opening-results"></div>
+      <input id="duel-opening-id" type="hidden">
+      <label>Your color
+        <select id="duel-color"><option value="white">White</option><option value="black">Black</option></select>
+      </label>
+      <label>Required book moves
+        <select id="duel-required-plies">
+          <option value="8">4 moves</option>
+          <option value="12" selected>6 moves</option>
+          <option value="16">8 moves</option>
+          <option value="20">10 moves</option>
+        </select>
+      </label>
+      <button id="send-opening-duel" class="button primary">Send challenge</button>
+      <div id="duel-create-status" class="auth-message"></div>
+    </div>
+  </div>
+
+  <div id="challenge-game-modal" class="modal-backdrop" hidden>
+    <div class="duel-game-modal">
+      <button id="close-challenge-game" class="modal-close">×</button>
+      <div class="duel-game-header">
+        <div>
+          <div class="eyebrow">OPENING DUEL</div>
+          <h2 id="duel-game-title">Opening</h2>
+          <p id="duel-game-subtitle"></p>
+        </div>
+        <span id="duel-turn-badge" class="cloud-pill">Loading…</span>
+      </div>
+      <div class="duel-game-layout">
+        <div>
+          <div id="web-duel-board" class="web-duel-board"></div>
+          <div class="duel-actions">
+            <button id="duel-resign-button" class="button secondary">Resign</button>
+            <button id="duel-refresh-button" class="button secondary">Refresh</button>
+          </div>
+        </div>
+        <aside class="duel-sidebar">
+          <div class="duel-book-card">
+            <span>SELECTED LINE</span>
+            <b id="duel-book-name"></b>
+            <code id="duel-book-pgn"></code>
+          </div>
+          <div>
+            <span class="eyebrow">MOVES</span>
+            <div id="duel-move-list" class="duel-move-list"></div>
+          </div>
+          <div id="duel-game-message" class="auth-message"></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+<div id="toast" class="toast" hidden></div>
 
   <script src="./app.js"></script>
 </body>

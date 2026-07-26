@@ -91,3 +91,15 @@ Example:
 
 Families are generated from the canonical opening name before the first colon.
 Each family can be expanded to show all stored move orders and variations.
+
+## Web v1.4 Opening Duels
+
+Run `bozos_v2_4_opening_duels.sql` before deploying this version.
+
+Features:
+- Challenge another username to an exact cloud opening or sideline
+- Accept, decline, or cancel invitations
+- Shared turn-by-turn board with Supabase Realtime
+- Required book moves are enforced before free play
+- Checkmate, draw, and resignation completion
+- Single-line library cards no longer show a pointless dropdown
