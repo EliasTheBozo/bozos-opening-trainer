@@ -76,3 +76,18 @@ CC0 Lichess chess-opening TSV files in the browser and imports them to Supabase
 through the protected `owner_import_openings` function.
 
 Run the accompanying v2.3 Supabase migration before using the importer.
+
+
+## Web v1.3 opening hierarchy
+
+The Opening Library now groups flat cloud records into opening families.
+
+Example:
+- Alekhine Defense
+  - Main Line
+  - Balogh Variation
+  - Brooklyn Variation
+  - Buckley Attack
+
+Families are generated from the canonical opening name before the first colon.
+Each family can be expanded to show all stored move orders and variations.

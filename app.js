@@ -272,7 +272,7 @@ async function searchOpenings(query) {
   const target = $('opening-results');
   target.innerHTML = '<div class="empty-state"><div>⌛</div><b>Searching theory…</b></div>';
 
-  let req = sb.from('openings').select('id,eco,name,variation,pgn,source_type').eq('status','published').limit(60);
+  let req = sb.from('openings').select('id,eco,name,variation,pgn,source_type').eq('status','published').limit(10000);
   if (query.trim()) req = req.or(`name.ilike.%${query.trim()}%,variation.ilike.%${query.trim()}%,eco.ilike.%${query.trim()}%`);
   const { data, error } = await req.order('name');
 
@@ -286,15 +286,142 @@ async function searchOpenings(query) {
     return;
   }
 
-  target.innerHTML = data.map(o => `
-    <article class="opening-card">
-      <span>${escapeHtml(o.eco || 'ECO —')} · ${escapeHtml(o.source_type || 'official')}</span>
-      <h3>${escapeHtml(o.name)}</h3>
-      ${o.variation ? `<small>${escapeHtml(o.variation)}</small>` : ''}
-      <div class="pgn">${escapeHtml((o.pgn || '').slice(0,220))}${(o.pgn || '').length > 220 ? '…' : ''}</div>
-      <span class="tag">Cloud opening</span>
+  const families = groupOpeningFamilies(data);
+  target.innerHTML = families.map(renderOpeningFamily).join('');
+
+  target.querySelectorAll('[data-family-toggle]').forEach(button => {
+    button.addEventListener('click', () => {
+      const familyId = button.dataset.familyToggle;
+      const body = document.querySelector(`[data-family-body="${familyId}"]`);
+      const expanded = button.getAttribute('aria-expanded') === 'true';
+      button.setAttribute('aria-expanded', String(!expanded));
+      body.hidden = expanded;
+      button.querySelector('.family-toggle-label').textContent =
+        expanded ? `View ${body.dataset.count} lines` : 'Hide lines';
+      button.querySelector('.family-chevron').textContent = expanded ? '⌄' : '⌃';
+    });
+  });
+}
+
+function familyBaseName(name = '') {
+  const colon = name.indexOf(':');
+  return (colon === -1 ? name : name.slice(0, colon)).trim() || 'Unnamed Opening';
+}
+
+function variationLabel(opening) {
+  if (opening.variation?.trim()) return opening.variation.trim();
+  const base = familyBaseName(opening.name);
+  if (opening.name.startsWith(base + ':')) {
+    return opening.name.slice(base.length + 1).trim();
+  }
+  return opening.name === base ? 'Main Line' : opening.name;
+}
+
+function moveCount(pgn = '') {
+  return (pgn.match(/\d+\./g) || []).length;
+}
+
+function groupOpeningFamilies(openings) {
+  const map = new Map();
+
+  for (const opening of openings) {
+    const base = familyBaseName(opening.name);
+    const key = base.toLowerCase();
+
+    if (!map.has(key)) {
+      map.set(key, {
+        id: `family-${key.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+        name: base,
+        ecos: new Set(),
+        sourceTypes: new Set(),
+        lines: []
+      });
+    }
+
+    const family = map.get(key);
+    if (opening.eco) family.ecos.add(opening.eco);
+    if (opening.source_type) family.sourceTypes.add(opening.source_type);
+    family.lines.push({
+      ...opening,
+      displayVariation: variationLabel(opening),
+      moveCount: moveCount(opening.pgn)
+    });
+  }
+
+  return Array.from(map.values())
+    .map(family => {
+      family.lines.sort((a, b) => {
+        const aMain = a.displayVariation === 'Main Line' ? 0 : 1;
+        const bMain = b.displayVariation === 'Main Line' ? 0 : 1;
+        return aMain - bMain ||
+          a.moveCount - b.moveCount ||
+          a.displayVariation.localeCompare(b.displayVariation);
+      });
+
+      const richest = [...family.lines].sort((a, b) =>
+        b.moveCount - a.moveCount ||
+        (b.pgn?.length || 0) - (a.pgn?.length || 0)
+      )[0];
+
+      return {
+        ...family,
+        ecos: Array.from(family.ecos).sort(),
+        sourceTypes: Array.from(family.sourceTypes),
+        preview: richest
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function renderOpeningFamily(family) {
+  const lineCount = family.lines.length;
+  const visibleEcos = family.ecos.slice(0, 4).join(', ');
+  const extraEcos = family.ecos.length > 4 ? ` +${family.ecos.length - 4}` : '';
+  const officialCount = family.lines.filter(line => line.source_type === 'official').length;
+  const bozoCount = family.lines.filter(line => line.source_type === 'bozo').length;
+
+  return `
+    <article class="opening-family-card">
+      <div class="family-card-header">
+        <div>
+          <span class="family-meta">${escapeHtml(visibleEcos || 'ECO —')}${extraEcos}</span>
+          <h3>${escapeHtml(family.name)}</h3>
+          <p>
+            ${lineCount.toLocaleString()} ${lineCount === 1 ? 'line' : 'lines'}
+            ${officialCount ? ` · ${officialCount} official` : ''}
+            ${bozoCount ? ` · ${bozoCount} BOZO` : ''}
+          </p>
+        </div>
+        <span class="family-count">${lineCount}</span>
+      </div>
+
+      <div class="family-preview">
+        <span>${escapeHtml(family.preview.displayVariation)}</span>
+        <code>${escapeHtml((family.preview.pgn || '').slice(0,180))}${(family.preview.pgn || '').length > 180 ? '…' : ''}</code>
+      </div>
+
+      <button class="family-toggle" data-family-toggle="${family.id}" aria-expanded="false">
+        <span class="family-toggle-label">View ${lineCount} ${lineCount === 1 ? 'line' : 'lines'}</span>
+        <span class="family-chevron">⌄</span>
+      </button>
+
+      <div class="family-lines" data-family-body="${family.id}" data-count="${lineCount}" hidden>
+        ${family.lines.map((line, index) => `
+          <div class="family-line-row">
+            <div class="line-index">${index + 1}</div>
+            <div class="line-content">
+              <div class="line-heading">
+                <b>${escapeHtml(line.displayVariation)}</b>
+                <span>${escapeHtml(line.eco || 'ECO —')} · ${escapeHtml(line.source_type || 'official')}</span>
+              </div>
+              <code>${escapeHtml(line.pgn || '')}</code>
+              ${line.notes ? `<p>${escapeHtml(line.notes)}</p>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
     </article>
-  `).join('');
+  `;
 }
 
 function renderOwnerGate() {
