@@ -337,6 +337,35 @@ async function loadOwnerPanel(panel) {
     return;
   }
 
+
+  if (panel === 'import') {
+    target.innerHTML = `
+      <div class="panel-heading">
+        <div><span>CANONICAL LIBRARY</span><h2>Import openings into Supabase</h2></div>
+      </div>
+      <div class="import-explainer">
+        <p>
+          This downloads the five CC0 Lichess opening files in your browser,
+          combines them with BOZO custom variations, and safely upserts them
+          into <code>public.openings</code> in batches.
+        </p>
+        <div class="import-summary">
+          <span><b>Source</b>Lichess chess-openings + BOZO custom lines</span>
+          <span><b>Destination</b>Supabase public.openings</span>
+          <span><b>Safety</b>Existing IDs update, progress is preserved</span>
+        </div>
+        <button id="start-opening-import" class="button primary">
+          Import full opening library
+        </button>
+        <div id="opening-import-status" class="import-status">
+          Ready. This may take a few minutes.
+        </div>
+        <div class="import-progress"><div id="opening-import-progress-bar"></div></div>
+      </div>`;
+    $('start-opening-import').addEventListener('click', importOpeningLibrary);
+    return;
+  }
+
   if (panel === 'announcements') {
     target.innerHTML = `<div class="panel-heading"><div><span>BULLETIN</span><h2>Publish an announcement</h2></div></div>
       <div class="announcement-form">
@@ -396,6 +425,144 @@ async function publishAnnouncement() {
   toast('Announcement published');
   await loadAnnouncement();
   route('home');
+}
+
+
+const OPENING_TSV_URLS = [
+  'https://raw.githubusercontent.com/lichess-org/chess-openings/master/a.tsv',
+  'https://raw.githubusercontent.com/lichess-org/chess-openings/master/b.tsv',
+  'https://raw.githubusercontent.com/lichess-org/chess-openings/master/c.tsv',
+  'https://raw.githubusercontent.com/lichess-org/chess-openings/master/d.tsv',
+  'https://raw.githubusercontent.com/lichess-org/chess-openings/master/e.tsv'
+];
+
+const BOZO_CLOUD_OPENINGS = [
+  {
+    eco:'A09',
+    name:'Réti Opening: Polish Grob Attack',
+    variation:'Bozo Main Line',
+    pgn:'1. Nf3 d5 2. b4 Nf6 3. Bb2 g6 4. h3 Bg7 5. g4 Qd6 6. a3 c5 7. g5 Nh5 8. Bxg7 Nxg7 9. bxc5 Qxc5 10. e3 O-O 11. d4 Qc7 12. Nbd2 Be6 13. h4 Nd7 14. Qb1 Bg4 15. Bd3 e5 16. Nxe5 Nxe5 17. dxe5 Qxe5 18. O-O Bh3 19. Re1 f6 20. f4 Qe6 21. Qd1 Bg4 22. Nf3 Qd6 23. gxf6 Qxf6 24. Be2 Rad8 25. Qd4 Qe7 26. Ng5 Bxe2 27. Rxe2 Nf5 28. Qd3 Nxh4 29. Rh2 Rf5 30. Kh1 h6 31. Rg1 hxg5 32. Rxh4 gxh4 33. Rxg6+ Kh7 34. Qxf5 Qe4+ 35. Qxe4 dxe4 36. Re6 Rd2 37. c4 Re2 38. Rxe4',
+    source_type:'bozo',
+    notes:'A BOZO custom Réti system that develops into a Polish-Grob pawn expansion.'
+  },
+  {
+    eco:'A00',
+    name:"Polish Opening: King's Indian, Polish Grob Attack",
+    variation:'Main Line',
+    pgn:'1. b4 Nf6 2. Bb2 g6 3. g4 Bg7 4. g5 Nh5 5. Bxg7 Nxg7 6. c4 O-O 7. Qb3',
+    source_type:'bozo',
+    notes:'A BOZO custom variation combining the Polish setup with a Grob-style g-pawn expansion.'
+  },
+  {
+    eco:'A00',
+    name:"Polish Opening: King's Indian, Polish Grob Attack",
+    variation:'h5 Counterstrike',
+    pgn:'1. b4 Nf6 2. Bb2 g6 3. g4 Bg7 4. g5 Nh5 5. Bxg7 Nxg7 6. c4 h5 7. gxh6 Rxh6 8. Qb3',
+    source_type:'bozo',
+    notes:'A BOZO custom branch where Black challenges the advanced g-pawn with ...h5.'
+  }
+];
+
+function parseOpeningTsv(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const header = lines.shift().split('\t');
+  const ecoIndex = header.indexOf('eco');
+  const nameIndex = header.indexOf('name');
+  const pgnIndex = header.indexOf('pgn');
+
+  return lines.map(line => {
+    const cols = line.split('\t');
+    return {
+      eco: cols[ecoIndex] || null,
+      name: cols[nameIndex] || 'Unnamed Opening',
+      pgn: cols[pgnIndex] || '',
+      source_type: 'official',
+      variation: null,
+      notes: null
+    };
+  }).filter(row => row.pgn);
+}
+
+function openingId(row) {
+  const raw = `${row.eco}|${row.name}|${row.variation || ''}|${row.pgn}`;
+  let hash = 2166136261;
+  for (let i = 0; i < raw.length; i++) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const slug = row.name.toLowerCase()
+    .replace(/[’']/g,'')
+    .replace(/[^a-z0-9]+/g,'-')
+    .replace(/^-|-$/g,'')
+    .slice(0,58);
+  return `${row.source_type === 'bozo' ? 'bozo' : 'eco'}-${slug}-${(hash >>> 0).toString(36)}`;
+}
+
+async function importOpeningLibrary() {
+  if (state.role !== 'owner') return toast('Only the Owner can import the canonical library.');
+
+  const button = $('start-opening-import');
+  const status = $('opening-import-status');
+  const bar = $('opening-import-progress-bar');
+  button.disabled = true;
+
+  try {
+    status.textContent = 'Downloading opening data…';
+    bar.style.width = '4%';
+
+    const chunks = [];
+    for (let i = 0; i < OPENING_TSV_URLS.length; i++) {
+      const response = await fetch(OPENING_TSV_URLS[i], { cache:'no-store' });
+      if (!response.ok) throw new Error(`Opening source ${response.status}`);
+      chunks.push(...parseOpeningTsv(await response.text()));
+      bar.style.width = `${8 + ((i + 1) / OPENING_TSV_URLS.length) * 22}%`;
+      status.textContent = `Downloaded ECO volume ${i + 1} of ${OPENING_TSV_URLS.length}…`;
+    }
+
+    const seen = new Set();
+    const rows = [...BOZO_CLOUD_OPENINGS, ...chunks].map(row => ({
+      id: openingId(row),
+      eco: row.eco,
+      name: row.name,
+      variation: row.variation,
+      pgn: row.pgn,
+      source_type: row.source_type,
+      status: 'published',
+      notes: row.notes,
+      metadata: {
+        imported_from: row.source_type === 'official'
+          ? 'lichess-org/chess-openings'
+          : 'bozos-opening-trainer',
+        imported_at: new Date().toISOString()
+      }
+    })).filter(row => {
+      const key = `${row.name}|${row.variation || ''}|${row.pgn}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    const batchSize = 150;
+    for (let start = 0; start < rows.length; start += batchSize) {
+      const batch = rows.slice(start, start + batchSize);
+      const { error } = await sb.rpc('owner_import_openings', { opening_rows: batch });
+      if (error) throw error;
+
+      const completed = Math.min(start + batch.length, rows.length);
+      const pct = 30 + (completed / rows.length) * 70;
+      bar.style.width = `${pct}%`;
+      status.textContent = `Imported ${completed.toLocaleString()} of ${rows.length.toLocaleString()} openings…`;
+    }
+
+    bar.style.width = '100%';
+    status.innerHTML = `<b>Import complete.</b> ${rows.length.toLocaleString()} published openings are now available to both web and Android.`;
+    toast('Opening library imported');
+  } catch (error) {
+    status.innerHTML = `<b>Import stopped:</b> ${escapeHtml(readableError(error))}`;
+    toast(readableError(error));
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function escapeHtml(value='') {

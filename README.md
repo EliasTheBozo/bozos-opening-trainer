@@ -56,3 +56,23 @@ database password, JWT secret, or other private credential to this repository.
 The Android app currently bundles its 3,800+ opening lines locally. The website
 searches `public.openings`. The next platform migration should import the opening
 library into that table so both Android and web use the same canonical source.
+
+
+## v1.1 fix
+
+Added a global `[hidden] { display: none !important; }` rule.
+
+This fixes:
+- Auth modal not closing
+- Sign-in and signup forms appearing simultaneously
+- Mobile navigation visibility
+- Guest/signed-in panels failing to switch correctly
+
+
+## v1.2 canonical opening import
+
+The Owner's Office now includes an Import Openings tool. It downloads the five
+CC0 Lichess chess-opening TSV files in the browser and imports them to Supabase
+through the protected `owner_import_openings` function.
+
+Run the accompanying v2.3 Supabase migration before using the importer.
