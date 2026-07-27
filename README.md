@@ -306,3 +306,13 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Checks draw conditions after every move and after every refresh
 - Handles timeout as a draw when the opponent lacks possible mating material
 - Cache-busts app.js?v=1.9.3
+
+
+## Web v1.9.4 — Study Board Rendering Fix
+
+- Fixes the undefined boardElement crash in the Opening Library study viewer
+- Separates the old viewer and new Studies Builder into unique board IDs
+- Prevents one study interface from rendering into the other interface
+- Adds correct piece-color attributes to the original study viewer
+- Standardizes full-opacity piece rendering on both study boards
+- Cache-busts app.js?v=1.9.4

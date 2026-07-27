@@ -1047,7 +1047,9 @@ function setStudyPly(nextPly) {
 }
 
 function paintStudy() {
-  if (!studyGame) return;
+  const boardElement = $('study-board');
+  if (!boardElement || !studyGame) return;
+
   const ranks = studyOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
   const files = studyOrientation === 'white'
     ? ['a','b','c','d','e','f','g','h']
@@ -1059,7 +1061,15 @@ function paintStudy() {
     for (const file of files) {
       const row = 8-rank;
       const col = file.charCodeAt(0)-97;
-      html.push(`<div>${webPiece(board[row][col])}</div>`);
+      const square = `${file}${rank}`;
+      const piece = studyGame.get(square);
+      const color = piece?.color === 'b'
+        ? 'black'
+        : piece?.color === 'w'
+          ? 'white'
+          : '';
+
+      html.push(`<div data-piece-color="${color}">${webPiece(board[row][col])}</div>`);
     }
   }
 
@@ -4486,7 +4496,7 @@ function renderStudyEditor() {
 }
 
 function paintStudyBoard() {
-  const boardElement = $('study-board');
+  const boardElement = $('study-builder-board');
   const node = selectedStudyNode();
   if (!boardElement) return;
   if (!node) {
@@ -4505,7 +4515,7 @@ function paintStudyBoard() {
     ? game.moves({ square: studySelectedSquare, verbose: true }).map(move => move.to)
     : [];
 
-  $('study-board').innerHTML = ranks.flatMap(rank =>
+  boardElement.innerHTML = ranks.flatMap(rank =>
     files.map(file => {
       const square = `${file}${rank}`;
       const symbol = board[8 - rank][file.charCodeAt(0) - 97];
