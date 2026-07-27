@@ -356,3 +356,14 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Makes connection-state rendering null-safe
 - Waits for the DOM before Spotify startup
 - Cache-busts app.js and spotify.js to v2.0.1
+
+
+## Web v2.0.2 — Spotify Audio Activation Fix
+
+- Calls Spotify Player.activateElement directly from user click handlers
+- Handles browser autoplay blocking with an actionable message
+- Waits briefly after transferring playback before starting content
+- Displays the actual playback error in the console and panel
+- Prevents Your Playlists from remaining stuck on Loading
+- Adds a reconnect option when the existing Spotify grant lacks playlist scopes
+- Cache-busts spotify.js and app.js as v2.0.2
