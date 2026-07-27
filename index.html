@@ -451,6 +451,115 @@
       </div>
     </section>
 
+
+<section id="view-studies" class="view">
+  <div class="page-shell studies-page">
+    <div class="page-heading studies-heading">
+      <div>
+        <div class="eyebrow">BOZO STUDIES</div>
+        <h1>Build the tree. Understand the ideas.</h1>
+        <p>Create branching repertoires, import variation-rich PGNs, attach notes, and ask BOZO Coach about any position.</p>
+      </div>
+      <div class="studies-heading-actions">
+        <button id="import-study-button" class="button secondary">Import PGN</button>
+        <button id="new-study-button" class="button primary">New study</button>
+      </div>
+    </div>
+
+    <div id="studies-signed-out" class="empty-state" hidden>
+      <h2>Sign in to create studies</h2>
+      <p>Your move trees, notes, chapters, and Coach explanations save to your BOZO account.</p>
+      <button class="button primary open-auth">Sign in</button>
+    </div>
+
+    <div id="studies-list-view">
+      <div class="studies-list-toolbar">
+        <div>
+          <h2>My studies</h2>
+          <p id="studies-list-status">Loading your studies…</p>
+        </div>
+      </div>
+      <div id="studies-grid" class="studies-grid"></div>
+    </div>
+
+    <div id="study-editor-view" class="study-editor-view" hidden>
+      <div class="study-editor-topbar">
+        <button id="close-study-editor" class="button secondary">← My studies</button>
+        <div class="study-title-block">
+          <input id="study-title-input" class="study-title-input" value="Untitled Study">
+          <input id="study-chapter-title-input" class="study-chapter-title-input" value="Chapter 1">
+        </div>
+        <div class="study-save-state">
+          <span id="study-autosave-state">Saved</span>
+          <button id="study-export-button" class="button secondary">Export PGN</button>
+          <button id="study-delete-button" class="button danger">Delete</button>
+        </div>
+      </div>
+
+      <div class="study-editor-layout">
+        <div class="study-board-column">
+          <div class="study-board-shell">
+            <div id="study-board" class="web-duel-board study-board"></div>
+          </div>
+
+          <div class="study-board-actions">
+            <button id="study-start-button" class="button secondary">⏮ Start</button>
+            <button id="study-previous-button" class="button secondary">← Previous</button>
+            <button id="study-flip-button" class="button secondary">Flip board</button>
+          </div>
+
+          <div class="study-position-strip">
+            <span id="study-position-label">Starting position</span>
+            <code id="study-fen-label"></code>
+          </div>
+        </div>
+
+        <aside class="study-tree-column">
+          <div class="study-panel-heading">
+            <div>
+              <span class="eyebrow">MOVE TREE</span>
+              <h2>Variations</h2>
+            </div>
+            <button id="study-promote-button" class="button secondary">Make main line</button>
+          </div>
+          <div id="study-move-tree" class="study-move-tree"></div>
+          <div class="study-tree-help">
+            Play a legal move on the board to add it. Playing a different move from an existing position creates a variation.
+          </div>
+        </aside>
+
+        <aside class="study-inspector-column">
+          <div class="study-inspector-tabs">
+            <button class="active" data-study-tab="notes">Notes</button>
+            <button data-study-tab="coach">BOZO Coach</button>
+          </div>
+
+          <div id="study-notes-tab" class="study-inspector-tab">
+            <label>
+              Note for this position
+              <textarea id="study-node-comment" rows="9" placeholder="Plans, traps, reminders, source notes…"></textarea>
+            </label>
+            <div class="study-node-tools">
+              <button id="study-save-note" class="button primary">Save note</button>
+              <button id="study-delete-variation" class="button secondary">Delete variation</button>
+            </div>
+          </div>
+
+          <div id="study-coach-tab" class="study-inspector-tab" hidden>
+            <div class="eyebrow">ASK ABOUT THIS POSITION</div>
+            <textarea id="study-coach-question" rows="4" placeholder="Why does this variation exist? Compare it with the main line."></textarea>
+            <button id="ask-study-coach" class="button primary">Ask BOZO Coach</button>
+            <div id="study-coach-answer" class="study-coach-answer">
+              Select a move and ask BOZO to explain its purpose, alternatives, or practical plan.
+            </div>
+            <button id="save-coach-as-note" class="button secondary" hidden>Save answer as note</button>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="view-profile" class="view">
       <div id="profile-guest" class="auth-required">
         <img src="./assets/bozo-mascot.webp" alt="">
@@ -883,6 +992,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=1.9.0"></script>
+  <script src="./app.js?v=1.9.1"></script>
 </body>
 </html>

@@ -273,3 +273,12 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Connects BOZO Coach to the selected study node
 - Autosaves study and chapter names
 - Cache-busts app.js?v=1.9.0
+
+
+## Web v1.9.1 — Studies Interface and Auth Startup Fix
+
+- Restores the missing Studies page markup
+- Restores the New Study and Import PGN modals
+- Prevents missing optional elements from crashing app initialization
+- Prevents Studies rendering from blocking Supabase authentication
+- Cache-busts app.js?v=1.9.1

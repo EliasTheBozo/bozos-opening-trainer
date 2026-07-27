@@ -3784,10 +3784,20 @@ function requireStudySession() {
 }
 
 async function renderStudies() {
+  const signedOutPanel = $('studies-signed-out');
+  const listView = $('studies-list-view');
+  const editorView = $('study-editor-view');
+
+  // A missing optional view must never interrupt authentication or routing.
+  if (!signedOutPanel || !listView || !editorView) {
+    console.warn('Studies interface is unavailable in this build.');
+    return;
+  }
+
   const signedIn = Boolean(state.session?.user?.id);
-  $('studies-signed-out').hidden = signedIn;
-  $('studies-list-view').hidden = !signedIn;
-  $('study-editor-view').hidden = true;
+  signedOutPanel.hidden = signedIn;
+  listView.hidden = !signedIn;
+  editorView.hidden = true;
 
   if (!signedIn) return;
 
@@ -4590,21 +4600,21 @@ function setStudyInspectorTab(tab) {
   $('study-coach-tab').hidden = tab !== 'coach';
 }
 
-$('new-study-button').addEventListener('click', openNewStudyModal);
-$('import-study-button').addEventListener('click', openImportStudyModal);
-$('close-new-study-modal').addEventListener('click', () => $('new-study-modal').hidden = true);
-$('close-import-study-modal').addEventListener('click', () => $('import-study-modal').hidden = true);
-$('create-study-submit').addEventListener('click', createNewStudy);
-$('import-study-submit').addEventListener('click', importStudyPgn);
-$('close-study-editor').addEventListener('click', renderStudies);
-$('study-title-input').addEventListener('input', scheduleStudyMetadataSave);
-$('study-chapter-title-input').addEventListener('input', scheduleStudyMetadataSave);
-$('study-save-note').addEventListener('click', saveStudyNote);
-$('study-promote-button').addEventListener('click', promoteStudyVariation);
-$('study-delete-variation').addEventListener('click', deleteStudyVariation);
-$('study-delete-button').addEventListener('click', deleteActiveStudy);
-$('study-export-button').addEventListener('click', exportActiveStudy);
-$('study-start-button').addEventListener('click', () => {
+$('new-study-button')?.addEventListener('click', openNewStudyModal);
+$('import-study-button')?.addEventListener('click', openImportStudyModal);
+$('close-new-study-modal')?.addEventListener('click', () => { const modal = $('new-study-modal'); if (modal) modal.hidden = true; });
+$('close-import-study-modal')?.addEventListener('click', () => { const modal = $('import-study-modal'); if (modal) modal.hidden = true; });
+$('create-study-submit')?.addEventListener('click', createNewStudy);
+$('import-study-submit')?.addEventListener('click', importStudyPgn);
+$('close-study-editor')?.addEventListener('click', renderStudies);
+$('study-title-input')?.addEventListener('input', scheduleStudyMetadataSave);
+$('study-chapter-title-input')?.addEventListener('input', scheduleStudyMetadataSave);
+$('study-save-note')?.addEventListener('click', saveStudyNote);
+$('study-promote-button')?.addEventListener('click', promoteStudyVariation);
+$('study-delete-variation')?.addEventListener('click', deleteStudyVariation);
+$('study-delete-button')?.addEventListener('click', deleteActiveStudy);
+$('study-export-button')?.addEventListener('click', exportActiveStudy);
+$('study-start-button')?.addEventListener('click', () => {
   const root = studyNodes.find(node => !node.parent_id);
   if (root) {
     selectedStudyNodeId = root.id;
@@ -4612,7 +4622,7 @@ $('study-start-button').addEventListener('click', () => {
     renderStudyEditor();
   }
 });
-$('study-previous-button').addEventListener('click', () => {
+$('study-previous-button')?.addEventListener('click', () => {
   const node = selectedStudyNode();
   if (node?.parent_id) {
     selectedStudyNodeId = node.parent_id;
@@ -4620,15 +4630,15 @@ $('study-previous-button').addEventListener('click', () => {
     renderStudyEditor();
   }
 });
-$('study-flip-button').addEventListener('click', () => {
+$('study-flip-button')?.addEventListener('click', () => {
   studyBuilderOrientation = studyBuilderOrientation === 'white' ? 'black' : 'white';
   paintStudyBoard();
 });
 $$('[data-study-tab]').forEach(button =>
   button.addEventListener('click', () => setStudyInspectorTab(button.dataset.studyTab))
 );
-$('ask-study-coach').addEventListener('click', askStudyCoach);
-$('save-coach-as-note').addEventListener('click', saveCoachAsStudyNote);
+$('ask-study-coach')?.addEventListener('click', askStudyCoach);
+$('save-coach-as-note')?.addEventListener('click', saveCoachAsStudyNote);
 
 
 function escapeHtml(value='') {
