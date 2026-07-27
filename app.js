@@ -941,7 +941,12 @@ function duelStateSignature(duel) {
     turn_user_id: duel.turn_user_id,
     result: duel.result,
     resulting_fen: duel.resulting_fen || duel.current_fen || duel.fen || '',
-    moves: normalizeDuelMoveHistory(duel.move_history)
+    moves: normalizeDuelMoveHistory(duel.move_history),
+    white_time_ms: duel.white_time_ms,
+    black_time_ms: duel.black_time_ms,
+    clock_started_at: duel.clock_started_at,
+    draw_offer_by: duel.draw_offer_by,
+    draw_offer_at: duel.draw_offer_at
   });
 }
 
@@ -1058,7 +1063,7 @@ function paintStudy() {
     }
   }
 
-  $('study-board').innerHTML = html.join('');
+  boardElement.innerHTML = html.join('');
   $('study-progress').textContent = studyPly === 0
     ? 'Start position'
     : `${studyPly}/${studyMoves.length} plies`;
@@ -3337,6 +3342,11 @@ let duelRealtimeChannel = null;
 let duelPollingTimer = null;
 let duelRefreshInFlight = false;
 let duelLastSignature = '';
+let duelUserAnnotations = [];
+let duelArrowStart = null;
+let duelRightMouseDown = false;
+let duelClockTimer = null;
+let duelClockSnapshot = null;
 
 function renderChallenges() {
   const signedIn = Boolean(state.session?.user);
@@ -3384,6 +3394,9 @@ $('duel-refresh-button').addEventListener('click', async () => {
   const changed = await refreshOpenWebDuel(activeWebDuel.id, { force: true });
   toast(changed ? 'Board refreshed' : 'Board is already current');
 });
+$('duel-offer-draw-button')?.addEventListener('click', offerWebDuelDraw);
+$('duel-accept-draw')?.addEventListener('click', () => respondWebDuelDraw(true));
+$('duel-decline-draw')?.addEventListener('click', () => respondWebDuelDraw(false));
 $('duel-resign-button').addEventListener('click', resignWebDuel);
 
 let openingSearchTimer;
@@ -3526,7 +3539,20 @@ async function fetchWebDuel(id) {
   try {
     const { data, error } = await sb.rpc('my_opening_challenges');
     if (error) throw error;
-    return (data || []).find(challenge => challenge.id === id) || null;
+
+    const duel = (data || []).find(challenge => challenge.id === id) || null;
+    if (!duel) return null;
+
+    // Clock columns were added after the original challenge RPC. Read them
+    // directly and merge them without changing the existing RPC contract.
+    const { data: clockRow, error: clockError } = await sb
+      .from('opening_challenges')
+      .select('white_time_ms,black_time_ms,clock_started_at,draw_offer_by,draw_offer_at,updated_at')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!clockError && clockRow) Object.assign(duel, clockRow);
+    return duel;
   } finally {
     duelRefreshInFlight = false;
   }
@@ -3569,6 +3595,9 @@ async function refreshOpenWebDuel(id, { force = false } = {}) {
   $('duel-book-pgn').textContent = duel.line_pgn || '';
 
   paintWebDuel();
+  checkAndFinishWebDuelRules().catch(error =>
+    console.warn('Automatic draw check failed:', error)
+  );
   return true;
 }
 
@@ -3622,12 +3651,16 @@ async function openWebDuel(id) {
     });
 
   startWebDuelPolling(id);
+  startDuelClock();
 }
 
 function closeWebDuel() {
   $('challenge-game-modal').hidden = true;
   stopWebDuelPolling();
+  stopDuelClock();
   duelLastSignature = '';
+  duelUserAnnotations = [];
+  duelArrowStart = null;
 
   if (duelRealtimeChannel) {
     sb.removeChannel(duelRealtimeChannel);
@@ -3635,12 +3668,393 @@ function closeWebDuel() {
   }
 }
 
+function duelSquareCenter(square) {
+  const orientation = activeWebDuel ? myDuelColor(activeWebDuel) : 'white';
+  const fileIndex = square.charCodeAt(0) - 97;
+  const rankIndex = Number(square[1]) - 1;
+  const displayFile = orientation === 'white' ? fileIndex : 7 - fileIndex;
+  const displayRank = orientation === 'white' ? 7 - rankIndex : rankIndex;
+  return {
+    x: displayFile * 100 + 50,
+    y: displayRank * 100 + 50
+  };
+}
+
+function addDuelArrow(from, to) {
+  const index = duelUserAnnotations.findIndex(item =>
+    item.type === 'arrow' && item.from === from && item.to === to
+  );
+  if (index >= 0) duelUserAnnotations.splice(index, 1);
+  else duelUserAnnotations.push({ type: 'arrow', from, to });
+  paintDuelAnnotations();
+}
+
+function toggleDuelSquare(square) {
+  const index = duelUserAnnotations.findIndex(item =>
+    item.type === 'square' && item.square === square
+  );
+  if (index >= 0) duelUserAnnotations.splice(index, 1);
+  else duelUserAnnotations.push({ type: 'square', square });
+  paintDuelAnnotations();
+}
+
+function paintDuelAnnotations() {
+  const svg = $('friend-duel-arrow-layer');
+  if (!svg || !activeWebDuel) return;
+
+  const marker = `
+    <marker id="friend-duel-arrow-head"
+            markerWidth="8" markerHeight="8"
+            refX="6.5" refY="4"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#f6c945"></path>
+    </marker>`;
+
+  const markup = duelUserAnnotations.map(item => {
+    if (item.type === 'square') {
+      const center = duelSquareCenter(item.square);
+      return `<rect x="${center.x - 48}" y="${center.y - 48}"
+                    width="96" height="96" rx="10"
+                    fill="#f6c945" opacity=".28"></rect>`;
+    }
+
+    const from = duelSquareCenter(item.from);
+    const to = duelSquareCenter(item.to);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const endX = to.x - dx / length * 23;
+    const endY = to.y - dy / length * 23;
+
+    return `<line x1="${from.x}" y1="${from.y}"
+                  x2="${endX}" y2="${endY}"
+                  stroke="#f6c945"
+                  stroke-width="14"
+                  stroke-linecap="round"
+                  opacity=".82"
+                  marker-end="url(#friend-duel-arrow-head)"></line>`;
+  }).join('');
+
+  svg.innerHTML = `<defs>${marker}</defs>${markup}`;
+}
+
+function chessBoolean(game, names) {
+  for (const name of names) {
+    if (typeof game?.[name] === 'function') {
+      try {
+        if (game[name]()) return true;
+      } catch (_) {}
+    }
+  }
+  return false;
+}
+
+function duelThreefold(game) {
+  return chessBoolean(game, [
+    'isThreefoldRepetition',
+    'inThreefoldRepetition',
+    'in_threefold_repetition'
+  ]);
+}
+
+function duelStalemate(game) {
+  return chessBoolean(game, ['isStalemate', 'inStalemate', 'in_stalemate']);
+}
+
+function duelInsufficientMaterial(game) {
+  return chessBoolean(game, [
+    'isInsufficientMaterial',
+    'insufficientMaterial',
+    'insufficient_material'
+  ]);
+}
+
+function duelGeneralDraw(game) {
+  return chessBoolean(game, ['isDraw', 'inDraw', 'in_draw']);
+}
+
+function duelCheckmate(game) {
+  return chessBoolean(game, ['isCheckmate', 'inCheckmate', 'in_checkmate']);
+}
+
+function duelHalfmoveClock(game) {
+  const fen = game?.fen?.() || '';
+  const fields = fen.split(' ');
+  return Number(fields[4] || 0);
+}
+
+function duelFiftyMoveRule(game) {
+  return duelHalfmoveClock(game) >= 100;
+}
+
+function duelAutomaticDrawReason(game) {
+  if (duelThreefold(game)) return 'threefold repetition';
+  if (duelFiftyMoveRule(game)) return 'fifty-move rule';
+  if (duelStalemate(game)) return 'stalemate';
+  if (duelInsufficientMaterial(game)) return 'insufficient material';
+
+  // Some chess.js versions expose only a combined draw method.
+  if (duelGeneralDraw(game) && !duelCheckmate(game)) return 'draw';
+  return '';
+}
+
+function sideHasPossibleMatingMaterial(game, color) {
+  const pieces = [];
+  for (const file of ['a','b','c','d','e','f','g','h']) {
+    for (let rank = 1; rank <= 8; rank++) {
+      const piece = game.get(`${file}${rank}`);
+      if (piece?.color === color && piece.type !== 'k') pieces.push(piece.type);
+    }
+  }
+
+  if (pieces.some(type => type === 'q' || type === 'r' || type === 'p')) return true;
+  const bishops = pieces.filter(type => type === 'b').length;
+  const knights = pieces.filter(type => type === 'n').length;
+
+  // This is intentionally conservative: combinations that can possibly
+  // produce mate count as mating material.
+  return bishops >= 2 || (bishops >= 1 && knights >= 1) || knights >= 2;
+}
+
+async function finishWebDuelAsDraw(reason) {
+  if (!activeWebDuel || activeWebDuel.status !== 'active') return false;
+
+  const { error } = await sb.rpc('finish_opening_challenge', {
+    challenge_id: activeWebDuel.id,
+    finish_reason: reason,
+    game_result: '1/2-1/2'
+  });
+
+  if (error) {
+    console.warn('Could not finish duel as draw:', error);
+    return false;
+  }
+
+  activeWebDuel.status = 'completed';
+  activeWebDuel.result = '1/2-1/2';
+  activeWebDuel.draw_offer_by = null;
+  activeWebDuel.draw_offer_at = null;
+  stopDuelClock();
+  paintWebDuel();
+  toast(`Draw by ${reason}`);
+  return true;
+}
+
+async function checkAndFinishWebDuelRules() {
+  if (!activeWebDuel || activeWebDuel.status !== 'active' || !webDuelGame) return false;
+
+  if (duelCheckmate(webDuelGame)) {
+    const result = webDuelGame.turn() === 'w' ? '0-1' : '1-0';
+    const { error } = await sb.rpc('finish_opening_challenge', {
+      challenge_id: activeWebDuel.id,
+      finish_reason: 'checkmate',
+      game_result: result
+    });
+    if (!error) {
+      activeWebDuel.status = 'completed';
+      activeWebDuel.result = result;
+      stopDuelClock();
+      paintWebDuel();
+      return true;
+    }
+    return false;
+  }
+
+  const drawReason = duelAutomaticDrawReason(webDuelGame);
+  if (drawReason) return finishWebDuelAsDraw(drawReason);
+  return false;
+}
+
+function paintDuelDrawOffer() {
+  const panel = $('duel-draw-offer-panel');
+  const offerButton = $('duel-offer-draw-button');
+  if (!panel || !offerButton || !activeWebDuel) return;
+
+  const uid = state.session?.user?.id;
+  const offeredByMe = activeWebDuel.draw_offer_by === uid;
+  const offeredByOpponent =
+    Boolean(activeWebDuel.draw_offer_by) && activeWebDuel.draw_offer_by !== uid;
+
+  panel.hidden = !activeWebDuel.draw_offer_by || activeWebDuel.status !== 'active';
+  offerButton.disabled =
+    activeWebDuel.status !== 'active' || Boolean(activeWebDuel.draw_offer_by);
+  offerButton.textContent = offeredByMe ? 'Draw offered' : 'Offer draw';
+
+  if (offeredByMe) {
+    $('duel-draw-offer-title').textContent = 'Draw offer sent';
+    $('duel-draw-offer-message').textContent =
+      'Waiting for your opponent to accept or decline.';
+    $('duel-draw-response-actions').hidden = true;
+  } else if (offeredByOpponent) {
+    $('duel-draw-offer-title').textContent = 'Your opponent offers a draw';
+    $('duel-draw-offer-message').textContent =
+      'Accept to finish the game as a draw, or decline to continue.';
+    $('duel-draw-response-actions').hidden = false;
+  }
+}
+
+async function offerWebDuelDraw() {
+  if (!activeWebDuel || activeWebDuel.status !== 'active') return;
+  const button = $('duel-offer-draw-button');
+  button.disabled = true;
+
+  const { data, error } = await sb.rpc('offer_opening_challenge_draw', {
+    challenge_id: activeWebDuel.id
+  });
+
+  if (error) {
+    button.disabled = false;
+    return toast(readableError(error));
+  }
+
+  if (data) Object.assign(activeWebDuel, data);
+  else {
+    activeWebDuel.draw_offer_by = state.session.user.id;
+    activeWebDuel.draw_offer_at = new Date().toISOString();
+  }
+  paintDuelDrawOffer();
+  toast('Draw offered');
+}
+
+async function respondWebDuelDraw(accept) {
+  if (!activeWebDuel || !activeWebDuel.draw_offer_by) return;
+
+  const { data, error } = await sb.rpc('respond_opening_challenge_draw', {
+    challenge_id: activeWebDuel.id,
+    accept_draw: Boolean(accept)
+  });
+
+  if (error) return toast(readableError(error));
+
+  if (accept) {
+    if (data) Object.assign(activeWebDuel, data);
+    activeWebDuel.status = 'completed';
+    activeWebDuel.result = '1/2-1/2';
+    stopDuelClock();
+    paintWebDuel();
+    toast('Draw agreed');
+  } else {
+    activeWebDuel.draw_offer_by = null;
+    activeWebDuel.draw_offer_at = null;
+    paintDuelDrawOffer();
+    toast('Draw offer declined');
+  }
+}
+
+function formatDuelClock(milliseconds) {
+  const safe = Math.max(0, Number(milliseconds || 0));
+  const totalSeconds = Math.ceil(safe / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function duelColorForUser(duel, userId) {
+  const challengerIsWhite = duel.challenger_color === 'white';
+  if (userId === duel.challenger_id) return challengerIsWhite ? 'white' : 'black';
+  if (userId === duel.opponent_id) return challengerIsWhite ? 'black' : 'white';
+  return null;
+}
+
+function currentDuelClockValues() {
+  if (!activeWebDuel) return { white: 600000, black: 600000 };
+
+  let white = Number(activeWebDuel.white_time_ms ?? 600000);
+  let black = Number(activeWebDuel.black_time_ms ?? 600000);
+
+  if (activeWebDuel.status === 'active' &&
+      activeWebDuel.clock_started_at &&
+      activeWebDuel.turn_user_id) {
+    const elapsed = Math.max(
+      0,
+      Date.now() - new Date(activeWebDuel.clock_started_at).getTime()
+    );
+    const activeColor = duelColorForUser(activeWebDuel, activeWebDuel.turn_user_id);
+    if (activeColor === 'white') white -= elapsed;
+    if (activeColor === 'black') black -= elapsed;
+  }
+
+  return { white: Math.max(0, white), black: Math.max(0, black) };
+}
+
+function paintDuelClock() {
+  const panel = $('friend-duel-clocks');
+  if (!panel || !activeWebDuel) return;
+
+  panel.hidden = false;
+  const values = currentDuelClockValues();
+  $('friend-clock-white').textContent = formatDuelClock(values.white);
+  $('friend-clock-black').textContent = formatDuelClock(values.black);
+
+  const whiteUser = activeWebDuel.challenger_color === 'white'
+    ? activeWebDuel.challenger_username
+    : activeWebDuel.opponent_username;
+  const blackUser = activeWebDuel.challenger_color === 'white'
+    ? activeWebDuel.opponent_username
+    : activeWebDuel.challenger_username;
+
+  $('friend-clock-white-name').textContent = `White · ${whiteUser || ''}`;
+  $('friend-clock-black-name').textContent = `Black · ${blackUser || ''}`;
+
+  const activeColor = activeWebDuel.status === 'active'
+    ? duelColorForUser(activeWebDuel, activeWebDuel.turn_user_id)
+    : null;
+
+  panel.querySelector('[data-color="white"]')
+    ?.classList.toggle('active', activeColor === 'white');
+  panel.querySelector('[data-color="black"]')
+    ?.classList.toggle('active', activeColor === 'black');
+
+  if ((values.white <= 0 || values.black <= 0) &&
+      activeWebDuel.status === 'active') {
+    const flaggingColor = values.white <= 0 ? 'white' : 'black';
+    const winnerColor = flaggingColor === 'white' ? 'black' : 'white';
+    const winnerChessColor = winnerColor === 'white' ? 'w' : 'b';
+
+    $('duel-game-message').textContent =
+      `${flaggingColor[0].toUpperCase() + flaggingColor.slice(1)} has run out of time.`;
+
+    stopDuelClock();
+
+    if (!sideHasPossibleMatingMaterial(webDuelGame, winnerChessColor)) {
+      finishWebDuelAsDraw('timeout against insufficient mating material');
+    } else {
+      const result = winnerColor === 'white' ? '1-0' : '0-1';
+      sb.rpc('finish_opening_challenge', {
+        challenge_id: activeWebDuel.id,
+        finish_reason: 'timeout',
+        game_result: result
+      }).then(({ error }) => {
+        if (error) return console.warn('Could not finish timeout:', error);
+        activeWebDuel.status = 'completed';
+        activeWebDuel.result = result;
+        paintWebDuel();
+      });
+    }
+  }
+}
+
+function startDuelClock() {
+  stopDuelClock();
+  paintDuelClock();
+  duelClockTimer = setInterval(paintDuelClock, 250);
+}
+
+function stopDuelClock() {
+  if (duelClockTimer) clearInterval(duelClockTimer);
+  duelClockTimer = null;
+}
+
 function webPiece(symbol) {
   return {p:'♟',r:'♜',n:'♞',b:'♝',q:'♛',k:'♚',P:'♙',R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔'}[symbol] || '';
 }
 
 function fenBoard(fen) {
-  const boardPart = (fen === 'start' ? new Chess().fen() : fen).split(' ')[0];
+  const normalizedFen =
+    !fen || fen === 'start' || fen === 'startpos'
+      ? new Chess().fen()
+      : fen;
+  const boardPart = normalizedFen.split(' ')[0];
   return boardPart.split('/').map(rank => {
     const squares=[];
     for (const ch of rank) {
@@ -3677,12 +4091,41 @@ function paintWebDuel() {
     for (const file of files) {
       const row=8-rankNum, col=file.charCodeAt(0)-97;
       const square=`${file}${rankNum}`;
-      const piece=board[row][col];
-      html.push(`<button data-square="${square}" class="${selectedWebSquare===square?'selected':''}">${webPiece(piece)}</button>`);
+      const symbol=board[row][col];
+      const piece=webDuelGame.get(square);
+      html.push(`<button data-square="${square}"
+                         data-piece-color="${piece?.color === 'b' ? 'black' : piece?.color === 'w' ? 'white' : ''}"
+                         class="${selectedWebSquare===square?'selected':''}">
+                   ${webPiece(symbol)}
+                 </button>`);
     }
   }
   $('web-duel-board').innerHTML=html.join('');
-  $('web-duel-board').querySelectorAll('button').forEach(b => b.addEventListener('click', () => clickWebDuelSquare(b.dataset.square)));
+  $('web-duel-board').querySelectorAll('button').forEach(button => {
+    button.addEventListener('click', () => clickWebDuelSquare(button.dataset.square));
+    button.addEventListener('contextmenu', event => {
+      event.preventDefault();
+      if (!duelRightMouseDown) toggleDuelSquare(button.dataset.square);
+    });
+    button.addEventListener('mousedown', event => {
+      if (event.button !== 2) return;
+      event.preventDefault();
+      duelRightMouseDown = true;
+      duelArrowStart = button.dataset.square;
+    });
+    button.addEventListener('mouseup', event => {
+      if (event.button !== 2 || !duelArrowStart) return;
+      event.preventDefault();
+      const end = button.dataset.square;
+      if (end !== duelArrowStart) addDuelArrow(duelArrowStart, end);
+      duelArrowStart = null;
+      setTimeout(() => { duelRightMouseDown = false; }, 0);
+    });
+  });
+
+  paintDuelAnnotations();
+  paintDuelClock();
+  paintDuelDrawOffer();
 
   const moves = normalizeDuelMoveHistory(c.move_history);
   $('duel-move-list').innerHTML = renderDuelMoveRows(moves);
@@ -3720,18 +4163,10 @@ async function clickWebDuelSquare(square) {
 
   // Rebuild from the server response so both clients use the same canonical history.
   webDuelGame = replayWebDuelPosition(activeWebDuel);
+  activeWebDuel.draw_offer_by = null;
+  activeWebDuel.draw_offer_at = null;
   paintWebDuel();
-
-  if (webDuelGame.in_checkmate()) {
-    await sb.rpc('finish_opening_challenge',{
-      challenge_id:activeWebDuel.id,finish_reason:'checkmate',
-      game_result:webDuelGame.turn()==='w'?'0-1':'1-0'
-    });
-  } else if (webDuelGame.in_draw()) {
-    await sb.rpc('finish_opening_challenge',{
-      challenge_id:activeWebDuel.id,finish_reason:'draw',game_result:'1/2-1/2'
-    });
-  }
+  await checkAndFinishWebDuelRules();
   await refreshOpenWebDuel(activeWebDuel.id, { force: true });
 }
 
@@ -3951,6 +4386,33 @@ async function openStudyEditor(studyId) {
   if (nodesError) return toast(readableError(nodesError));
 
   studyNodes = nodes || [];
+
+  // Older or partially-created studies may not contain a root node. Repair
+  // them automatically instead of leaving the board blank.
+  if (!studyNodes.some(node => !node.parent_id)) {
+    const start = new Chess();
+    const { data: repairedRoot, error: rootError } = await sb
+      .from('study_nodes')
+      .insert({
+        chapter_id: activeStudyChapter.id,
+        parent_id: null,
+        ply: 0,
+        san: null,
+        uci: null,
+        fen_before: start.fen(),
+        fen_after: start.fen(),
+        comment: '',
+        nag: '',
+        is_main_line: true,
+        sort_order: 0
+      })
+      .select()
+      .single();
+
+    if (rootError) return toast(readableError(rootError));
+    studyNodes.unshift(repairedRoot);
+  }
+
   rebuildStudyNodeMap();
   const root = studyNodes.find(node => !node.parent_id);
   selectedStudyNodeId = root?.id || studyNodes[0]?.id || null;
@@ -3994,6 +4456,18 @@ function studyPathTo(nodeId) {
 }
 
 function studyGameAtNode(nodeId) {
+  const selected = studyNodeMap.get(nodeId);
+
+  // Saved FEN is the canonical source. Replaying SAN remains a fallback for
+  // imported legacy nodes.
+  if (selected?.fen_after && selected.fen_after !== 'startpos') {
+    try {
+      return new Chess(selected.fen_after);
+    } catch (error) {
+      console.warn('Invalid saved study FEN; replaying moves instead.', error);
+    }
+  }
+
   const game = new Chess();
   const path = studyPathTo(nodeId).filter(node => node.san);
   for (const node of path) {
@@ -4012,8 +4486,14 @@ function renderStudyEditor() {
 }
 
 function paintStudyBoard() {
+  const boardElement = $('study-board');
   const node = selectedStudyNode();
-  if (!node) return;
+  if (!boardElement) return;
+  if (!node) {
+    boardElement.innerHTML =
+      '<div class="study-board-error">No starting position was found.</div>';
+    return;
+  }
   const game = studyGameAtNode(node.id);
   const board = fenBoard(game.fen());
   const ranks = studyBuilderOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];

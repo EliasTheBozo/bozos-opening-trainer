@@ -282,3 +282,27 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Prevents missing optional elements from crashing app initialization
 - Prevents Studies rendering from blocking Supabase authentication
 - Cache-busts app.js?v=1.9.1
+
+
+## Web v1.9.2 — Board Interaction and Clocks
+
+- Restores right-click arrows and square highlights in friend games
+- Keeps annotations local to each player
+- Corrects white and black piece opacity in Studies and multiplayer
+- Uses saved study FEN as the canonical board position
+- Automatically repairs studies missing a root position
+- Adds synchronized 10-minute clocks to friend games
+- Reads clock state directly when the older challenge RPC omits new columns
+- Cache-busts app.js?v=1.9.2
+
+
+## Web v1.9.3 — Multiplayer Draw Rules
+
+- Adds persistent Offer Draw, Accept, and Decline controls
+- Clears pending offers when either player makes a move
+- Detects threefold repetition across the complete saved move history
+- Detects the fifty-move rule from the FEN halfmove counter
+- Detects stalemate and insufficient material
+- Checks draw conditions after every move and after every refresh
+- Handles timeout as a draw when the opponent lacks possible mating material
+- Cache-busts app.js?v=1.9.3

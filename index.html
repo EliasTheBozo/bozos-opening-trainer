@@ -854,10 +854,28 @@
 
 <div class="duel-game-layout">
         <div>
-          <div id="web-duel-board" class="web-duel-board"></div>
+          <div class="friend-board-shell">
+            <div id="web-duel-board" class="web-duel-board"></div>
+            <svg id="friend-duel-arrow-layer"
+                 class="board-arrow-layer friend-duel-arrow-layer"
+                 viewBox="0 0 800 800"
+                 aria-hidden="true"></svg>
+          </div>
           <div class="duel-actions">
+            <button id="duel-offer-draw-button" class="button secondary">Offer draw</button>
             <button id="duel-resign-button" class="button secondary">Resign</button>
             <button id="duel-refresh-button" class="button secondary">Refresh</button>
+          </div>
+
+          <div id="duel-draw-offer-panel" class="duel-draw-offer-panel" hidden>
+            <div>
+              <b id="duel-draw-offer-title">Draw offered</b>
+              <span id="duel-draw-offer-message"></span>
+            </div>
+            <div id="duel-draw-response-actions">
+              <button id="duel-accept-draw" class="button primary">Accept</button>
+              <button id="duel-decline-draw" class="button secondary">Decline</button>
+            </div>
           </div>
         </div>
         <aside class="duel-sidebar">
@@ -992,6 +1010,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=1.9.1"></script>
+  <script src="./app.js?v=1.9.3"></script>
 </body>
 </html>

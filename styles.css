@@ -1678,3 +1678,110 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
     width:100%;
   }
 }
+
+
+/* WEB v1.9.2 — FRIEND ANNOTATIONS, CLOCKS, STUDY BOARD */
+.friend-board-shell {
+  position:relative;
+  width:100%;
+  aspect-ratio:1;
+}
+.friend-board-shell .web-duel-board {
+  width:100%;
+  height:100%;
+}
+.friend-duel-arrow-layer {
+  z-index:5;
+}
+
+/* Chess symbols must remain fully opaque. Earlier text shadows made the
+   white pieces look translucent on pale squares. */
+.web-duel-board button,
+.study-board button {
+  opacity:1 !important;
+  font-family:"Segoe UI Symbol","Noto Sans Symbols 2","Arial Unicode MS",sans-serif;
+  font-weight:700;
+}
+.web-duel-board button[data-piece-color="white"],
+.study-board button[data-piece-color="white"] {
+  color:#fff9e8;
+  -webkit-text-stroke:1px rgba(35,22,36,.86);
+  text-shadow:
+    0 1px 0 #2a182b,
+    0 2px 2px rgba(0,0,0,.72),
+    0 0 2px rgba(0,0,0,.88);
+}
+.web-duel-board button[data-piece-color="black"],
+.study-board button[data-piece-color="black"] {
+  color:#17131b;
+  -webkit-text-stroke:.65px rgba(248,237,215,.42);
+  text-shadow:
+    0 1px 0 rgba(255,255,255,.28),
+    0 2px 2px rgba(0,0,0,.55);
+}
+.study-board-error {
+  grid-column:1/-1;
+  display:grid;
+  place-items:center;
+  min-height:280px;
+  padding:24px;
+  color:var(--muted);
+  background:rgba(255,255,255,.025);
+}
+.friend-duel-clocks {
+  position:sticky;
+  top:0;
+  z-index:3;
+}
+.player-clock-card strong {
+  min-width:76px;
+  text-align:right;
+}
+.player-clock-card.active strong {
+  color:#fff;
+}
+
+
+/* WEB v1.9.3 — DRAW OFFERS AND COMPLETE DRAW RULES */
+.duel-draw-offer-panel {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-top:10px;
+  padding:12px 14px;
+  border:1px solid rgba(250,204,21,.28);
+  border-radius:13px;
+  background:rgba(250,204,21,.065);
+}
+.duel-draw-offer-panel[hidden] {
+  display:none;
+}
+.duel-draw-offer-panel > div:first-child {
+  display:grid;
+  gap:3px;
+}
+.duel-draw-offer-panel b {
+  color:#fde047;
+}
+.duel-draw-offer-panel span {
+  color:var(--muted);
+  font-size:10px;
+}
+#duel-draw-response-actions {
+  display:flex;
+  gap:7px;
+}
+#duel-draw-response-actions[hidden] {
+  display:none;
+}
+@media(max-width:560px) {
+  .duel-draw-offer-panel {
+    align-items:stretch;
+    flex-direction:column;
+  }
+  #duel-draw-response-actions {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+}
