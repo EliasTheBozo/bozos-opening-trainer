@@ -26,11 +26,41 @@
   async function api(path,opt={},retry=true){const r=await fetch(API+path,{...opt,headers:{Authorization:`Bearer ${await access()}`,'Content-Type':'application/json',...(opt.headers||{})}});if(r.status===401&&retry){await refresh();return api(path,opt,false)}if(r.status===204)return null;const d=await r.json().catch(()=>null);if(!r.ok)throw Error(d?.error?.message||`Spotify request failed (${r.status}).`);return d}
   async function callback(){const p=new URLSearchParams(location.search),code=p.get('code'),error=p.get('error');if(!code&&!error)return;if(error)throw Error(`Spotify authorization failed: ${error}`);if(p.get('state')!==localStorage.getItem('bozo_spotify_state'))throw Error('Spotify login state did not match.');await exchange(code);history.replaceState({},document.title,location.pathname+location.hash)}
 
-  async function waitSdk(){if(window.Spotify?.Player)return;await new Promise((resolve,reject)=>{const prior=window.onSpotifyWebPlaybackSDKReady;window.onSpotifyWebPlaybackSDKReady=()=>{try{prior?.()}catch{}resolve()};setTimeout(()=>reject(Error('Spotify SDK did not load.')),20000)})}
+  async function waitSdk(){
+    if(window.Spotify?.Player) return;
+    await new Promise((resolve,reject)=>{
+      let settled=false;
+      const finish=()=>{if(settled)return;settled=true;resolve()};
+      window.onSpotifyWebPlaybackSDKReady=finish;
+
+      let script=document.querySelector('script[data-bozo-spotify-sdk]');
+      if(!script){
+        script=document.createElement('script');
+        script.src='https://sdk.scdn.co/spotify-player.js';
+        script.async=true;
+        script.dataset.bozoSpotifySdk='true';
+        script.onerror=()=>{if(!settled){settled=true;reject(Error('Spotify SDK did not load.'))}};
+        document.head.appendChild(script);
+      }
+
+      if(window.Spotify?.Player) finish();
+      setTimeout(()=>{if(!settled){settled=true;reject(Error('Spotify SDK did not load.'))}},20000);
+    });
+  }
   async function initPlayer(){if(!connected())return;if(initPromise)return initPromise;initPromise=(async()=>{await waitSdk();if(player)return player;player=new Spotify.Player({name:'BOZO Music',getOAuthToken:cb=>access().then(cb).catch(e=>msg(e.message,true)),volume:Number(localStorage.getItem('bozo_spotify_volume')||55)/100,enableMediaSession:true});player.addListener('ready',({device_id})=>{deviceId=device_id;msg('BOZO Music is ready.')});player.addListener('not_ready',()=>msg('Spotify player went offline.',true));player.addListener('account_error',({message})=>msg(`${message} Premium is required for browser playback.`,true));player.addListener('authentication_error',({message})=>{msg(message,true);clear()});player.addListener('initialization_error',({message})=>msg(message,true));player.addListener('playback_error',({message})=>msg(message,true));player.addListener('player_state_changed',s=>{if(s){currentState=s;paintState(s)}});if(!await player.connect())throw Error('Spotify player could not connect.');return player})().catch(e=>{initPromise=null;throw e});return initPromise}
-  function paintConnection(){const c=connected();$('spotify-disconnected-view').hidden=c;$('spotify-connected-view').hidden=!c;$('spotify-mini-player').hidden=!c;$('spotify-music-button').classList.toggle('connected',c)}
-  function open(){ $('spotify-panel').hidden=false;paintConnection();if(connected())initExperience().catch(e=>msg(e.message,true)) }
-  function close(){ $('spotify-panel').hidden=true }
+  function paintConnection(){
+    const c=connected();
+    const disconnected=$('spotify-disconnected-view');
+    const connectedView=$('spotify-connected-view');
+    const mini=$('spotify-mini-player');
+    const button=$('spotify-music-button');
+    if(disconnected) disconnected.hidden=c;
+    if(connectedView) connectedView.hidden=!c;
+    if(mini) mini.hidden=!c;
+    if(button) button.classList.toggle('connected',c);
+  }
+  function open(){const panel=$('spotify-panel');if(!panel)return;panel.hidden=false;paintConnection();if(connected())initExperience().catch(e=>msg(e.message,true))}
+  function close(){const panel=$('spotify-panel');if(panel)panel.hidden=true}
   const image=i=>i?.images?.[0]?.url||i?.album?.images?.[0]?.url||'';
   async function profile(){const d=await api('/me');$('spotify-user-name').textContent=d.display_name||d.email||'Spotify user'}
   async function featured(){const d=await api(`/playlists/${FEATURED}`);$('spotify-featured-name').textContent=d.name;$('spotify-featured-owner').textContent=`Curated by ${d.owner?.display_name||'Elias'}`;const im=image(d),el=$('spotify-featured-image');el.hidden=!im;if(im)el.src=im;$('spotify-featured-playlist').dataset.spotifyUri=d.uri}
@@ -46,5 +76,14 @@
   async function disconnect(){try{await player?.disconnect()}catch{}player=null;deviceId='';initPromise=null;clearInterval(progressTimer);clear();paintConnection();close();window.toast?.('Spotify disconnected')}
 
   $('spotify-music-button')?.addEventListener('click',open);$('spotify-panel-close')?.addEventListener('click',close);$('spotify-connect-button')?.addEventListener('click',login);$('spotify-disconnect-button')?.addEventListener('click',disconnect);$('spotify-search-button')?.addEventListener('click',search);$('spotify-search-input')?.addEventListener('keydown',e=>{if(e.key==='Enter')search()});$('spotify-refresh-playlists')?.addEventListener('click',playlists);$('spotify-featured-playlist')?.addEventListener('click',e=>playContext(e.currentTarget.dataset.spotifyUri));$('spotify-mini-open')?.addEventListener('click',open);$('spotify-play-pause')?.addEventListener('click',()=>player?.togglePlay());$('spotify-previous')?.addEventListener('click',()=>player?.previousTrack());$('spotify-next')?.addEventListener('click',()=>player?.nextTrack());$('spotify-volume')?.addEventListener('input',e=>{localStorage.setItem('bozo_spotify_volume',e.target.value);player?.setVolume(Number(e.target.value)/100)});
-  callback().catch(e=>{console.error(e);window.toast?.(e.message)}).finally(()=>{paintConnection();if(connected())initPlayer().catch(e=>console.warn(e))});
+  function startSpotify(){
+    callback()
+      .catch(e=>{console.error(e);window.toast?.(e.message)})
+      .finally(()=>{
+        paintConnection();
+        if(connected()) initPlayer().catch(e=>console.warn(e));
+      });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',startSpotify,{once:true});
+  else startSpotify();
 })();

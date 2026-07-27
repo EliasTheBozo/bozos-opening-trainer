@@ -346,3 +346,13 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Adds persistent play, pause, previous, next, progress, and volume controls
 - Refreshes Spotify access tokens in the browser
 - Remembers the most recently selected Spotify context
+
+
+## Web v2.0.1 — Spotify Startup Fix
+
+- Adds the missing Music button to the actual header
+- Registers `onSpotifyWebPlaybackSDKReady` before loading Spotify's SDK
+- Loads the SDK dynamically to prevent callback-order errors
+- Makes connection-state rendering null-safe
+- Waits for the DOM before Spotify startup
+- Cache-busts app.js and spotify.js to v2.0.1
