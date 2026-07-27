@@ -325,3 +325,12 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Forces rendering after the study modal becomes visible
 - Creates all 64 squares through DOM APIs
 - Cache-busts app.js?v=1.9.5
+
+
+## Web v1.9.6 — Correct Study Board Mapping
+
+- Corrects the Opening Library viewer to use `study-board`
+- Corrects the new Studies Builder to use `study-builder-board`
+- Ensures each renderer writes to the visible board on its own page
+- Preserves the direct chess.js board renderer from v1.9.5
+- Cache-busts app.js?v=1.9.6
