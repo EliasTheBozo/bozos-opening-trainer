@@ -1882,11 +1882,11 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
 
 /* WEB v2.1.0 — CONSISTENT HIGH-CONTRAST PIECES + BOARD SIZING */
 :root {
-  --bozo-board-max: 590px;
+  --bozo-board-max: 540px;
 }
-:root[data-bozo-board-size="compact"] { --bozo-board-max: 470px; }
-:root[data-bozo-board-size="medium"]  { --bozo-board-max: 590px; }
-:root[data-bozo-board-size="large"]   { --bozo-board-max: 700px; }
+:root[data-bozo-board-size="compact"] { --bozo-board-max: 420px; }
+:root[data-bozo-board-size="medium"]  { --bozo-board-max: 540px; }
+:root[data-bozo-board-size="large"]   { --bozo-board-max: 650px; }
 
 /* Every board now uses the exact same local SVG piece set. */
 .bozo-chess-piece {
@@ -1985,4 +1985,21 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
     --bozo-board-max: min(94vw, 580px);
   }
   .bozo-board-size-control { justify-content:center; }
+}
+
+
+/* WEB v2.1.1 — embedded pieces and tighter responsive sizing */
+.bozo-chess-piece {
+  max-width:88%;
+  max-height:88%;
+}
+#study-modal .study-board-shell,
+#challenge-game-modal .friend-board-shell,
+#challenge-game-modal .bot-board-shell {
+  width:min(100%,var(--bozo-board-max));
+  max-width:var(--bozo-board-max);
+}
+@media(max-height:820px) and (min-width:760px) {
+  :root[data-bozo-board-size="medium"] { --bozo-board-max: 500px; }
+  :root[data-bozo-board-size="large"] { --bozo-board-max: 570px; }
 }

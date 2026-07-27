@@ -378,3 +378,13 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Persists the user's board-size preference across pages and visits
 - Defaults to Medium so side panels and music controls retain space
 - Cache-busts app.js and spotify.js as v2.1.0
+
+
+## Web v2.1.1 — Embedded Piece Repair
+
+- Embeds all twelve chess-piece SVGs directly inside app.js
+- Removes dependence on Cloudflare serving nested piece asset paths
+- Preserves the same high-contrast vector style on every board
+- Reduces Compact, Medium, and Large board dimensions
+- Adds extra height-aware sizing for shorter desktop screens
+- Cache-busts app.js and spotify.js as v2.1.1
