@@ -334,3 +334,15 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Ensures each renderer writes to the visible board on its own page
 - Preserves the direct chess.js board renderer from v1.9.5
 - Cache-busts app.js?v=1.9.6
+
+## Web v2.0.0 — BOZO Music
+
+- Adds Spotify Authorization Code with PKCE
+- Does not use or expose a Spotify client secret
+- Adds the BOZO featured playlist
+- Adds Spotify search for tracks, artists, albums, and playlists
+- Loads the connected user's playlists
+- Adds Web Playback SDK streaming for Spotify Premium users
+- Adds persistent play, pause, previous, next, progress, and volume controls
+- Refreshes Spotify access tokens in the browser
+- Remembers the most recently selected Spotify context

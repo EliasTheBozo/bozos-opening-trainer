@@ -1008,8 +1008,28 @@
     </div>
   </div>
 
+
+  <aside id="spotify-panel" class="spotify-panel" hidden aria-label="Spotify music">
+    <div class="spotify-panel-header"><div><div class="eyebrow">BOZO MUSIC</div><h2>Train with a soundtrack</h2></div><button id="spotify-panel-close" class="spotify-panel-close" type="button">×</button></div>
+    <div id="spotify-disconnected-view" class="spotify-connect-card"><div class="spotify-logo-mark">♪</div><h3>Connect Spotify</h3><p>Play BOZO's featured playlist, search Spotify, or choose one of your own playlists.</p><button id="spotify-connect-button" class="button primary">Connect Spotify</button><small>In-browser playback requires Spotify Premium.</small></div>
+    <div id="spotify-connected-view" class="spotify-connected-view" hidden>
+      <div class="spotify-account-row"><div><span>CONNECTED AS</span><b id="spotify-user-name">Spotify user</b></div><button id="spotify-disconnect-button" class="button secondary">Disconnect</button></div>
+      <section class="spotify-section"><div class="spotify-section-heading"><div><span class="eyebrow">BOZO PICK</span><h3>Featured playlist</h3></div></div><button id="spotify-featured-playlist" class="spotify-featured-card" type="button"><img id="spotify-featured-image" alt="" hidden><div><b id="spotify-featured-name">BOZO Playlist</b><span id="spotify-featured-owner">Curated by Elias</span></div><strong>▶</strong></button></section>
+      <section class="spotify-section"><label class="spotify-search-label">Search Spotify<div class="spotify-search-row"><input id="spotify-search-input" type="search" placeholder="Songs, artists, albums, or playlists"><button id="spotify-search-button" class="button primary">Search</button></div></label><div id="spotify-search-results" class="spotify-result-list"></div></section>
+      <section class="spotify-section"><div class="spotify-section-heading"><div><span class="eyebrow">YOUR SPOTIFY</span><h3>Your playlists</h3></div><button id="spotify-refresh-playlists" class="button secondary">Refresh</button></div><div id="spotify-user-playlists" class="spotify-playlist-grid"><div class="spotify-loading">Loading playlists…</div></div></section>
+      <div id="spotify-player-message" class="auth-message"></div>
+    </div>
+  </aside>
+  <div id="spotify-mini-player" class="spotify-mini-player" hidden>
+    <button id="spotify-mini-open" class="spotify-track-summary" type="button"><img id="spotify-track-image" alt="" hidden><div><b id="spotify-track-name">Nothing playing</b><span id="spotify-track-artist">Spotify</span></div></button>
+    <div class="spotify-mini-controls"><button id="spotify-previous" type="button">⏮</button><button id="spotify-play-pause" type="button">▶</button><button id="spotify-next" type="button">⏭</button></div>
+    <div class="spotify-progress-wrap"><span id="spotify-progress-current">0:00</span><div class="spotify-progress-track"><div id="spotify-progress-fill"></div></div><span id="spotify-progress-duration">0:00</span></div>
+    <label class="spotify-volume-control"><span>🔊</span><input id="spotify-volume" type="range" min="0" max="100" value="55"></label>
+  </div>
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=1.9.6"></script>
+  <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  <script src="./app.js?v=2.0.0"></script>
+  <script src="./spotify.js?v=2.0.0"></script>
 </body>
 </html>
