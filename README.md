@@ -256,3 +256,20 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Explains whether a move continued, changed, or abandoned the earlier plan
 - Compares the real game continuation with the stronger continuation
 - Cache-busts app.js?v=1.8.2
+
+
+## Web v1.9.0 — BOZO Studies
+
+- Adds a top-level Studies page
+- Creates private or public studies
+- Creates and edits chapters
+- Adds legal moves directly on the board
+- Builds branching variation trees
+- Saves notes to individual positions
+- Promotes variations to the main line
+- Deletes branches recursively
+- Imports PGNs containing comments and parenthesized variations
+- Exports the move tree back to PGN
+- Connects BOZO Coach to the selected study node
+- Autosaves study and chapter names
+- Cache-busts app.js?v=1.9.0

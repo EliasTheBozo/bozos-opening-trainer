@@ -31,6 +31,7 @@
       <button data-route="challenges">Challenges</button>
       <button data-route="friends">Friends</button>
       <button data-route="review">Review</button>
+      <button data-route="studies">Studies</button>
       <button data-route="profile">Profile</button>
       <button id="owner-nav" data-route="owner" hidden>Owner's Office</button>
     </nav>
@@ -49,6 +50,7 @@
     <button data-route="challenges">Challenges</button>
     <button data-route="friends">Friends</button>
     <button data-route="review">Review</button>
+    <button data-route="studies">Studies</button>
     <button data-route="profile">Profile</button>
     <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
   </div>
@@ -845,8 +847,42 @@
     </div>
   </div>
 
+
+  <div id="new-study-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal study-create-modal">
+      <button id="close-new-study-modal" class="modal-close">×</button>
+      <div class="eyebrow">NEW STUDY</div>
+      <h2>Create your move tree</h2>
+      <label>Study title<input id="new-study-title" value="Untitled Study"></label>
+      <label>Description<textarea id="new-study-description" rows="3" placeholder="What are you learning?"></textarea></label>
+      <label>Visibility
+        <select id="new-study-visibility">
+          <option value="private">Private</option>
+          <option value="public">Public</option>
+        </select>
+      </label>
+      <button id="create-study-submit" class="button primary">Create study</button>
+      <div id="new-study-status" class="auth-message"></div>
+    </div>
+  </div>
+
+  <div id="import-study-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal study-import-modal">
+      <button id="close-import-study-modal" class="modal-close">×</button>
+      <div class="eyebrow">IMPORT STUDY</div>
+      <h2>Paste a PGN with variations</h2>
+      <label>Study title<input id="import-study-title" value="Imported Study"></label>
+      <label>Chapter title<input id="import-chapter-title" value="Chapter 1"></label>
+      <label>PGN
+        <textarea id="import-study-pgn" rows="14" placeholder='1. b4 e5 (1... Nf6 2. Bb2) 2. Bb2'></textarea>
+      </label>
+      <button id="import-study-submit" class="button primary">Build study</button>
+      <div id="import-study-status" class="auth-message"></div>
+    </div>
+  </div>
+
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=1.8.2"></script>
+  <script src="./app.js?v=1.9.0"></script>
 </body>
 </html>

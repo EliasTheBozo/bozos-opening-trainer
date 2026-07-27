@@ -52,6 +52,7 @@ function route(name) {
   if (name === 'challenges') renderChallenges();
   if (name === 'friends') renderFriends();
   if (name === 'review') prepareReviewPage();
+  if (name === 'studies') renderStudies();
   if (name === 'profile') renderProfile();
   if (name === 'owner') renderOwnerGate();
 }
@@ -3759,6 +3760,876 @@ document.addEventListener('visibilitychange', () => {
     refreshOpenWebDuel(activeWebDuel.id, { force: true }).catch(() => {});
   }
 });
+
+
+/* ============================================================
+   BOZO STUDIES — BRANCHING MOVE TREES
+   ============================================================ */
+
+let studyList = [];
+let activeStudy = null;
+let activeStudyChapter = null;
+let studyNodes = [];
+let studyNodeMap = new Map();
+let selectedStudyNodeId = null;
+let studySelectedSquare = null;
+let studyBuilderOrientation = 'white';
+let studySaveTimer = null;
+let latestStudyCoachText = '';
+
+function requireStudySession() {
+  if (state.session?.user?.id) return true;
+  openAuth('signin');
+  return false;
+}
+
+async function renderStudies() {
+  const signedIn = Boolean(state.session?.user?.id);
+  $('studies-signed-out').hidden = signedIn;
+  $('studies-list-view').hidden = !signedIn;
+  $('study-editor-view').hidden = true;
+
+  if (!signedIn) return;
+
+  $('studies-list-status').textContent = 'Loading your studies…';
+  const { data, error } = await sb
+    .from('studies')
+    .select('id,title,description,visibility,created_at,updated_at')
+    .eq('owner', state.session.user.id)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    $('studies-list-status').textContent = readableError(error);
+    return;
+  }
+
+  studyList = data || [];
+  $('studies-list-status').textContent =
+    `${studyList.length} ${studyList.length === 1 ? 'study' : 'studies'}`;
+
+  $('studies-grid').innerHTML = studyList.length
+    ? studyList.map(study => `
+        <article class="study-card" data-open-study="${study.id}">
+          <div class="study-card-top">
+            <span>${escapeHtml(study.visibility)}</span>
+            <small>${new Date(study.updated_at || study.created_at).toLocaleDateString()}</small>
+          </div>
+          <h3>${escapeHtml(study.title)}</h3>
+          <p>${escapeHtml(study.description || 'No description yet.')}</p>
+          <button class="button secondary">Open study</button>
+        </article>
+      `).join('')
+    : `
+      <div class="empty-state studies-empty">
+        <h2>Your first move tree starts here</h2>
+        <p>Create a study from scratch or import a variation-rich PGN from Lichess.</p>
+        <button class="button primary" id="empty-new-study">Create study</button>
+      </div>
+    `;
+
+  $$('[data-open-study]').forEach(card =>
+    card.addEventListener('click', () => openStudyEditor(card.dataset.openStudy))
+  );
+  $('empty-new-study')?.addEventListener('click', openNewStudyModal);
+}
+
+function openNewStudyModal() {
+  if (!requireStudySession()) return;
+  $('new-study-modal').hidden = false;
+  $('new-study-status').textContent = '';
+}
+
+function openImportStudyModal() {
+  if (!requireStudySession()) return;
+  $('import-study-modal').hidden = false;
+  $('import-study-status').textContent = '';
+}
+
+async function createStudyRecord({ title, description = '', visibility = 'private', chapterTitle = 'Chapter 1' }) {
+  const userId = state.session?.user?.id;
+  if (!userId) throw new Error('Sign in first.');
+
+  const { data: study, error: studyError } = await sb
+    .from('studies')
+    .insert({
+      owner: userId,
+      title: title || 'Untitled Study',
+      description,
+      visibility
+    })
+    .select()
+    .single();
+
+  if (studyError) throw studyError;
+
+  const { data: chapter, error: chapterError } = await sb
+    .from('study_chapters')
+    .insert({
+      study_id: study.id,
+      title: chapterTitle || 'Chapter 1',
+      sort_order: 0,
+      starting_fen: 'startpos'
+    })
+    .select()
+    .single();
+
+  if (chapterError) throw chapterError;
+
+  const start = new Chess();
+  const { data: root, error: rootError } = await sb
+    .from('study_nodes')
+    .insert({
+      chapter_id: chapter.id,
+      parent_id: null,
+      ply: 0,
+      san: null,
+      uci: null,
+      fen_before: start.fen(),
+      fen_after: start.fen(),
+      comment: '',
+      is_main_line: true,
+      sort_order: 0
+    })
+    .select()
+    .single();
+
+  if (rootError) throw rootError;
+
+  return { study, chapter, root };
+}
+
+async function createNewStudy() {
+  const button = $('create-study-submit');
+  button.disabled = true;
+  $('new-study-status').textContent = 'Creating…';
+
+  try {
+    const created = await createStudyRecord({
+      title: $('new-study-title').value.trim(),
+      description: $('new-study-description').value.trim(),
+      visibility: $('new-study-visibility').value
+    });
+    $('new-study-modal').hidden = true;
+    await openStudyEditor(created.study.id);
+  } catch (error) {
+    $('new-study-status').textContent = readableError(error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function openStudyEditor(studyId) {
+  const [{ data: study, error: studyError }, { data: chapters, error: chapterError }] =
+    await Promise.all([
+      sb.from('studies').select('*').eq('id', studyId).single(),
+      sb.from('study_chapters').select('*').eq('study_id', studyId).order('sort_order').limit(1)
+    ]);
+
+  if (studyError) return toast(readableError(studyError));
+  if (chapterError || !chapters?.length) return toast('This study has no chapter.');
+
+  activeStudy = study;
+  activeStudyChapter = chapters[0];
+
+  const { data: nodes, error: nodesError } = await sb
+    .from('study_nodes')
+    .select('*')
+    .eq('chapter_id', activeStudyChapter.id)
+    .order('ply')
+    .order('sort_order');
+
+  if (nodesError) return toast(readableError(nodesError));
+
+  studyNodes = nodes || [];
+  rebuildStudyNodeMap();
+  const root = studyNodes.find(node => !node.parent_id);
+  selectedStudyNodeId = root?.id || studyNodes[0]?.id || null;
+  studySelectedSquare = null;
+
+  $('studies-list-view').hidden = true;
+  $('study-editor-view').hidden = false;
+  $('study-title-input').value = activeStudy.title;
+  $('study-chapter-title-input').value = activeStudyChapter.title;
+  $('study-autosave-state').textContent = 'Saved';
+
+  renderStudyEditor();
+}
+
+function rebuildStudyNodeMap() {
+  studyNodeMap = new Map(studyNodes.map(node => [node.id, node]));
+}
+
+function selectedStudyNode() {
+  return studyNodeMap.get(selectedStudyNodeId) || null;
+}
+
+function studyChildren(parentId) {
+  return studyNodes
+    .filter(node => node.parent_id === parentId)
+    .sort((a, b) =>
+      Number(b.is_main_line) - Number(a.is_main_line) ||
+      Number(a.sort_order) - Number(b.sort_order) ||
+      String(a.created_at).localeCompare(String(b.created_at))
+    );
+}
+
+function studyPathTo(nodeId) {
+  const path = [];
+  let node = studyNodeMap.get(nodeId);
+  while (node) {
+    path.unshift(node);
+    node = node.parent_id ? studyNodeMap.get(node.parent_id) : null;
+  }
+  return path;
+}
+
+function studyGameAtNode(nodeId) {
+  const game = new Chess();
+  const path = studyPathTo(nodeId).filter(node => node.san);
+  for (const node of path) {
+    if (!game.move(node.san, { sloppy: true })) {
+      console.warn('Could not replay study node', node);
+      break;
+    }
+  }
+  return game;
+}
+
+function renderStudyEditor() {
+  paintStudyBoard();
+  renderStudyMoveTree();
+  renderStudyInspector();
+}
+
+function paintStudyBoard() {
+  const node = selectedStudyNode();
+  if (!node) return;
+  const game = studyGameAtNode(node.id);
+  const board = fenBoard(game.fen());
+  const ranks = studyBuilderOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = studyBuilderOrientation === 'white'
+    ? ['a','b','c','d','e','f','g','h']
+    : ['h','g','f','e','d','c','b','a'];
+
+  const legalTargets = studySelectedSquare
+    ? game.moves({ square: studySelectedSquare, verbose: true }).map(move => move.to)
+    : [];
+
+  $('study-board').innerHTML = ranks.flatMap(rank =>
+    files.map(file => {
+      const square = `${file}${rank}`;
+      const symbol = board[8 - rank][file.charCodeAt(0) - 97];
+      const piece = game.get(square);
+      const classes = [];
+      if (square === studySelectedSquare) classes.push('study-selected-square');
+      if (legalTargets.includes(square)) classes.push('study-legal-square');
+
+      return `<button type="button"
+                      data-study-square="${square}"
+                      class="${classes.join(' ')}"
+                      data-piece-color="${piece?.color || ''}">
+                ${webPiece(symbol)}
+              </button>`;
+    })
+  ).join('');
+
+  $$('[data-study-square]').forEach(button =>
+    button.addEventListener('click', () => handleStudySquare(button.dataset.studySquare))
+  );
+
+  const path = studyPathTo(node.id).filter(item => item.san);
+  $('study-position-label').textContent = node.san
+    ? `${Math.ceil(node.ply / 2)}${node.ply % 2 ? '.' : '...'} ${node.san}`
+    : 'Starting position';
+  $('study-fen-label').textContent = game.fen();
+}
+
+async function handleStudySquare(square) {
+  const node = selectedStudyNode();
+  if (!node || !activeStudyChapter) return;
+
+  const game = studyGameAtNode(node.id);
+  const piece = game.get(square);
+
+  if (!studySelectedSquare) {
+    if (piece && piece.color === game.turn()) {
+      studySelectedSquare = square;
+      paintStudyBoard();
+    }
+    return;
+  }
+
+  if (piece && piece.color === game.turn()) {
+    studySelectedSquare = square;
+    paintStudyBoard();
+    return;
+  }
+
+  const from = studySelectedSquare;
+  studySelectedSquare = null;
+  const candidate = game.moves({ square: from, verbose: true }).find(move => move.to === square);
+  if (!candidate) {
+    paintStudyBoard();
+    return toast('That move is not legal.');
+  }
+
+  const played = game.move({
+    from,
+    to: square,
+    promotion: candidate.promotion || 'q'
+  });
+  if (!played) return;
+
+  const existing = studyChildren(node.id).find(
+    child => reviewCleanSan(child.san) === reviewCleanSan(played.san)
+  );
+
+  if (existing) {
+    selectedStudyNodeId = existing.id;
+    renderStudyEditor();
+    return;
+  }
+
+  $('study-autosave-state').textContent = 'Saving move…';
+  const siblings = studyChildren(node.id);
+  const { data: inserted, error } = await sb
+    .from('study_nodes')
+    .insert({
+      chapter_id: activeStudyChapter.id,
+      parent_id: node.id,
+      ply: node.ply + 1,
+      san: played.san,
+      uci: `${played.from}${played.to}${played.promotion || ''}`,
+      fen_before: node.fen_after || studyGameAtNode(node.id).fen(),
+      fen_after: game.fen(),
+      comment: '',
+      nag: '',
+      is_main_line: siblings.length === 0,
+      sort_order: siblings.length
+    })
+    .select()
+    .single();
+
+  if (error) {
+    $('study-autosave-state').textContent = 'Save failed';
+    return toast(readableError(error));
+  }
+
+  studyNodes.push(inserted);
+  rebuildStudyNodeMap();
+  selectedStudyNodeId = inserted.id;
+  $('study-autosave-state').textContent = 'Saved';
+  renderStudyEditor();
+}
+
+function renderStudyMoveTree() {
+  const root = studyNodes.find(node => !node.parent_id);
+  if (!root) {
+    $('study-move-tree').innerHTML = '<p>No root position found.</p>';
+    return;
+  }
+
+  const renderBranch = (parentId, depth = 0) => {
+    const children = studyChildren(parentId);
+    if (!children.length) return '';
+
+    return `<div class="study-tree-level" style="--study-depth:${depth}">
+      ${children.map((node, index) => `
+        <div class="study-tree-node-wrap">
+          <button class="study-tree-node ${node.id === selectedStudyNodeId ? 'active' : ''} ${node.is_main_line ? 'main-line' : 'variation'}"
+                  data-study-node="${node.id}">
+            <span>${Math.ceil(node.ply / 2)}${node.ply % 2 ? '.' : '...'}</span>
+            <b>${escapeHtml(node.san || '')}</b>
+            ${node.comment ? '<i title="Has note">●</i>' : ''}
+          </button>
+          ${renderBranch(node.id, depth + 1)}
+        </div>
+      `).join('')}
+    </div>`;
+  };
+
+  $('study-move-tree').innerHTML = `
+    <button class="study-tree-root ${root.id === selectedStudyNodeId ? 'active' : ''}"
+            data-study-node="${root.id}">Starting position</button>
+    ${renderBranch(root.id)}
+  `;
+
+  $$('[data-study-node]').forEach(button =>
+    button.addEventListener('click', () => {
+      selectedStudyNodeId = button.dataset.studyNode;
+      studySelectedSquare = null;
+      renderStudyEditor();
+    })
+  );
+}
+
+function renderStudyInspector() {
+  const node = selectedStudyNode();
+  if (!node) return;
+  $('study-node-comment').value = node.comment || '';
+  $('study-delete-variation').disabled = !node.parent_id;
+  $('study-promote-button').disabled = !node.parent_id || node.is_main_line;
+}
+
+function scheduleStudyMetadataSave() {
+  clearTimeout(studySaveTimer);
+  $('study-autosave-state').textContent = 'Saving…';
+  studySaveTimer = setTimeout(saveStudyMetadata, 500);
+}
+
+async function saveStudyMetadata() {
+  if (!activeStudy || !activeStudyChapter) return;
+
+  const title = $('study-title-input').value.trim() || 'Untitled Study';
+  const chapterTitle = $('study-chapter-title-input').value.trim() || 'Chapter 1';
+
+  const [{ error: studyError }, { error: chapterError }] = await Promise.all([
+    sb.from('studies').update({ title }).eq('id', activeStudy.id),
+    sb.from('study_chapters').update({ title: chapterTitle }).eq('id', activeStudyChapter.id)
+  ]);
+
+  if (studyError || chapterError) {
+    $('study-autosave-state').textContent = 'Save failed';
+    return;
+  }
+
+  activeStudy.title = title;
+  activeStudyChapter.title = chapterTitle;
+  $('study-autosave-state').textContent = 'Saved';
+}
+
+async function saveStudyNote() {
+  const node = selectedStudyNode();
+  if (!node) return;
+  const comment = $('study-node-comment').value.trim();
+  $('study-autosave-state').textContent = 'Saving note…';
+
+  const { error } = await sb
+    .from('study_nodes')
+    .update({ comment })
+    .eq('id', node.id);
+
+  if (error) {
+    $('study-autosave-state').textContent = 'Save failed';
+    return toast(readableError(error));
+  }
+
+  node.comment = comment;
+  $('study-autosave-state').textContent = 'Saved';
+  renderStudyMoveTree();
+}
+
+async function promoteStudyVariation() {
+  const node = selectedStudyNode();
+  if (!node?.parent_id) return;
+
+  $('study-autosave-state').textContent = 'Promoting…';
+  const siblings = studyChildren(node.parent_id);
+  const siblingIds = siblings.map(item => item.id);
+
+  if (siblingIds.length) {
+    const { error: clearError } = await sb
+      .from('study_nodes')
+      .update({ is_main_line: false })
+      .in('id', siblingIds);
+    if (clearError) return toast(readableError(clearError));
+  }
+
+  const { error } = await sb
+    .from('study_nodes')
+    .update({ is_main_line: true, sort_order: 0 })
+    .eq('id', node.id);
+
+  if (error) return toast(readableError(error));
+
+  siblings.forEach(item => item.is_main_line = item.id === node.id);
+  $('study-autosave-state').textContent = 'Saved';
+  renderStudyMoveTree();
+}
+
+function collectStudyDescendants(nodeId) {
+  const collected = [];
+  const visit = id => {
+    for (const child of studyChildren(id)) {
+      collected.push(child.id);
+      visit(child.id);
+    }
+  };
+  visit(nodeId);
+  return collected;
+}
+
+async function deleteStudyVariation() {
+  const node = selectedStudyNode();
+  if (!node?.parent_id) return;
+  if (!confirm(`Delete ${node.san} and every continuation below it?`)) return;
+
+  const parentId = node.parent_id;
+  const { error } = await sb.from('study_nodes').delete().eq('id', node.id);
+  if (error) return toast(readableError(error));
+
+  const removed = new Set([node.id, ...collectStudyDescendants(node.id)]);
+  studyNodes = studyNodes.filter(item => !removed.has(item.id));
+  rebuildStudyNodeMap();
+  selectedStudyNodeId = parentId;
+  renderStudyEditor();
+  toast('Variation deleted');
+}
+
+async function deleteActiveStudy() {
+  if (!activeStudy || !confirm(`Delete "${activeStudy.title}" permanently?`)) return;
+  const { error } = await sb.from('studies').delete().eq('id', activeStudy.id);
+  if (error) return toast(readableError(error));
+  activeStudy = null;
+  activeStudyChapter = null;
+  studyNodes = [];
+  selectedStudyNodeId = null;
+  await renderStudies();
+  toast('Study deleted');
+}
+
+function tokenizeStudyPgn(pgn) {
+  return String(pgn || '')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/;[^\n\r]*/g, ' ')
+    .replace(/\{([^}]*)\}/g, ' {$1} ')
+    .replace(/(\(|\))/g, ' $1 ')
+    .replace(/\$\d+/g, ' ')
+    .replace(/\d+\.(\.\.)?/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+}
+
+function parseStudyPgnTree(pgn) {
+  const tokens = tokenizeStudyPgn(pgn);
+  const root = { san: null, comment: '', children: [] };
+  const positionStack = [];
+  let current = root;
+  let game = new Chess();
+  let lastNode = root;
+  let pendingComment = '';
+
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+
+    if (token === '(') {
+      const parent = lastNode.parent || root;
+      positionStack.push({ current, gameFen: game.fen(), lastNode });
+      current = parent;
+      game = new Chess(parent.fenAfter || new Chess().fen());
+      lastNode = parent;
+      continue;
+    }
+
+    if (token === ')') {
+      const saved = positionStack.pop();
+      if (saved) {
+        current = saved.current;
+        game = new Chess(saved.gameFen);
+        lastNode = saved.lastNode;
+      }
+      continue;
+    }
+
+    if (token.startsWith('{')) {
+      pendingComment = token.replace(/^\{|\}$/g, '');
+      while (!token.endsWith('}') && index + 1 < tokens.length) {
+        index++;
+        pendingComment += ` ${tokens[index].replace(/\}$/, '')}`;
+        if (tokens[index].endsWith('}')) break;
+      }
+      if (lastNode !== root) lastNode.comment = pendingComment.trim();
+      pendingComment = '';
+      continue;
+    }
+
+    if (/^(1-0|0-1|1\/2-1\/2|\*)$/.test(token)) continue;
+    if (/^[!?]+$/.test(token)) {
+      if (lastNode !== root) lastNode.nag = token;
+      continue;
+    }
+
+    const before = game.fen();
+    const move = game.move(token, { sloppy: true });
+    if (!move) continue;
+
+    let node = current.children.find(
+      child => reviewCleanSan(child.san) === reviewCleanSan(move.san)
+    );
+    if (!node) {
+      node = {
+        san: move.san,
+        uci: `${move.from}${move.to}${move.promotion || ''}`,
+        fenBefore: before,
+        fenAfter: game.fen(),
+        comment: pendingComment,
+        nag: '',
+        children: [],
+        parent: current
+      };
+      current.children.push(node);
+    }
+
+    current = node;
+    lastNode = node;
+    pendingComment = '';
+  }
+
+  return root;
+}
+
+async function persistImportedTree(root, chapterId, rootId) {
+  const queue = root.children.map((node, index) => ({
+    node,
+    parentId: rootId,
+    ply: 1,
+    main: index === 0,
+    sortOrder: index
+  }));
+
+  while (queue.length) {
+    const item = queue.shift();
+    const { data: inserted, error } = await sb
+      .from('study_nodes')
+      .insert({
+        chapter_id: chapterId,
+        parent_id: item.parentId,
+        ply: item.ply,
+        san: item.node.san,
+        uci: item.node.uci,
+        fen_before: item.node.fenBefore,
+        fen_after: item.node.fenAfter,
+        comment: item.node.comment || '',
+        nag: item.node.nag || '',
+        is_main_line: item.main,
+        sort_order: item.sortOrder
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    item.node.children.forEach((child, index) => queue.push({
+      node: child,
+      parentId: inserted.id,
+      ply: item.ply + 1,
+      main: index === 0,
+      sortOrder: index
+    }));
+  }
+}
+
+async function importStudyPgn() {
+  const pgn = $('import-study-pgn').value.trim();
+  if (!pgn) {
+    $('import-study-status').textContent = 'Paste a PGN first.';
+    return;
+  }
+
+  const button = $('import-study-submit');
+  button.disabled = true;
+  $('import-study-status').textContent = 'Parsing variations…';
+
+  try {
+    const tree = parseStudyPgnTree(pgn);
+    if (!tree.children.length) throw new Error('No legal moves were found in this PGN.');
+
+    const created = await createStudyRecord({
+      title: $('import-study-title').value.trim() || 'Imported Study',
+      chapterTitle: $('import-chapter-title').value.trim() || 'Chapter 1'
+    });
+
+    $('import-study-status').textContent = 'Saving move tree…';
+    await persistImportedTree(tree, created.chapter.id, created.root.id);
+    $('import-study-modal').hidden = true;
+    await openStudyEditor(created.study.id);
+    toast('Study imported');
+  } catch (error) {
+    $('import-study-status').textContent = readableError(error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function studyNodePgn(node, moveNumber, side) {
+  const prefix = side === 'w' ? `${moveNumber}. ` : `${moveNumber}... `;
+  const comment = node.comment ? ` {${node.comment.replace(/[{}]/g, '')}}` : '';
+  return `${prefix}${node.san}${node.nag || ''}${comment}`;
+}
+
+function exportStudyPgnText() {
+  const root = studyNodes.find(node => !node.parent_id);
+  if (!root) return '';
+
+  const renderFrom = (parentId, moveNumber = 1, side = 'w') => {
+    const children = studyChildren(parentId);
+    if (!children.length) return '';
+
+    const main = children.find(node => node.is_main_line) || children[0];
+    const variations = children.filter(node => node.id !== main.id);
+
+    let text = studyNodePgn(main, moveNumber, side);
+    const nextMove = side === 'b' ? moveNumber + 1 : moveNumber;
+    const nextSide = side === 'w' ? 'b' : 'w';
+
+    for (const variation of variations) {
+      const variationText =
+        studyNodePgn(variation, moveNumber, side) +
+        ' ' +
+        renderFrom(variation.id, nextMove, nextSide);
+      text += ` (${variationText.trim()})`;
+    }
+
+    const continuation = renderFrom(main.id, nextMove, nextSide);
+    if (continuation) text += ` ${continuation}`;
+    return text.trim();
+  };
+
+  return `[Event "${(activeStudy?.title || 'BOZO Study').replace(/"/g, "'")}"]
+[Chapter "${(activeStudyChapter?.title || 'Chapter 1').replace(/"/g, "'")}"]
+[Site "BOZO'S Opening Trainer"]
+
+${renderFrom(root.id)} *`;
+}
+
+function exportActiveStudy() {
+  const pgn = exportStudyPgnText();
+  const blob = new Blob([pgn], { type: 'application/x-chess-pgn' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${(activeStudy?.title || 'bozo-study').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.pgn`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+async function askStudyCoach() {
+  const node = selectedStudyNode();
+  if (!node) return;
+  const path = studyPathTo(node.id).filter(item => item.san);
+  const siblings = node.parent_id
+    ? studyChildren(node.parent_id).filter(item => item.id !== node.id)
+    : [];
+  const continuation = [];
+  let cursor = node;
+  for (let index = 0; index < 6; index++) {
+    const next = studyChildren(cursor.id).find(item => item.is_main_line) || studyChildren(cursor.id)[0];
+    if (!next) break;
+    continuation.push(next.san);
+    cursor = next;
+  }
+
+  const button = $('ask-study-coach');
+  button.disabled = true;
+  button.textContent = 'Thinking…';
+  $('study-coach-answer').textContent = 'BOZO is reading the branch…';
+
+  try {
+    const { data, error } = await sb.functions.invoke('explain-move', {
+      body: {
+        mode: 'study',
+        gameStatus: 'study',
+        move: node.san || 'Starting position',
+        fen: node.fen_after,
+        fenBefore: node.fen_before,
+        question: $('study-coach-question').value.trim() ||
+          'Explain why this move belongs in the study, compare its sibling variations, and give the practical plan.',
+        opening: activeStudy?.title || 'Study',
+        variation: activeStudyChapter?.title || 'Chapter',
+        moveHistory: path.map(item => item.san),
+        contextBeforeMoves: path.slice(-8).map(item => item.san),
+        actualContinuation: continuation,
+        siblingVariations: siblings.map(item => item.san),
+        existingNote: node.comment || '',
+        classification: 'Study move'
+      }
+    });
+    if (error) throw error;
+
+    const explanation = data?.explanation || data;
+    latestStudyCoachText = [
+      explanation?.summary,
+      explanation?.howWeGotHere,
+      explanation?.comparison,
+      ...(explanation?.practicalPlan || [])
+    ].filter(Boolean).join('\n\n');
+
+    $('study-coach-answer').innerHTML = `
+      <p>${escapeHtml(explanation?.summary || 'No explanation returned.')}</p>
+      ${explanation?.howWeGotHere ? `<div><b>Context</b><p>${escapeHtml(explanation.howWeGotHere)}</p></div>` : ''}
+      ${explanation?.comparison ? `<div><b>Variation comparison</b><p>${escapeHtml(explanation.comparison)}</p></div>` : ''}
+      ${Array.isArray(explanation?.practicalPlan) ? `
+        <div><b>Practical plan</b>
+          <ol>${explanation.practicalPlan.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ol>
+        </div>` : ''}
+      ${explanation?.watchFor ? `<div class="coach-warning"><b>Watch for:</b><span>${escapeHtml(explanation.watchFor)}</span></div>` : ''}
+    `;
+    $('save-coach-as-note').hidden = !latestStudyCoachText;
+  } catch (error) {
+    $('study-coach-answer').textContent = readableError(error);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Ask BOZO Coach';
+  }
+}
+
+async function saveCoachAsStudyNote() {
+  if (!latestStudyCoachText) return;
+  const existing = $('study-node-comment').value.trim();
+  $('study-node-comment').value =
+    [existing, `BOZO Coach:\n${latestStudyCoachText}`].filter(Boolean).join('\n\n');
+  await saveStudyNote();
+}
+
+function setStudyInspectorTab(tab) {
+  $$('[data-study-tab]').forEach(button =>
+    button.classList.toggle('active', button.dataset.studyTab === tab)
+  );
+  $('study-notes-tab').hidden = tab !== 'notes';
+  $('study-coach-tab').hidden = tab !== 'coach';
+}
+
+$('new-study-button').addEventListener('click', openNewStudyModal);
+$('import-study-button').addEventListener('click', openImportStudyModal);
+$('close-new-study-modal').addEventListener('click', () => $('new-study-modal').hidden = true);
+$('close-import-study-modal').addEventListener('click', () => $('import-study-modal').hidden = true);
+$('create-study-submit').addEventListener('click', createNewStudy);
+$('import-study-submit').addEventListener('click', importStudyPgn);
+$('close-study-editor').addEventListener('click', renderStudies);
+$('study-title-input').addEventListener('input', scheduleStudyMetadataSave);
+$('study-chapter-title-input').addEventListener('input', scheduleStudyMetadataSave);
+$('study-save-note').addEventListener('click', saveStudyNote);
+$('study-promote-button').addEventListener('click', promoteStudyVariation);
+$('study-delete-variation').addEventListener('click', deleteStudyVariation);
+$('study-delete-button').addEventListener('click', deleteActiveStudy);
+$('study-export-button').addEventListener('click', exportActiveStudy);
+$('study-start-button').addEventListener('click', () => {
+  const root = studyNodes.find(node => !node.parent_id);
+  if (root) {
+    selectedStudyNodeId = root.id;
+    studySelectedSquare = null;
+    renderStudyEditor();
+  }
+});
+$('study-previous-button').addEventListener('click', () => {
+  const node = selectedStudyNode();
+  if (node?.parent_id) {
+    selectedStudyNodeId = node.parent_id;
+    studySelectedSquare = null;
+    renderStudyEditor();
+  }
+});
+$('study-flip-button').addEventListener('click', () => {
+  studyBuilderOrientation = studyBuilderOrientation === 'white' ? 'black' : 'white';
+  paintStudyBoard();
+});
+$$('[data-study-tab]').forEach(button =>
+  button.addEventListener('click', () => setStudyInspectorTab(button.dataset.studyTab))
+);
+$('ask-study-coach').addEventListener('click', askStudyCoach);
+$('save-coach-as-note').addEventListener('click', saveCoachAsStudyNote);
+
 
 function escapeHtml(value='') {
   return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
