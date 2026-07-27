@@ -316,3 +316,12 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Adds correct piece-color attributes to the original study viewer
 - Standardizes full-opacity piece rendering on both study boards
 - Cache-busts app.js?v=1.9.4
+
+
+## Web v1.9.5 — Direct Study Renderer
+
+- Rebuilds the Opening Library board directly from chess.js board()
+- Removes reliance on the shared FEN renderer
+- Forces rendering after the study modal becomes visible
+- Creates all 64 squares through DOM APIs
+- Cache-busts app.js?v=1.9.5

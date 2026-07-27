@@ -1029,6 +1029,8 @@ async function openStudyOpening(openingId) {
   $('study-modal').hidden = false;
   clearCoach();
   paintStudy();
+  requestAnimationFrame(() => paintStudy());
+  setTimeout(() => paintStudy(), 80);
 }
 
 function closeStudy() {
@@ -1047,46 +1049,76 @@ function setStudyPly(nextPly) {
 }
 
 function paintStudy() {
-  const boardElement = $('study-board');
-  if (!boardElement || !studyGame) return;
-
-  const ranks = studyOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
-  const files = studyOrientation === 'white'
-    ? ['a','b','c','d','e','f','g','h']
-    : ['h','g','f','e','d','c','b','a'];
-  const board = fenBoard(studyGame.fen());
-  const html = [];
-
-  for (const rank of ranks) {
-    for (const file of files) {
-      const row = 8-rank;
-      const col = file.charCodeAt(0)-97;
-      const square = `${file}${rank}`;
-      const piece = studyGame.get(square);
-      const color = piece?.color === 'b'
-        ? 'black'
-        : piece?.color === 'w'
-          ? 'white'
-          : '';
-
-      html.push(`<div data-piece-color="${color}">${webPiece(board[row][col])}</div>`);
-    }
+  const boardElement = document.getElementById('study-board');
+  if (!boardElement) {
+    console.error('Opening Library study board element is missing.');
+    return;
   }
 
-  boardElement.innerHTML = html.join('');
-  $('study-progress').textContent = studyPly === 0
-    ? 'Start position'
-    : `${studyPly}/${studyMoves.length} plies`;
+  if (!studyGame) {
+    studyGame = new Chess();
+  }
 
-  $('study-move-list').innerHTML = renderGroupedMoveRows(studyMoves, studyPly);
+  try {
+    const orientation = studyOrientation === 'black' ? 'black' : 'white';
+    const boardMatrix = studyGame.board();
+    const rankIndexes = orientation === 'white'
+      ? [0,1,2,3,4,5,6,7]
+      : [7,6,5,4,3,2,1,0];
+    const fileIndexes = orientation === 'white'
+      ? [0,1,2,3,4,5,6,7]
+      : [7,6,5,4,3,2,1,0];
+    const pieceSymbols = {
+      wp:'♙', wr:'♖', wn:'♘', wb:'♗', wq:'♕', wk:'♔',
+      bp:'♟', br:'♜', bn:'♞', bb:'♝', bq:'♛', bk:'♚'
+    };
 
-  $('study-prev').disabled = studyPly === 0;
-  $('study-start').disabled = studyPly === 0;
-  $('study-next').disabled = studyPly === studyMoves.length;
-  $('study-end').disabled = studyPly === studyMoves.length;
-  updateCoachMoveLabel();
+    const fragment = document.createDocumentFragment();
+
+    for (const rowIndex of rankIndexes) {
+      for (const columnIndex of fileIndexes) {
+        const piece = boardMatrix[rowIndex][columnIndex];
+        const square = document.createElement('div');
+        square.className = 'opening-study-square';
+
+        if (piece) {
+          const color = piece.color === 'w' ? 'white' : 'black';
+          square.dataset.pieceColor = color;
+          square.textContent = pieceSymbols[`${piece.color}${piece.type}`] || '';
+        }
+
+        fragment.appendChild(square);
+      }
+    }
+
+    boardElement.replaceChildren(fragment);
+
+    const progress = document.getElementById('study-progress');
+    if (progress) {
+      progress.textContent = studyPly === 0
+        ? 'Start position'
+        : `${studyPly}/${studyMoves.length} plies`;
+    }
+
+    const moveList = document.getElementById('study-move-list');
+    if (moveList) moveList.innerHTML = renderGroupedMoveRows(studyMoves, studyPly);
+
+    const previous = document.getElementById('study-prev');
+    const startButton = document.getElementById('study-start');
+    const next = document.getElementById('study-next');
+    const endButton = document.getElementById('study-end');
+    if (previous) previous.disabled = studyPly === 0;
+    if (startButton) startButton.disabled = studyPly === 0;
+    if (next) next.disabled = studyPly === studyMoves.length;
+    if (endButton) endButton.disabled = studyPly === studyMoves.length;
+
+    updateCoachMoveLabel();
+  } catch (error) {
+    console.error('Opening Library study board render failed:', error);
+    boardElement.innerHTML =
+      '<div class="study-board-error">The position could not be rendered. Open the browser console and send the red error shown there.</div>';
+  }
 }
-
 
 
 let lastCoachExplanation = null;
