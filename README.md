@@ -367,3 +367,14 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Prevents Your Playlists from remaining stuck on Loading
 - Adds a reconnect option when the existing Spotify grant lacks playlist scopes
 - Cache-busts spotify.js and app.js as v2.0.2
+
+
+## Web v2.1.0 — Unified Piece Style and Board Sizing
+
+- Replaces Unicode chess glyphs with one local high-contrast SVG set on every board
+- Uses bright ivory White pieces and deep charcoal Black pieces with clear outlines
+- Applies the same pieces to Study, Studies Builder, Review, BOZO Bot, and friend games
+- Adds Compact, Medium, and Large board controls to every board workspace
+- Persists the user's board-size preference across pages and visits
+- Defaults to Medium so side panels and music controls retain space
+- Cache-busts app.js and spotify.js as v2.1.0

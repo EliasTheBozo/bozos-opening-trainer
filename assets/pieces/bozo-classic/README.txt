@@ -1,0 +1,1 @@
+BOZO Classic pieces are locally generated vector outlines from Unicode chess glyphs in DejaVu Sans. DejaVu fonts are distributed under their included permissive license. No runtime font download is required.

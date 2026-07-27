@@ -1084,7 +1084,8 @@ function paintStudy() {
         if (piece) {
           const color = piece.color === 'w' ? 'white' : 'black';
           square.dataset.pieceColor = color;
-          square.textContent = pieceSymbols[`${piece.color}${piece.type}`] || '';
+          const symbol = pieceSymbols[`${piece.color}${piece.type}`] || '';
+          square.innerHTML = webPiece(symbol);
         }
 
         fragment.appendChild(square);
@@ -4088,7 +4089,14 @@ function stopDuelClock() {
 }
 
 function webPiece(symbol) {
-  return {p:'♟',r:'♜',n:'♞',b:'♝',q:'♛',k:'♚',P:'♙',R:'♖',N:'♘',B:'♗',Q:'♕',K:'♔'}[symbol] || '';
+  const pieceFiles = {
+    P:'wP', R:'wR', N:'wN', B:'wB', Q:'wQ', K:'wK',
+    p:'bP', r:'bR', n:'bN', b:'bB', q:'bQ', k:'bK'
+  };
+  const file = pieceFiles[symbol];
+  return file
+    ? `<img class="bozo-chess-piece" src="./assets/pieces/bozo-classic/${file}.svg" alt="" draggable="false">`
+    : '';
 }
 
 function fenBoard(fen) {
@@ -5162,6 +5170,65 @@ $$('[data-study-tab]').forEach(button =>
 $('ask-study-coach')?.addEventListener('click', askStudyCoach);
 $('save-coach-as-note')?.addEventListener('click', saveCoachAsStudyNote);
 
+
+/* ============================================================
+   BOZO BOARD DISPLAY — CONSISTENT PIECES + RESPONSIVE SIZING
+   ============================================================ */
+const BOZO_BOARD_SIZES = ['compact', 'medium', 'large'];
+
+function currentBozoBoardSize() {
+  const saved = localStorage.getItem('bozo_board_size');
+  return BOZO_BOARD_SIZES.includes(saved) ? saved : 'medium';
+}
+
+function applyBozoBoardSize(size) {
+  const resolved = BOZO_BOARD_SIZES.includes(size) ? size : 'medium';
+  document.documentElement.dataset.bozoBoardSize = resolved;
+  localStorage.setItem('bozo_board_size', resolved);
+  document.querySelectorAll('[data-bozo-board-size]').forEach(button => {
+    button.classList.toggle('active', button.dataset.bozoBoardSize === resolved);
+  });
+  window.dispatchEvent(new Event('resize'));
+}
+
+function makeBozoBoardSizeControl() {
+  const control = document.createElement('div');
+  control.className = 'bozo-board-size-control';
+  control.innerHTML = `
+    <span>Board size</span>
+    ${BOZO_BOARD_SIZES.map(size => `
+      <button type="button" data-bozo-board-size="${size}">
+        ${size[0].toUpperCase() + size.slice(1)}
+      </button>`).join('')}
+  `;
+  control.querySelectorAll('[data-bozo-board-size]').forEach(button => {
+    button.addEventListener('click', () => applyBozoBoardSize(button.dataset.bozoBoardSize));
+  });
+  return control;
+}
+
+function initializeBozoBoardDisplay() {
+  applyBozoBoardSize(currentBozoBoardSize());
+  const targets = [
+    '#study-modal .study-board-shell',
+    '#study-editor-view .study-board-shell',
+    '#challenge-game-modal .friend-board-shell',
+    '#bot-game-modal .bot-board-shell',
+    '#view-review .review-board-frame'
+  ];
+  targets.forEach(selector => {
+    const shell = document.querySelector(selector);
+    if (!shell || shell.parentElement?.querySelector(':scope > .bozo-board-size-control')) return;
+    shell.insertAdjacentElement('beforebegin', makeBozoBoardSizeControl());
+  });
+  applyBozoBoardSize(currentBozoBoardSize());
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeBozoBoardDisplay, { once:true });
+} else {
+  initializeBozoBoardDisplay();
+}
 
 function escapeHtml(value='') {
   return String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
