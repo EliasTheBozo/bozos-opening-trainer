@@ -415,3 +415,18 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - White now appears at the bottom when orientation is White
 - Black now appears at the bottom when the board is flipped
 - Preserves unified pieces, board sizing, Spotify, and all prior features
+
+
+## Web v2.2.0 — YouTube Music Fallback
+
+- Keeps full Spotify Web Playback for Spotify Premium accounts
+- Detects Spotify Free accounts from the Spotify profile endpoint
+- Opens Spotify items externally instead of producing an in-site playback error for Free accounts
+- Adds the public BOZO's Picks YouTube playlist directly inside BOZO
+- Does not require a YouTube login, API key, Google Cloud project, or YouTube Premium
+- Adds YouTube play, pause, previous, next, progress, and volume controls
+- Adds a persistent YouTube mini-player
+- Ensures only one provider plays at a time
+- Fixes Opening Library study rank interpretation so 1.e4 appears as White's move on e4
+- Sets White pieces to #F8F9FA and Black pieces to #2C302E
+- Cache-busts app.js, spotify.js, and youtube.js as v2.2.0

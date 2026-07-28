@@ -8,12 +8,22 @@
   const TOKEN='https://accounts.spotify.com/api/token';
   const SCOPES='streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative';
   let player=null, deviceId='', currentState=null, progressTimer=null, initPromise=null, playerActivated=false;
+  let spotifyProduct=localStorage.getItem('bozo_spotify_product')||'';
 
   const redirectUri=()=>location.hostname==='127.0.0.1'?`${location.protocol}//${location.host}${location.pathname}`:'https://bozos-opening-trainer.eliasdakid06.workers.dev';
   const tokens=()=>{try{return JSON.parse(localStorage.getItem('bozo_spotify_tokens')||'null')}catch{return null}};
   const save=t=>localStorage.setItem('bozo_spotify_tokens',JSON.stringify(t));
   const clear=()=>['bozo_spotify_tokens','bozo_spotify_verifier','bozo_spotify_state'].forEach(k=>localStorage.removeItem(k));
   const connected=()=>Boolean(tokens()?.access_token);
+  const premium=()=>spotifyProduct==='premium';
+  const spotifyOpenUrl=uri=>{
+    const match=String(uri||'').match(/^spotify:(track|playlist|album|artist):(.+)$/);
+    return match?`https://open.spotify.com/${match[1]}/${match[2]}`:'https://open.spotify.com/';
+  };
+  function showYouTubeFallback(reason='Spotify Free does not support playback inside websites.'){
+    msg(`${reason} Use the YouTube player below, or open this item in Spotify.`,true);
+    document.getElementById('youtube-music-section')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
   const random=(n=64)=>{const a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~',v=crypto.getRandomValues(new Uint8Array(n));return Array.from(v,x=>a[x%a.length]).join('')};
   const b64=buf=>btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   const sha=s=>crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
@@ -25,7 +35,7 @@
       return 'Chrome blocked audio playback. Click the green Play button once more to activate BOZO Music.';
     }
     if(/premium|account/i.test(text)){
-      return `${text} Spotify Premium is required for playback inside BOZO.`;
+      return `${text} Use the YouTube player below for free in-site playback.`;
     }
     if(/restriction|not available|market/i.test(text)){
       return `${text} Try another song that is available in your Spotify region.`;
@@ -88,7 +98,7 @@
     const button=$('spotify-music-button');
     if(disconnected) disconnected.hidden=c;
     if(connectedView) connectedView.hidden=!c;
-    if(mini) mini.hidden=!c;
+    if(mini) mini.hidden=!c || (spotifyProduct && !premium());
     if(button) button.classList.toggle('connected',c);
   }
   function open(){const panel=$('spotify-panel');if(!panel)return;panel.hidden=false;paintConnection();if(connected())initExperience().catch(e=>msg(e.message,true))}
@@ -97,8 +107,18 @@
   async function profile(){
     try{
       const d=await api('/me');
+      spotifyProduct=String(d.product||'').toLowerCase();
+      localStorage.setItem('bozo_spotify_product',spotifyProduct);
       const el=$('spotify-user-name');
+      const plan=$('spotify-account-plan');
       if(el) el.textContent=d.display_name||d.email||'Spotify user';
+      if(plan) plan.textContent=spotifyProduct
+        ? `${spotifyProduct[0].toUpperCase()}${spotifyProduct.slice(1)} plan`
+        : '';
+      paintConnection();
+      if(spotifyProduct && !premium()){
+        showYouTubeFallback('Spotify Free is connected.');
+      }
     }catch(error){
       console.warn('Spotify profile:',error);
       msg(`Spotify profile could not load: ${error.message}`,true);
@@ -134,6 +154,12 @@
     return deviceId;
   }
   async function playContext(uri){
+    if(spotifyProduct && !premium()){
+      window.open(spotifyOpenUrl(uri),'_blank','noopener,noreferrer');
+      showYouTubeFallback('This Spotify account cannot play inside BOZO.');
+      return;
+    }
+    window.BozoYouTube?.pause?.();
     try{
       msg('Starting playlist…');
       await ensureDevice();
@@ -146,6 +172,12 @@
     }
   }
   async function playTrack(uri){
+    if(spotifyProduct && !premium()){
+      window.open(spotifyOpenUrl(uri),'_blank','noopener,noreferrer');
+      showYouTubeFallback('This Spotify account cannot play inside BOZO.');
+      return;
+    }
+    window.BozoYouTube?.pause?.();
     try{
       msg('Starting track…');
       await ensureDevice();
@@ -160,7 +192,7 @@
   const time=ms=>{const s=Math.max(0,Math.floor((ms||0)/1000));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};
   function progress(pos,dur){$('spotify-progress-current').textContent=time(pos);$('spotify-progress-duration').textContent=time(dur);$('spotify-progress-fill').style.width=`${dur?Math.min(100,pos/dur*100):0}%`}
   function paintState(s){const tr=s.track_window?.current_track,im=tr?.album?.images?.[0]?.url||'';$('spotify-track-name').textContent=tr?.name||'Nothing playing';$('spotify-track-artist').textContent=tr?.artists?.map(a=>a.name).join(', ')||'Spotify';const el=$('spotify-track-image');el.hidden=!im;if(im)el.src=im;$('spotify-play-pause').textContent=s.paused?'▶':'⏸';progress(s.position,s.duration);clearInterval(progressTimer);if(!s.paused){const start=Date.now(),initial=s.position;progressTimer=setInterval(()=>progress(Math.min(s.duration,initial+Date.now()-start),s.duration),500)}}
-  async function disconnect(){try{await player?.disconnect()}catch{}player=null;deviceId='';initPromise=null;playerActivated=false;clearInterval(progressTimer);clear();paintConnection();close();window.toast?.('Spotify disconnected')}
+  async function disconnect(){try{await player?.disconnect()}catch{}player=null;deviceId='';initPromise=null;playerActivated=false;clearInterval(progressTimer);clear();localStorage.removeItem('bozo_spotify_product');spotifyProduct='';paintConnection();close();window.toast?.('Spotify disconnected')}
 
   $('spotify-music-button')?.addEventListener('click',open);
   $('spotify-panel-close')?.addEventListener('click',close);
@@ -175,6 +207,11 @@
   });
   $('spotify-mini-open')?.addEventListener('click',open);
   $('spotify-play-pause')?.addEventListener('click',async()=>{
+    if(spotifyProduct && !premium()){
+      showYouTubeFallback('Spotify Free cannot use the BOZO mini-player.');
+      return;
+    }
+    window.BozoYouTube?.pause?.();
     activateFromGesture();
     try{
       if(!player) await initPlayer();
@@ -185,6 +222,11 @@
   $('spotify-previous')?.addEventListener('click',()=>{activateFromGesture();player?.previousTrack()});
   $('spotify-next')?.addEventListener('click',()=>{activateFromGesture();player?.nextTrack()});
   $('spotify-volume')?.addEventListener('input',e=>{localStorage.setItem('bozo_spotify_volume',e.target.value);player?.setVolume(Number(e.target.value)/100)});
+  window.BozoSpotify={
+    pause:()=>{try{player?.pause?.()}catch{}},
+    premium:()=>premium()
+  };
+
   function startSpotify(){
     callback()
       .catch(e=>{console.error(e);window.toast?.(e.message)})

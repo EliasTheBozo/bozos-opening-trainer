@@ -2051,3 +2051,114 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
 :root[data-bozo-board-size="large"] .bozo-chess-piece {
   font-size:clamp(34px,8vmin,78px) !important;
 }
+
+
+/* WEB v2.2.0 — YOUTUBE FALLBACK + FINAL PIECE HUES */
+.bozo-chess-piece-white {
+  color:#F8F9FA !important;
+  -webkit-text-stroke:1px #5F666D !important;
+  text-shadow:
+    0 1px 0 rgba(255,255,255,.4),
+    0 2px 2px rgba(0,0,0,.48) !important;
+}
+.bozo-chess-piece-black {
+  color:#2C302E !important;
+  -webkit-text-stroke:.45px #161917 !important;
+  text-shadow:
+    0 1px 0 rgba(255,255,255,.12),
+    0 2px 2px rgba(0,0,0,.48) !important;
+}
+.spotify-account-plan {
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:9px;
+  font-weight:700;
+  text-transform:capitalize;
+}
+.youtube-music-section {
+  margin-top:20px;
+  padding-bottom:28px;
+}
+.youtube-eyebrow {
+  color:#ff5a4f !important;
+}
+.youtube-free-badge {
+  padding:5px 8px;
+  border:1px solid rgba(255,90,79,.3);
+  border-radius:999px;
+  color:#ff8a82;
+  background:rgba(255,90,79,.08);
+  font-size:8px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.youtube-section-copy {
+  margin:0;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.5;
+}
+.youtube-featured-card {
+  display:grid;
+  grid-template-columns:48px 1fr;
+  align-items:center;
+  gap:11px;
+  width:100%;
+  padding:11px;
+  border:1px solid rgba(255,90,79,.28);
+  border-radius:14px;
+  color:#fff;
+  background:rgba(255,90,79,.055);
+  text-align:left;
+  cursor:pointer;
+}
+.youtube-featured-card > div:last-child {
+  display:grid;
+  gap:4px;
+}
+.youtube-featured-card span {
+  color:var(--muted);
+  font-size:9px;
+}
+.youtube-play-icon,
+.youtube-mini-art {
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  background:#ff0033;
+  color:#fff;
+  box-shadow:0 7px 20px rgba(255,0,51,.22);
+}
+.youtube-play-icon {
+  width:48px;
+  height:48px;
+  font-size:18px;
+}
+.youtube-player-shell {
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;
+  background:#000;
+}
+.youtube-player-shell[hidden] {
+  display:none;
+}
+.youtube-player-shell iframe {
+  display:block;
+  width:100%;
+  min-height:220px;
+  border:0;
+}
+.youtube-mini-player {
+  border-color:rgba(255,0,51,.3);
+}
+.youtube-mini-art {
+  width:45px;
+  height:45px;
+}
+#youtube-progress-fill {
+  width:0;
+  height:100%;
+  background:#ff0033;
+}

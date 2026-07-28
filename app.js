@@ -1062,11 +1062,11 @@ function paintStudy() {
   try {
     const orientation = studyOrientation === 'black' ? 'black' : 'white';
     const boardMatrix = studyGame.board();
-    // In this chess.js build, board()[0] is rank 1 rather than rank 8.
-    // Reverse the rows for White so White's pieces appear at the bottom.
+    // chess.js board()[0] is rank 8 and board()[7] is rank 1.
+    // White therefore reads the matrix in its native order; Black reverses it.
     const rankIndexes = orientation === 'white'
-      ? [7,6,5,4,3,2,1,0]
-      : [0,1,2,3,4,5,6,7];
+      ? [0,1,2,3,4,5,6,7]
+      : [7,6,5,4,3,2,1,0];
     const fileIndexes = orientation === 'white'
       ? [0,1,2,3,4,5,6,7]
       : [7,6,5,4,3,2,1,0];
