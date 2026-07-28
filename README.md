@@ -397,3 +397,13 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Sends direct piece IDs from the original study viewer
 - Keeps the embedded high-contrast vector set and board size controls
 - Cache-busts app.js and spotify.js as v2.1.2
+
+
+## Web v2.1.3 — Reliable Unified Pieces
+
+- Replaces broken embedded SVG data with a dependable built-in piece renderer
+- Restores pawns, knights, bishops, queens, and kings alongside the rooks
+- Uses one renderer on every BOZO board
+- Keeps bright ivory white pieces and high-contrast charcoal black pieces
+- Preserves Compact, Medium, and Large board sizes
+- Cache-busts app.js and spotify.js as v2.1.3
