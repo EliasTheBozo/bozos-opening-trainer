@@ -407,3 +407,11 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Keeps bright ivory white pieces and high-contrast charcoal black pieces
 - Preserves Compact, Medium, and Large board sizes
 - Cache-busts app.js and spotify.js as v2.1.3
+
+
+## Web v2.1.4 — Study orientation fix
+
+- Corrects the Opening Library study board row order
+- White now appears at the bottom when orientation is White
+- Black now appears at the bottom when the board is flipped
+- Preserves unified pieces, board sizing, Spotify, and all prior features
