@@ -388,3 +388,12 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Reduces Compact, Medium, and Large board dimensions
 - Adds extra height-aware sizing for shorter desktop screens
 - Cache-busts app.js and spotify.js as v2.1.1
+
+
+## Web v2.1.2 — Piece Symbol Compatibility Fix
+
+- Fixes the empty Opening Library board after the vector-piece update
+- Accepts FEN symbols, Unicode chess symbols, and direct chess.js piece IDs
+- Sends direct piece IDs from the original study viewer
+- Keeps the embedded high-contrast vector set and board size controls
+- Cache-busts app.js and spotify.js as v2.1.2
