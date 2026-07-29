@@ -440,3 +440,20 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Removes the hollow font-glyph appearance and oversized contrasting strokes
 - Uses the same renderer on Study, Review, Bot, and Friend boards
 - Preserves Spotify and YouTube functionality
+
+
+## Web v2.2.2 — Final BOZO Piece Assets
+
+- Adds 12 individually mapped BOZO chess-piece SVG files
+- Removes the oversized embedded piece table from app.js
+- Uses explicit wP/wN/wB/wR/wQ/wK and bP/bN/bB/bR/bQ/bK mappings
+- Makes the black bishop accent white
+- Makes the white bishop accent dark
+- Gives the black knight a small white eye
+- Uses the uploaded solid artwork with transparent backgrounds
+- Standardizes every piece to a 512x512 canvas and shared baseline
+- Adds a restrained board-scale drop shadow
+- Cache-busts app.js and piece assets as v2.2.2
+
+Note: the SVG files are stable SVG containers around the supplied transparent artwork,
+preserving its shading and exact visual appearance.
