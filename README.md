@@ -484,3 +484,12 @@ preserving its shading and exact visual appearance.
 - Removed the added contrasting cross/mark from both bishop assets
 - Preserved all v2.3.0 features, including YouTube search and Spotify
 - Cache-busted app, styles, YouTube code, and piece assets
+
+
+## Web v2.3.2 — Clean Bishop Assets
+
+- Rebuilt both bishops directly from the untouched source artwork
+- Removed the added cross/accent entirely rather than painting over it
+- Preserved the original shading, silhouette, baseline, and 512x512 asset sizing
+- Preserved YouTube search, Spotify, custom board colors, and all other v2.3.1 features
+- Cache-busted app, styles, YouTube code, and piece assets as v2.3.2
