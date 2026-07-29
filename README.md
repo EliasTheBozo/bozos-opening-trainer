@@ -493,3 +493,14 @@ preserving its shading and exact visual appearance.
 - Preserved the original shading, silhouette, baseline, and 512x512 asset sizing
 - Preserved YouTube search, Spotify, custom board colors, and all other v2.3.1 features
 - Cache-busted app, styles, YouTube code, and piece assets as v2.3.2
+
+
+## Web v2.3.3 — Music Provider State Fix
+
+- Adds a shared active music provider controller
+- YouTube BOZO's Picks now explicitly reloads the playlist after searched videos
+- Spotify playback now immediately takes ownership of the visible mini-player
+- Spotify mini-player refreshes after starting a playlist or track
+- YouTube and Spotify pause each other when switching providers
+- The visible bottom bar always matches the active provider
+- All v2.3.2 board, bishop, YouTube search, and Spotify features remain intact

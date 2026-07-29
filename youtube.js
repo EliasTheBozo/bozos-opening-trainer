@@ -69,9 +69,12 @@
 
   function showMini(show=true) {
     const mini = $('youtube-mini-player');
-    if (mini) mini.hidden = !show;
-    const spotifyMini = $('spotify-mini-player');
-    if (show && spotifyMini) spotifyMini.hidden = true;
+    if (show) {
+      window.BozoMusic?.setActiveProvider?.('youtube');
+      if (mini) mini.hidden = false;
+    } else if (mini) {
+      mini.hidden = true;
+    }
   }
 
 
@@ -241,6 +244,7 @@
           onStateChange(event) {
             const state = event.data;
             if (state === YT.PlayerState.PLAYING) {
+              window.BozoMusic?.setActiveProvider?.('youtube');
               $('youtube-play-pause').textContent = '⏸';
               showMini(true);
               startProgress();
@@ -290,9 +294,21 @@
   async function play() {
     try {
       const instance = await ensurePlayer();
-      window.BozoSpotify?.pause?.();
-      instance.playVideo();
+      await window.BozoSpotify?.pause?.();
+      window.BozoMusic?.setActiveProvider?.('youtube');
+
+      instance.loadPlaylist({
+        list: PLAYLIST_ID,
+        listType: 'playlist',
+        index: 0,
+        startSeconds: 0,
+        suggestedQuality: 'default'
+      });
+
+      $('youtube-track-name').textContent = "BOZO's Picks";
+      $('youtube-track-artist').textContent = 'YouTube';
       showMini(true);
+      message("Playing BOZO's Picks on YouTube.");
     } catch (error) {
       message(error.message, true);
     }
@@ -352,6 +368,13 @@
     pause,
     toggle,
     search: searchYouTube,
-    open: openPanel
+    open: openPanel,
+    playFeatured: play,
+    stop: () => {
+      try { player?.stopVideo?.(); } catch (_) {}
+    },
+    getState: () => {
+      try { return player?.getPlayerState?.(); } catch (_) { return null; }
+    }
   };
 })();

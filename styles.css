@@ -2399,3 +2399,16 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
   font-size:10px;
   text-align:center;
 }
+
+
+/* WEB v2.3.3 — ACTIVE MUSIC PROVIDER */
+html[data-music-provider="youtube"] #spotify-mini-player {
+  display:none !important;
+}
+html[data-music-provider="spotify"] #youtube-mini-player {
+  display:none !important;
+}
+html[data-music-provider="youtube"] #youtube-mini-player,
+html[data-music-provider="spotify"] #spotify-mini-player {
+  display:grid !important;
+}

@@ -153,6 +153,46 @@
     await sleep(450);
     return deviceId;
   }
+
+  async function refreshSpotifyMiniState(retries=5){
+    for(let attempt=0; attempt<retries; attempt++){
+      try{
+        const state=await player?.getCurrentState?.();
+        if(state){
+          currentState=state;
+          paintState(state);
+          window.BozoMusic?.setActiveProvider?.('spotify');
+          return state;
+        }
+
+        const playback=await api('/me/player');
+        if(playback?.item){
+          const pseudo={
+            paused:!playback.is_playing,
+            position:playback.progress_ms||0,
+            duration:playback.item.duration_ms||0,
+            track_window:{
+              current_track:{
+                name:playback.item.name,
+                artists:playback.item.artists||[],
+                album:playback.item.album||{}
+              }
+            }
+          };
+          currentState=pseudo;
+          paintState(pseudo);
+          window.BozoMusic?.setActiveProvider?.('spotify');
+          return pseudo;
+        }
+      }catch(error){
+        console.warn('Spotify refresh attempt failed:',error);
+      }
+      await new Promise(resolve=>setTimeout(resolve,400));
+    }
+    window.BozoMusic?.setActiveProvider?.('spotify');
+    return null;
+  }
+
   async function playContext(uri){
     if(spotifyProduct && !premium()){
       window.open(spotifyOpenUrl(uri),'_blank','noopener,noreferrer');
@@ -160,6 +200,7 @@
       return;
     }
     window.BozoYouTube?.pause?.();
+    window.BozoMusic?.setActiveProvider?.('spotify');
     try{
       msg('Starting playlist…');
       await ensureDevice();
@@ -178,6 +219,7 @@
       return;
     }
     window.BozoYouTube?.pause?.();
+    window.BozoMusic?.setActiveProvider?.('spotify');
     try{
       msg('Starting track…');
       await ensureDevice();
@@ -212,6 +254,7 @@
       return;
     }
     window.BozoYouTube?.pause?.();
+    window.BozoMusic?.setActiveProvider?.('spotify');
     activateFromGesture();
     try{
       if(!player) await initPlayer();
@@ -223,8 +266,12 @@
   $('spotify-next')?.addEventListener('click',()=>{activateFromGesture();player?.nextTrack()});
   $('spotify-volume')?.addEventListener('input',e=>{localStorage.setItem('bozo_spotify_volume',e.target.value);player?.setVolume(Number(e.target.value)/100)});
   window.BozoSpotify={
-    pause:()=>{try{player?.pause?.()}catch{}},
-    premium:()=>premium()
+    pause:async()=>{
+      try{await player?.pause?.()}catch{}
+    },
+    premium:()=>premium(),
+    refresh:()=>refreshSpotifyMiniState(),
+    activate:()=>window.BozoMusic?.setActiveProvider?.('spotify')
   };
 
   function startSpotify(){
