@@ -2288,3 +2288,114 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
 .bozo-chess-piece {
   filter:drop-shadow(0 1px 1px rgba(0,0,0,.22)) !important;
 }
+
+
+/* WEB v2.3.0 — YOUTUBE SEARCH */
+.youtube-search-block {
+  display:grid;
+  gap:10px;
+  padding-top:16px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+.youtube-search-block > label {
+  color:#67f0d0;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.youtube-search-row {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+}
+.youtube-search-row input {
+  min-width:0;
+  padding:11px 12px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:11px;
+  color:#fff;
+  background:rgba(9,3,14,.78);
+  outline:none;
+}
+.youtube-search-row input:focus {
+  border-color:rgba(255,157,54,.65);
+  box-shadow:0 0 0 3px rgba(255,157,54,.1);
+}
+.youtube-search-row button {
+  padding:0 16px;
+  border:0;
+  border-radius:11px;
+  color:#140a06;
+  background:#FF9D36;
+  font-weight:900;
+  cursor:pointer;
+}
+.youtube-search-row button:disabled {
+  opacity:.55;
+  cursor:wait;
+}
+.youtube-search-results {
+  display:grid;
+  gap:8px;
+  max-height:360px;
+  overflow:auto;
+}
+.youtube-result-card {
+  display:grid;
+  grid-template-columns:76px minmax(0,1fr) 34px;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  padding:8px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  color:#fff;
+  background:rgba(255,255,255,.035);
+  text-align:left;
+  cursor:pointer;
+}
+.youtube-result-card:hover {
+  border-color:rgba(255,0,51,.38);
+  background:rgba(255,0,51,.055);
+}
+.youtube-result-card img {
+  width:76px;
+  aspect-ratio:16/9;
+  object-fit:cover;
+  border-radius:8px;
+  background:#000;
+}
+.youtube-result-copy {
+  display:grid;
+  gap:4px;
+  min-width:0;
+}
+.youtube-result-copy b,
+.youtube-result-copy small {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.youtube-result-copy b { font-size:11px; }
+.youtube-result-copy small {
+  color:var(--muted);
+  font-size:9px;
+}
+.youtube-result-play {
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  border-radius:999px;
+  color:#fff;
+  background:#ff0033;
+}
+.youtube-empty-results {
+  padding:14px;
+  border:1px dashed rgba(255,255,255,.1);
+  border-radius:11px;
+  color:var(--muted);
+  font-size:10px;
+  text-align:center;
+}

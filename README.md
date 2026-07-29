@@ -466,3 +466,15 @@ preserving its shading and exact visual appearance.
 - Coordinate labels changed to #4B4250
 - Piece drop shadow softened
 - Added final CSS overrides so the new palette applies across Study, Review, Bot, and Friend boards
+
+
+## Web v2.3.0 — YouTube Search
+
+- Adds in-site YouTube video search using YouTube Data API v3
+- Returns up to 8 embeddable video results
+- Uses type=video, videoEmbeddable=true, safeSearch=moderate
+- Shows thumbnail, title, channel, and Play action
+- Plays results through the existing BOZO YouTube player
+- Keeps Spotify Premium playback unchanged
+- Adds a short search cooldown to reduce accidental quota use
+- Cache-busts styles, app.js, and youtube.js as v2.3.0

@@ -2,7 +2,26 @@
   'use strict';
 
   const PLAYLIST_ID = 'PLBhpxtzTWwzA';
+  const YOUTUBE_API_KEY = 'AIzaSyCrcksqDtkOC8k4VYvgL73A_eRpJdEFqfA';
+  const SEARCH_ENDPOINT = 'https://www.googleapis.com/youtube/v3/search';
+  const SEARCH_COOLDOWN_MS = 1200;
+  let lastSearchAt = 0;
   const $ = id => document.getElementById(id);
+
+  function escapeHtml(value='') {
+    return String(value)
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;')
+      .replaceAll("'",'&#039;');
+  }
+
+  function decodeEntities(value='') {
+    const el = document.createElement('textarea');
+    el.innerHTML = value;
+    return el.value;
+  }
 
   let player = null;
   let apiPromise = null;
@@ -53,6 +72,111 @@
     if (mini) mini.hidden = !show;
     const spotifyMini = $('spotify-mini-player');
     if (show && spotifyMini) spotifyMini.hidden = true;
+  }
+
+
+  function searchStatus(text='', error=false) {
+    const el = $('youtube-search-status');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('error', error);
+  }
+
+  function renderSearchResults(items=[]) {
+    const container = $('youtube-search-results');
+    if (!container) return;
+    if (!items.length) {
+      container.innerHTML = '<div class="youtube-empty-results">No embeddable videos found.</div>';
+      return;
+    }
+
+    container.innerHTML = items.map(item => {
+      const videoId = item?.id?.videoId || '';
+      const snippet = item?.snippet || {};
+      const title = decodeEntities(snippet.title || 'Untitled video');
+      const channel = decodeEntities(snippet.channelTitle || 'YouTube');
+      const thumb = snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '';
+
+      return `
+        <button type="button" class="youtube-result-card"
+          data-youtube-video-id="${escapeHtml(videoId)}"
+          data-youtube-title="${escapeHtml(title)}"
+          data-youtube-channel="${escapeHtml(channel)}">
+          <img src="${escapeHtml(thumb)}" alt="" loading="lazy">
+          <span class="youtube-result-copy">
+            <b>${escapeHtml(title)}</b>
+            <small>${escapeHtml(channel)}</small>
+          </span>
+          <span class="youtube-result-play">▶</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  async function searchYouTube() {
+    const input = $('youtube-search-input');
+    const button = $('youtube-search-button');
+    const query = String(input?.value || '').trim();
+
+    if (!query) {
+      searchStatus('Enter a song, artist, or video.', true);
+      input?.focus();
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastSearchAt < SEARCH_COOLDOWN_MS) {
+      searchStatus('Please wait a moment before searching again.', true);
+      return;
+    }
+    lastSearchAt = now;
+
+    try {
+      button.disabled = true;
+      searchStatus('Searching YouTube…');
+      $('youtube-search-results').innerHTML = '';
+
+      const params = new URLSearchParams({
+        part: 'snippet',
+        type: 'video',
+        q: query,
+        maxResults: '8',
+        videoEmbeddable: 'true',
+        safeSearch: 'moderate',
+        key: YOUTUBE_API_KEY
+      });
+
+      const response = await fetch(`${SEARCH_ENDPOINT}?${params.toString()}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error?.message || `YouTube search failed (${response.status}).`);
+      }
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      renderSearchResults(items);
+      searchStatus(items.length ? `${items.length} results` : 'No results found.');
+    } catch (error) {
+      console.error('YouTube search:', error);
+      searchStatus(error.message || 'YouTube search failed.', true);
+      renderSearchResults([]);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function playSearchResult(videoId, title='YouTube video', channel='YouTube') {
+    if (!videoId) return;
+    try {
+      const instance = await ensurePlayer();
+      window.BozoSpotify?.pause?.();
+      $('youtube-track-name').textContent = title;
+      $('youtube-track-artist').textContent = channel;
+      instance.loadVideoById(videoId);
+      showMini(true);
+      message(`Playing ${title}.`);
+    } catch (error) {
+      message(error.message, true);
+    }
   }
 
   function loadApi() {
@@ -195,6 +319,23 @@
     $('youtube-music-section')?.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
 
+  $('youtube-search-button')?.addEventListener('click', searchYouTube);
+  $('youtube-search-input')?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      searchYouTube();
+    }
+  });
+  $('youtube-search-results')?.addEventListener('click', event => {
+    const card = event.target.closest('[data-youtube-video-id]');
+    if (!card) return;
+    playSearchResult(
+      card.dataset.youtubeVideoId,
+      card.dataset.youtubeTitle,
+      card.dataset.youtubeChannel
+    );
+  });
+
   $('youtube-featured-playlist')?.addEventListener('click', play);
   $('youtube-mini-open')?.addEventListener('click', openPanel);
   $('youtube-play-pause')?.addEventListener('click', toggle);
@@ -210,6 +351,7 @@
     play,
     pause,
     toggle,
+    search: searchYouTube,
     open: openPanel
   };
 })();

@@ -1044,6 +1044,19 @@
         </div>
       </button>
 
+
+      <div class="youtube-search-block">
+        <label for="youtube-search-input">Search YouTube</label>
+        <div class="youtube-search-row">
+          <input id="youtube-search-input" type="search"
+            placeholder="Songs, artists, or videos"
+            autocomplete="off" maxlength="120">
+          <button id="youtube-search-button" type="button">Search</button>
+        </div>
+        <div id="youtube-search-status" class="auth-message"></div>
+        <div id="youtube-search-results" class="youtube-search-results"></div>
+      </div>
+
       <div id="youtube-player-shell" class="youtube-player-shell" hidden>
         <div id="youtube-player"></div>
       </div>
@@ -1089,8 +1102,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=2.2.3"></script>
+  <script src="./app.js?v=2.3.0"></script>
   <script src="./spotify.js?v=2.2.1"></script>
-  <script src="./youtube.js?v=2.2.1"></script>
+  <script src="./youtube.js?v=2.3.0"></script>
 </body>
 </html>
