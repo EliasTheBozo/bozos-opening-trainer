@@ -457,3 +457,12 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 
 Note: the SVG files are stable SVG containers around the supplied transparent artwork,
 preserving its shading and exact visual appearance.
+
+## Web v2.2.3 — Board Contrast Pass
+
+- Light squares changed to #D5C79B
+- Dark squares changed to #6E5875
+- Board border changed to #FF9D36
+- Coordinate labels changed to #4B4250
+- Piece drop shadow softened
+- Added final CSS overrides so the new palette applies across Study, Review, Bot, and Friend boards

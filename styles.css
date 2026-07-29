@@ -2208,3 +2208,83 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
   -webkit-text-stroke:0 !important;
   text-shadow:none !important;
 }
+
+
+/* WEB v2.2.3 — FINAL BOARD COLOR TUNING */
+:root {
+  --board-light:#D5C79B;
+  --board-dark:#6E5875;
+  --board-coordinate:#4B4250;
+  --board-border:#FF9D36;
+}
+
+/* Opening Library / Study / Review / Bot / Friend boards */
+.chess-square.light,
+.square.light,
+.board-square.light,
+[data-square-color="light"] {
+  background:#D5C79B !important;
+}
+.chess-square.dark,
+.square.dark,
+.board-square.dark,
+[data-square-color="dark"] {
+  background:#6E5875 !important;
+}
+
+/* Common nth-child fallback for 8x8 CSS-grid boards */
+.chessboard > :nth-child(16n+1),
+.chessboard > :nth-child(16n+3),
+.chessboard > :nth-child(16n+5),
+.chessboard > :nth-child(16n+7),
+.chessboard > :nth-child(16n+10),
+.chessboard > :nth-child(16n+12),
+.chessboard > :nth-child(16n+14),
+.chessboard > :nth-child(16n+16),
+.study-board > :nth-child(16n+1),
+.study-board > :nth-child(16n+3),
+.study-board > :nth-child(16n+5),
+.study-board > :nth-child(16n+7),
+.study-board > :nth-child(16n+10),
+.study-board > :nth-child(16n+12),
+.study-board > :nth-child(16n+14),
+.study-board > :nth-child(16n+16) {
+  background:#D5C79B !important;
+}
+.chessboard > :nth-child(16n+2),
+.chessboard > :nth-child(16n+4),
+.chessboard > :nth-child(16n+6),
+.chessboard > :nth-child(16n+8),
+.chessboard > :nth-child(16n+9),
+.chessboard > :nth-child(16n+11),
+.chessboard > :nth-child(16n+13),
+.chessboard > :nth-child(16n+15),
+.study-board > :nth-child(16n+2),
+.study-board > :nth-child(16n+4),
+.study-board > :nth-child(16n+6),
+.study-board > :nth-child(16n+8),
+.study-board > :nth-child(16n+9),
+.study-board > :nth-child(16n+11),
+.study-board > :nth-child(16n+13),
+.study-board > :nth-child(16n+15) {
+  background:#6E5875 !important;
+}
+
+.chessboard,
+.study-board,
+.review-board,
+.bot-board,
+.friend-board {
+  border-color:#FF9D36 !important;
+}
+
+.board-coordinate,
+.coordinate,
+.rank-label,
+.file-label {
+  color:#4B4250 !important;
+}
+
+.bozo-chess-piece {
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.22)) !important;
+}
