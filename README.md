@@ -430,3 +430,13 @@ Locks Opening Duel boards to a stable square 8×8 grid so move history and sideb
 - Fixes Opening Library study rank interpretation so 1.e4 appears as White's move on e4
 - Sets White pieces to #F8F9FA and Black pieces to #2C302E
 - Cache-busts app.js, spotify.js, and youtube.js as v2.2.0
+
+
+## Web v2.2.1 — Solid Piece Renderer
+
+- Replaces browser Unicode chess glyphs with the existing BOZO SVG piece set
+- Embeds all 12 SVGs directly in app.js to eliminate asset-path failures
+- Uses solid White #F8F9FA and Black #2C302E fills
+- Removes the hollow font-glyph appearance and oversized contrasting strokes
+- Uses the same renderer on Study, Review, Bot, and Friend boards
+- Preserves Spotify and YouTube functionality
