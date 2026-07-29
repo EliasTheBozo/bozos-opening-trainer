@@ -4100,7 +4100,7 @@ function webPiece(symbol) {
   if (!id) return '';
 
   const color = id[0] === 'w' ? 'white' : 'black';
-  const source = `./assets/pieces/bozo-custom/${id}.svg?v=2.2.2`;
+  const source = `./assets/pieces/bozo-custom/${id}.svg?v=2.3.1`;
 
   return `<img
     class="bozo-chess-piece bozo-chess-piece-${color}"

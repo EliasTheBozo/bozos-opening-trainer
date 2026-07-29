@@ -478,3 +478,9 @@ preserving its shading and exact visual appearance.
 - Keeps Spotify Premium playback unchanged
 - Adds a short search cooldown to reduce accidental quota use
 - Cache-busts styles, app.js, and youtube.js as v2.3.0
+
+
+## Web v2.3.1 — Bishop Refinement
+- Removed the added contrasting cross/mark from both bishop assets
+- Preserved all v2.3.0 features, including YouTube search and Spotify
+- Cache-busted app, styles, YouTube code, and piece assets
