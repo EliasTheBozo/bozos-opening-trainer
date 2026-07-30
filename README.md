@@ -504,3 +504,11 @@ preserving its shading and exact visual appearance.
 - YouTube and Spotify pause each other when switching providers
 - The visible bottom bar always matches the active provider
 - All v2.3.2 board, bishop, YouTube search, and Spotify features remain intact
+
+
+## Web v2.4.0 — Phase One Local Opening Mastery
+- Spotify is labeled Coming Soon; YouTube remains available.
+- Opening cards display local mastery.
+- Study walkthroughs save line progress, streaks, sessions, and completion locally.
+- Dashboard includes local mastery stats and reset controls.
+- No Supabase changes are required for this phase.

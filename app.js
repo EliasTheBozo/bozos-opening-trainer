@@ -294,6 +294,7 @@ async function searchOpenings(query) {
 
   const families = groupOpeningFamilies(data);
   target.innerHTML = families.map(renderOpeningFamily).join('');
+  window.BozoMastery?.refreshAll?.();
 
   target.querySelectorAll('[data-family-toggle]').forEach(button => {
     button.addEventListener('click', () => {
@@ -449,6 +450,10 @@ function renderOpeningFamily(family) {
         ${single ? '' : `<span class="family-count">${lineCount}</span>`}
       </div>
 
+      <div class="opening-mastery-inline" data-mastery-opening="${preview.id}" data-mastery-name="${escapeHtml(challengeName)}">
+        ${window.BozoMastery ? window.BozoMastery.cardMarkup(preview.id) : ''}
+      </div>
+
       <div class="family-preview">
         <span>${escapeHtml(preview.displayVariation)}</span>
         <code>${formatPreviewMoves(preview.pgn || '', 4)}</code>
@@ -498,6 +503,9 @@ function renderOpeningFamily(family) {
                   <div class="line-heading">
                     <b>${escapeHtml(line.displayVariation)}</b>
                     <span>${escapeHtml(line.eco || 'ECO —')} · ${escapeHtml(line.source_type || 'official')}</span>
+                  </div>
+                  <div class="line-mastery-inline" data-mastery-opening="${line.id}" data-mastery-name="${escapeHtml(lineChallengeName)}">
+                    ${window.BozoMastery ? window.BozoMastery.compactMarkup(line.id) : ''}
                   </div>
                   <code>${escapeHtml(line.pgn || '')}</code>
                   ${line.notes ? `<p>${escapeHtml(line.notes)}</p>` : ''}
@@ -1015,6 +1023,7 @@ async function openStudyOpening(openingId) {
   if (error || !data) return toast(readableError(error || new Error('Opening not found')));
 
   studyOpening = data;
+  window.BozoMastery?.startSession?.(data, 0);
   studyGame = new Chess();
   const parser = new Chess();
   const loaded = parser.load_pgn(data.pgn, { sloppy: true });
@@ -1038,7 +1047,9 @@ function closeStudy() {
 }
 
 function setStudyPly(nextPly) {
+  const previousStudyPly = studyPly;
   studyPly = Math.max(0, Math.min(studyMoves.length, nextPly));
+  window.BozoMastery?.recordStudyPly?.(studyOpening, studyPly, studyMoves.length, previousStudyPly);
   studyGame = new Chess();
   for (let i = 0; i < studyPly; i++) {
     studyGame.move(studyMoves[i], { sloppy: true });
@@ -1112,6 +1123,7 @@ function paintStudy() {
     if (endButton) endButton.disabled = studyPly === studyMoves.length;
 
     updateCoachMoveLabel();
+    window.BozoMastery?.paintStudyPanel?.(studyOpening, studyPly, studyMoves.length);
   } catch (error) {
     console.error('Opening Library study board render failed:', error);
     boardElement.innerHTML =

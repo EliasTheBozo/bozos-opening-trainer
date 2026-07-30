@@ -177,6 +177,20 @@
     </section>
 
     <section id="view-dashboard" class="view">
+      <section class="panel local-mastery-dashboard" aria-labelledby="local-mastery-title">
+        <div class="panel-heading">
+          <div><span>PHASE ONE</span><h2 id="local-mastery-title">Local Opening Mastery</h2></div>
+          <button id="reset-local-mastery" class="button secondary" type="button">Reset local progress</button>
+        </div>
+        <p class="local-mastery-copy">Progress is saved on this device. Cloud syncing will be added in Phase Two.</p>
+        <div class="stats-grid local-mastery-stats">
+          <article><span>Overall Mastery</span><b id="local-overall-mastery">0%</b><small id="local-mastery-rank">Beginner</small></article>
+          <article><span>Lines Studied</span><b id="local-lines-studied">0</b><small>Unique opening lines</small></article>
+          <article><span>Best Streak</span><b id="local-best-streak">0</b><small>Moves revealed in sequence</small></article>
+          <article><span>Needs Review</span><b id="local-needs-review">0</b><small>Incomplete studied lines</small></article>
+        </div>
+        <div id="local-mastery-list" class="local-mastery-list"></div>
+      </section>
       <div id="dashboard-guest" class="auth-required">
         <img src="./assets/bozo-mascot.webp" alt="">
         <h1>Your training headquarters</h1>
@@ -686,6 +700,22 @@
 
   
   
+  <div id="mastery-summary-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal mastery-summary-modal">
+      <button id="close-mastery-summary" class="modal-close" type="button">×</button>
+      <div class="eyebrow">SESSION COMPLETE</div>
+      <h2 id="mastery-summary-title">Opening studied</h2>
+      <div class="mastery-summary-score"><strong id="mastery-summary-percent">0%</strong><span id="mastery-summary-rank">Beginner</span></div>
+      <div class="mastery-summary-grid">
+        <article><span>Moves reviewed</span><b id="mastery-summary-moves">0</b></article>
+        <article><span>Best streak</span><b id="mastery-summary-streak">0</b></article>
+        <article><span>Sessions</span><b id="mastery-summary-sessions">0</b></article>
+      </div>
+      <p id="mastery-summary-message"></p>
+      <button id="mastery-summary-done" class="button primary" type="button">Keep studying</button>
+    </div>
+  </div>
+
   <div id="add-web-friend-modal" class="modal-backdrop" hidden>
     <div class="auth-modal">
       <button id="close-add-web-friend" class="modal-close">×</button>
@@ -737,6 +767,19 @@
           <div class="study-tip">
             Use Previous and Next to walk through the line without an opponent.
           </div>
+
+          <section class="study-mastery-panel">
+            <div class="study-mastery-heading">
+              <div><span class="eyebrow">OPENING MASTERY</span><h3 id="study-mastery-rank">Beginner</h3></div>
+              <strong id="study-mastery-percent">0%</strong>
+            </div>
+            <div class="mastery-track"><span id="study-mastery-fill"></span></div>
+            <div class="study-mastery-stats">
+              <span>Session streak <b id="study-session-streak">0</b></span>
+              <span>Best <b id="study-best-streak">0</b></span>
+            </div>
+            <p id="study-mastery-note">Walk through the line to build mastery on this device.</p>
+          </section>
 
           <section id="bozo-coach-panel" class="bozo-coach-panel">
             <div class="coach-heading">
@@ -1014,8 +1057,8 @@
 
   <aside id="spotify-panel" class="spotify-panel" hidden aria-label="Spotify music">
     <div class="spotify-panel-header"><div><div class="eyebrow">BOZO MUSIC</div><h2>Train with a soundtrack</h2></div><button id="spotify-panel-close" class="spotify-panel-close" type="button">×</button></div>
-    <div id="spotify-disconnected-view" class="spotify-connect-card"><div class="spotify-logo-mark">♪</div><h3>Connect Spotify</h3><p>Play BOZO's featured playlist, search Spotify, or choose one of your own playlists.</p><button id="spotify-connect-button" class="button primary">Connect Spotify</button><small>In-browser playback requires Spotify Premium.</small></div>
-    <div id="spotify-connected-view" class="spotify-connected-view" hidden>
+    <div id="spotify-disconnected-view" class="spotify-connect-card spotify-coming-soon"><div class="spotify-logo-mark">♪</div><span class="coming-soon-pill">COMING SOON</span><h3>Spotify integration</h3><p>Spotify account connections are temporarily unavailable while BOZO prepares public access.</p><small>Use YouTube search and BOZO's Picks below in the meantime.</small></div>
+    <div id="spotify-connected-view" class="spotify-connected-view" hidden aria-disabled="true">
       <div class="spotify-account-row"><div><span>CONNECTED AS</span><b id="spotify-user-name">Spotify user</b><small id="spotify-account-plan" class="spotify-account-plan"></small></div><button id="spotify-disconnect-button" class="button secondary">Disconnect</button></div>
       <section class="spotify-section"><div class="spotify-section-heading"><div><span class="eyebrow">BOZO PICK</span><h3>Featured playlist</h3></div></div><button id="spotify-featured-playlist" class="spotify-featured-card" type="button"><img id="spotify-featured-image" alt="" hidden><div><b id="spotify-featured-name">BOZO Playlist</b><span id="spotify-featured-owner">Curated by Elias</span></div><strong>▶</strong></button></section>
       <section class="spotify-section"><label class="spotify-search-label">Search Spotify<div class="spotify-search-row"><input id="spotify-search-input" type="search" placeholder="Songs, artists, albums, or playlists"><button id="spotify-search-button" class="button primary">Search</button></div></label><div id="spotify-search-results" class="spotify-result-list"></div></section>
@@ -1102,9 +1145,10 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./app.js?v=2.3.3"></script>
+  <script src="./mastery.js?v=2.4.0"></script>
+  <script src="./app.js?v=2.4.0"></script>
   <script src="./bozo-music-controller.js?v=2.3.3"></script>
-  <script src="./spotify.js?v=2.3.3"></script>
-  <script src="./youtube.js?v=2.3.3"></script>
+  <script src="./spotify.js?v=2.4.0"></script>
+  <script src="./youtube.js?v=2.4.0"></script>
 </body>
 </html>
