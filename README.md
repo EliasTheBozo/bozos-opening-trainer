@@ -542,3 +542,14 @@ Features:
 - The profile `avatar_url` updates automatically
 - Users can restore the BOZO mascot
 - Broken or missing images fall back to the mascot
+
+
+## Web v2.6.1 — Support BOZO
+
+- Added a polished Support BOZO page
+- Added a voluntary customer-set-price PayPal support link
+- Added Support navigation on desktop and mobile
+- Added a subtle support callout to the home page
+- Expanded the footer with useful navigation and launch-ready messaging
+- Clarified that contributions do not unlock features or gameplay advantages
+- Preserved every v2.6.0 profile-picture, mastery, music, review, study, and community feature

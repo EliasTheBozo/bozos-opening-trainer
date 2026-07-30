@@ -32,6 +32,7 @@
       <button data-route="friends">Friends</button>
       <button data-route="review">Review</button>
       <button data-route="studies">Studies</button>
+      <button class="support-nav-button" data-route="support">Support</button>
       <button data-route="profile">Profile</button>
       <button id="owner-nav" data-route="owner" hidden>Owner's Office</button>
     </nav>
@@ -54,6 +55,7 @@
     <button data-route="friends">Friends</button>
     <button data-route="review">Review</button>
     <button data-route="studies">Studies</button>
+    <button class="support-nav-button" data-route="support">Support BOZO</button>
     <button data-route="profile">Profile</button>
     <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
   </div>
@@ -152,6 +154,16 @@
           <li><span>4</span><div><b>Real game</b><small>Score 90% opening accuracy in review.</small></div></li>
           <li><span>5</span><div><b>Master</b><small>Pass the final assessment and earn +500.</small></div></li>
         </ol>
+      </section>
+
+      <section class="home-support-card" aria-labelledby="home-support-title">
+        <div class="home-support-icon" aria-hidden="true">♥</div>
+        <div>
+          <div class="eyebrow">INDEPENDENT AND AD-FREE</div>
+          <h2 id="home-support-title">Help BOZO keep growing.</h2>
+          <p>BOZO's core chess learning stays free. Voluntary support helps cover hosting, development, and new features.</p>
+        </div>
+        <button class="button support-button" data-route="support">Support BOZO</button>
       </section>
     </section>
 
@@ -646,6 +658,52 @@
       </div>
     </section>
 
+    <section id="view-support" class="view support-view">
+      <div class="support-hero">
+        <div class="support-copy">
+          <div class="eyebrow">SUPPORT DEVELOPMENT</div>
+          <h1>Help keep BOZO free, ad-free, and growing.</h1>
+          <p class="support-lead">BOZO is an independent chess-learning platform built to make opening study useful, approachable, and available to everyone.</p>
+
+          <div class="support-promise">
+            <span>NO ADS</span>
+            <span>NO SUBSCRIPTIONS</span>
+            <span>CORE LEARNING FREE</span>
+          </div>
+
+          <p>Supporting BOZO is completely optional. Every contribution helps cover the real costs of running the platform and gives future improvements more room to grow.</p>
+
+          <div class="support-actions">
+            <a class="button support-button support-paypal-button"
+               href="https://www.paypal.com/ncp/payment/C6TK6E2VW45TY"
+               target="_blank" rel="noopener noreferrer">
+              Support with PayPal
+              <span aria-hidden="true">↗</span>
+            </a>
+            <button class="button secondary" data-route="home">Back to BOZO</button>
+          </div>
+          <small class="support-note">Contributions do not unlock features or provide gameplay advantages. They simply support BOZO's continued development.</small>
+        </div>
+
+        <aside class="support-impact-card" aria-label="Where support goes">
+          <div class="support-mascot-wrap">
+            <img src="./assets/bozo-mascot.webp" alt="Professor Bozo">
+            <span>THANK YOU!</span>
+          </div>
+          <div>
+            <div class="eyebrow">WHERE SUPPORT GOES</div>
+            <h2>Building a better BOZO.</h2>
+          </div>
+          <ul class="support-impact-list">
+            <li><span>♟</span><div><b>New opening content</b><small>More lines, plans, traps, and practical training.</small></div></li>
+            <li><span>☁</span><div><b>Hosting and infrastructure</b><small>Keeping cloud accounts, progress, and tools online.</small></div></li>
+            <li><span>▣</span><div><b>Web and Android development</b><small>Polish, performance, accessibility, and new features.</small></div></li>
+            <li><span>★</span><div><b>The future of BOZO</b><small>Courses, community tools, and whatever comes next.</small></div></li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
     <section id="view-owner" class="view">
       <div id="owner-denied" class="auth-required">
         <div class="lock-icon">🔒</div>
@@ -684,7 +742,12 @@
       <img src="./assets/bozo-mascot.webp" alt="">
       <span><b>BOZO'S</b><small>Master openings while having fun.</small></span>
     </div>
-    <p>Android and web. One Supabase account.</p>
+    <div class="footer-links">
+      <button data-route="home">Home</button>
+      <button data-route="library">Opening Library</button>
+      <button data-route="support">Support</button>
+    </div>
+    <p>Independent, ad-free chess learning. © 2026 BOZO.</p>
   </footer>
 
   <div id="auth-modal" class="modal-backdrop" hidden>
@@ -1166,8 +1229,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./mastery.js?v=2.6.0"></script>
-  <script src="./app.js?v=2.6.0"></script>
+  <script src="./mastery.js?v=2.6.1"></script>
+  <script src="./app.js?v=2.6.1"></script>
   <script src="./bozo-music-controller.js?v=2.3.3"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
