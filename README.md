@@ -512,3 +512,17 @@ preserving its shading and exact visual appearance.
 - Study walkthroughs save line progress, streaks, sessions, and completion locally.
 - Dashboard includes local mastery stats and reset controls.
 - No Supabase changes are required for this phase.
+
+
+## Web v2.5.0 — Cloud Opening Mastery
+
+- Signed-in users sync opening mastery through `public.opening_mastery`
+- Guest users continue using browser storage
+- Local and cloud progress merge without lowering either copy
+- Existing local progress uploads automatically after sign-in
+- Cloud progress downloads automatically on another device
+- Training changes save locally immediately and sync in the background
+- Dashboard displays Local, Syncing, Synced, or Retry status
+- Manual “Sync now” control added
+- Reset mastery clears both local and cloud data for signed-in users
+- Existing YouTube, chessboard, openings, profiles, friends, and challenge features remain intact

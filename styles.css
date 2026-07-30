@@ -2421,3 +2421,63 @@ html[data-music-provider="spotify"] #spotify-mini-player {
 .study-mastery-panel{padding:1rem;border:1px solid var(--border);border-radius:18px;background:rgba(139,92,246,.07)}.study-mastery-heading{display:flex;justify-content:space-between;align-items:center;gap:1rem}.study-mastery-heading h3{margin:.15rem 0 0}.study-mastery-heading strong{font-size:1.65rem}.study-mastery-stats{display:flex;justify-content:space-between;margin-top:.65rem;color:var(--muted);font-size:.82rem}.study-mastery-panel p{margin:.65rem 0 0;color:var(--muted);font-size:.82rem}
 .mastery-summary-modal{text-align:center}.mastery-summary-score{display:grid;place-items:center;margin:1rem 0}.mastery-summary-score strong{font-size:4rem;line-height:1}.mastery-summary-score span{font-weight:800;color:#c4b5fd}.mastery-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;margin:1rem 0}.mastery-summary-grid article{padding:.8rem;border-radius:14px;background:rgba(255,255,255,.05)}.mastery-summary-grid span{display:block;color:var(--muted);font-size:.72rem}.mastery-summary-grid b{font-size:1.3rem}
 @media(max-width:700px){.local-mastery-row{grid-template-columns:1fr}.mastery-summary-grid{grid-template-columns:1fr}.local-mastery-stats{grid-template-columns:repeat(2,1fr)}}
+
+
+/* WEB v2.5.0 — CLOUD OPENING MASTERY */
+.mastery-cloud-actions {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:.65rem;
+  flex-wrap:wrap;
+}
+
+.mastery-sync-status {
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+  min-height:2.3rem;
+  padding:.45rem .75rem;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--surface-2);
+  font-size:.82rem;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.mastery-sync-status::before {
+  content:'';
+  width:.55rem;
+  height:.55rem;
+  border-radius:50%;
+  background:currentColor;
+  opacity:.75;
+}
+
+.mastery-sync-status[data-state="synced"] {
+  color:#2f8f5b;
+}
+
+.mastery-sync-status[data-state="syncing"] {
+  color:#a46b00;
+}
+
+.mastery-sync-status[data-state="error"] {
+  color:#b33a3a;
+}
+
+.mastery-sync-status[data-state="local"] {
+  color:var(--muted);
+}
+
+@media (max-width: 760px) {
+  .local-mastery-dashboard .panel-heading {
+    align-items:flex-start;
+  }
+
+  .mastery-cloud-actions {
+    width:100%;
+    justify-content:flex-start;
+  }
+}

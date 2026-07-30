@@ -179,10 +179,14 @@
     <section id="view-dashboard" class="view">
       <section class="panel local-mastery-dashboard" aria-labelledby="local-mastery-title">
         <div class="panel-heading">
-          <div><span>PHASE ONE</span><h2 id="local-mastery-title">Local Opening Mastery</h2></div>
-          <button id="reset-local-mastery" class="button secondary" type="button">Reset local progress</button>
+          <div><span>PHASE TWO</span><h2 id="local-mastery-title">Opening Mastery</h2></div>
+          <div class="mastery-cloud-actions">
+            <span id="mastery-sync-status" class="mastery-sync-status" data-state="local">Local only</span>
+            <button id="mastery-sync-now" class="button secondary" type="button">Sync now</button>
+            <button id="reset-local-mastery" class="button secondary" type="button">Reset mastery</button>
+          </div>
         </div>
-        <p class="local-mastery-copy">Progress is saved on this device. Cloud syncing will be added in Phase Two.</p>
+        <p class="local-mastery-copy">Guest progress stays on this device. Signed-in progress syncs automatically across BOZO platforms.</p>
         <div class="stats-grid local-mastery-stats">
           <article><span>Overall Mastery</span><b id="local-overall-mastery">0%</b><small id="local-mastery-rank">Beginner</small></article>
           <article><span>Lines Studied</span><b id="local-lines-studied">0</b><small>Unique opening lines</small></article>
@@ -1145,8 +1149,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./mastery.js?v=2.4.0"></script>
-  <script src="./app.js?v=2.4.0"></script>
+  <script src="./mastery.js?v=2.5.0"></script>
+  <script src="./app.js?v=2.5.0"></script>
   <script src="./bozo-music-controller.js?v=2.3.3"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>

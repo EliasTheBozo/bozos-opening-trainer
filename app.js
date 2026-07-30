@@ -5,6 +5,7 @@ const SUPABASE_KEY = 'sb_publishable_TSiatPuLjWMSx27rnsJTBw_Wxtc_F3y';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
+window.BozoSupabase = sb;
 
 const state = {
   session: null,
@@ -136,6 +137,7 @@ $('forgot-password-button').addEventListener('click', async () => {
 async function loadIdentity() {
   if (!state.session?.user) {
     state.profile = null; state.role = 'member'; state.progress = null;
+    await window.BozoMastery?.setAuth?.(sb, null);
     renderShell(); return;
   }
 
@@ -153,6 +155,7 @@ async function loadIdentity() {
   state.profile = profileRes.data;
   state.role = roleRes.data?.role || 'member';
   state.progress = progressRes.data;
+  await window.BozoMastery?.setAuth?.(sb, state.session.user);
   renderShell();
   await loadAnnouncement();
 }
@@ -212,6 +215,7 @@ function renderDashboard() {
 
 $('dashboard-sync-button').addEventListener('click', async () => {
   await loadIdentity();
+  await window.BozoMastery?.syncNow?.();
   toast('Cloud data refreshed');
 });
 
