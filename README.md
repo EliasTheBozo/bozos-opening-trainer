@@ -553,3 +553,11 @@ Features:
 - Expanded the footer with useful navigation and launch-ready messaging
 - Clarified that contributions do not unlock features or gameplay advantages
 - Preserved every v2.6.0 profile-picture, mastery, music, review, study, and community feature
+
+## v2.6.2 — Community Feedback
+
+- Added opening-specific **Suggest an improvement** actions throughout the Opening Library.
+- Added opening-specific and site-wide **Report an issue** actions.
+- Added signed-in submission forms with categories, PGN, details, and optional sources.
+- Expanded the Owner's Office queues to show full case details and support review, approval, rejection, resolution, and dismissal.
+- Added `SUPABASE_COMMUNITY_FEEDBACK_SETUP.sql` for the required fields and RLS policies.

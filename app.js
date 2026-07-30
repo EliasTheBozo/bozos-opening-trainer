@@ -646,6 +646,7 @@ function renderOpeningFamily(family) {
             Challenge
           </button>
         </div>
+        ${communityOpeningActions(preview)}
       ` : `
         <div class="family-action-row four-actions">
           <button class="study-button" onclick="openStudyById('${preview.id}')">Study preview</button>
@@ -664,6 +665,7 @@ function renderOpeningFamily(family) {
             <span class="family-chevron">⌄</span>
           </button>
         </div>
+        ${communityOpeningActions(preview, `Suggest a ${escapeHtml(family.name)} improvement`)}
 
         <div class="family-lines"
              data-family-body="${family.id}"
@@ -695,6 +697,7 @@ function renderOpeningFamily(family) {
                       Challenge
                     </button>
                   </div>
+                  ${communityOpeningActions(line)}
                 </div>
               </div>
             `;
@@ -704,6 +707,155 @@ function renderOpeningFamily(family) {
     </article>
   `;
 }
+
+
+function communityOpeningActions(opening, suggestionLabel = 'Suggest an improvement') {
+  const name = `${opening.name || 'Opening'}${opening.variation ? `: ${opening.variation}` : ''}`;
+  return `<div class="community-action-row">
+    <button type="button" class="suggest-opening-button"
+      data-opening-id="${escapeHtml(String(opening.id || ''))}"
+      data-opening-name="${escapeHtml(name)}"
+      data-opening-pgn="${escapeHtml(opening.pgn || '')}">✎ ${suggestionLabel}</button>
+    <button type="button" class="report-opening-button"
+      data-opening-id="${escapeHtml(String(opening.id || ''))}"
+      data-opening-name="${escapeHtml(name)}"
+      data-opening-pgn="${escapeHtml(opening.pgn || '')}">⚑ Report issue</button>
+  </div>`;
+}
+
+const SUGGESTION_TYPES = [
+  ['incorrect_move','Incorrect move'],
+  ['better_line','Better line or continuation'],
+  ['missing_variation','Missing variation'],
+  ['explanation','Explanation or plan'],
+  ['grammar','Grammar or formatting'],
+  ['other','Other improvement']
+];
+const REPORT_TYPES = [
+  ['bug','Website bug'],
+  ['broken_page','Broken page or feature'],
+  ['incorrect_content','Incorrect chess content'],
+  ['spam','Spam or abuse'],
+  ['copyright','Copyright concern'],
+  ['accessibility','Accessibility problem'],
+  ['other','Other issue']
+];
+
+function openCommunityFeedback(mode = 'suggestion', opening = {}) {
+  if (!state.session?.user) {
+    toast('Sign in to send community feedback.');
+    openAuth('signin');
+    return;
+  }
+  const suggestion = mode === 'suggestion';
+  $('community-feedback-mode').value = mode;
+  $('community-feedback-opening-id').value = opening.id || '';
+  $('community-feedback-opening-name').value = opening.name || (suggestion ? 'General opening suggestion' : 'BOZO website');
+  $('community-feedback-pgn').value = opening.pgn || '';
+  $('community-feedback-details').value = '';
+  $('community-feedback-source').value = '';
+  $('community-feedback-title').textContent = suggestion ? 'Suggest an improvement' : 'Report an issue';
+  $('community-feedback-eyebrow').textContent = suggestion ? 'COMMUNITY OPENING REVIEW' : 'HELP US FIX IT';
+  $('community-feedback-submit').textContent = suggestion ? 'Submit suggestion' : 'Submit report';
+  $('community-feedback-pgn-label').hidden = !suggestion;
+  $('community-feedback-source-label').hidden = !suggestion;
+  $('community-feedback-opening-label').querySelector('span')?.remove();
+  const types = suggestion ? SUGGESTION_TYPES : REPORT_TYPES;
+  $('community-feedback-type').innerHTML = types.map(([value,label]) => `<option value="${value}">${label}</option>`).join('');
+  $('community-feedback-details').placeholder = suggestion
+    ? 'Explain what should change and why. Include analysis, move orders, or sources when useful.'
+    : 'Tell us what happened, what you expected, and how we can reproduce the problem.';
+  $('community-feedback-modal').hidden = false;
+  setTimeout(() => $('community-feedback-type').focus(), 20);
+}
+
+function closeCommunityFeedback() {
+  $('community-feedback-modal').hidden = true;
+}
+
+$('close-community-feedback').addEventListener('click', closeCommunityFeedback);
+$('community-feedback-cancel').addEventListener('click', closeCommunityFeedback);
+$('community-feedback-modal').addEventListener('click', event => {
+  if (event.target.id === 'community-feedback-modal') closeCommunityFeedback();
+});
+$('footer-report-issue').addEventListener('click', () => openCommunityFeedback('report'));
+
+document.addEventListener('click', event => {
+  const suggestion = event.target.closest('.suggest-opening-button');
+  if (suggestion) {
+    openCommunityFeedback('suggestion', {
+      id: suggestion.dataset.openingId,
+      name: suggestion.dataset.openingName,
+      pgn: suggestion.dataset.openingPgn
+    });
+    return;
+  }
+  const report = event.target.closest('.report-opening-button');
+  if (report) {
+    openCommunityFeedback('report', {
+      id: report.dataset.openingId,
+      name: report.dataset.openingName,
+      pgn: report.dataset.openingPgn
+    });
+  }
+});
+
+$('community-feedback-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!state.session?.user) return openAuth('signin');
+  const submit = $('community-feedback-submit');
+  const mode = $('community-feedback-mode').value;
+  const type = $('community-feedback-type').value;
+  const openingId = $('community-feedback-opening-id').value || null;
+  const openingName = $('community-feedback-opening-name').value.trim();
+  const pgn = $('community-feedback-pgn').value.trim();
+  const details = $('community-feedback-details').value.trim();
+  const source = $('community-feedback-source').value.trim();
+  if (!details) return toast('Please describe the suggestion or issue.');
+
+  submit.disabled = true;
+  submit.textContent = 'Sending…';
+  let error;
+  if (mode === 'suggestion') {
+    const richPayload = {
+      submitted_by: state.session.user.id,
+      opening_id: openingId,
+      proposed_name: openingName,
+      proposed_pgn: pgn || null,
+      submission_type: type,
+      notes: [details, source ? `Source: ${source}` : ''].filter(Boolean).join('\n\n'),
+      status: 'pending'
+    };
+    ({ error } = await sb.from('opening_submissions').insert(richPayload));
+    if (error && /column|schema cache/i.test(readableError(error))) {
+      ({ error } = await sb.from('opening_submissions').insert({
+        proposed_name: openingName,
+        submission_type: type,
+        status: 'pending'
+      }));
+    }
+  } else {
+    const context = [openingName ? `Context: ${openingName}` : '', openingId ? `Opening ID: ${openingId}` : '', details].filter(Boolean).join('\n');
+    const richPayload = {
+      reporter_id: state.session.user.id,
+      report_type: type,
+      target_type: openingId ? 'opening' : 'website',
+      target_id: openingId,
+      reason: details,
+      details: context,
+      status: 'open'
+    };
+    ({ error } = await sb.from('reports').insert(richPayload));
+    if (error && /column|schema cache/i.test(readableError(error))) {
+      ({ error } = await sb.from('reports').insert({ report_type: type, reason: context, status: 'open' }));
+    }
+  }
+  submit.disabled = false;
+  submit.textContent = mode === 'suggestion' ? 'Submit suggestion' : 'Submit report';
+  if (error) return toast(`Could not send feedback: ${readableError(error)}`);
+  closeCommunityFeedback();
+  toast(mode === 'suggestion' ? 'Suggestion sent for review. Thank you!' : 'Report submitted. Thank you!');
+});
 
 function renderOwnerGate() {
   const allowed = Boolean(state.session && state.role === 'owner');
@@ -787,21 +939,64 @@ async function loadOwnerPanel(panel) {
   }
 
   const map = {
-    submissions: ['opening_submissions','proposed_name,submission_type,status,created_at','Opening review'],
-    reports: ['reports','report_type,reason,status,created_at','Open reports'],
-    audit: ['moderation_actions','action,reason,created_at','Audit history']
+    submissions: ['opening_submissions','Opening review'],
+    reports: ['reports','Open reports'],
+    audit: ['moderation_actions','Audit history']
   };
-  const [table, columns, title] = map[panel];
-  let request = sb.from(table).select(columns).order('created_at',{ascending:false}).limit(50);
+  const [table, title] = map[panel];
+  let request = sb.from(table).select('*').order('created_at',{ascending:false}).limit(50);
   if (panel === 'submissions') request = request.in('status',['pending','changes_requested']);
   if (panel === 'reports') request = request.in('status',['open','under_review']);
   const { data, error } = await request;
   if (error) return ownerError(error);
 
   target.innerHTML = `<div class="panel-heading"><div><span>OWNER</span><h2>${title}</h2></div></div>
-    <div class="owner-list">${(data || []).map(item => `
-      <div class="owner-list-row"><div><b>${escapeHtml(item.proposed_name || item.report_type || item.action || 'Item')}</b><small>${escapeHtml(item.submission_type || item.reason || item.status || '')}</small></div><small>${new Date(item.created_at).toLocaleString()}</small></div>
-    `).join('') || '<div class="empty-state"><div>✓</div><b>Nothing waiting</b></div>'}</div>`;
+    <div class="owner-list">${(data || []).map(item => ownerCaseMarkup(panel, item)).join('') || '<div class="empty-state"><div>✓</div><b>Nothing waiting</b></div>'}</div>`;
+
+  target.querySelectorAll('[data-case-status]').forEach(button => {
+    button.addEventListener('click', () => updateCommunityCase(
+      button.dataset.caseTable,
+      button.dataset.caseId,
+      button.dataset.caseStatus,
+      panel
+    ));
+  });
+}
+
+function ownerCaseMarkup(panel, item) {
+  if (panel === 'audit') {
+    return `<div class="owner-list-row"><div><b>${escapeHtml(item.action || 'Action')}</b><small>${escapeHtml(item.reason || item.status || '')}</small></div><small>${new Date(item.created_at).toLocaleString()}</small></div>`;
+  }
+  const suggestion = panel === 'submissions';
+  const heading = suggestion ? (item.proposed_name || 'Opening suggestion') : (item.report_type || 'Issue report');
+  const type = suggestion ? item.submission_type : item.report_type;
+  const details = item.notes || item.details || item.reason || '';
+  const pgn = item.proposed_pgn || '';
+  const approve = suggestion ? 'approved' : 'resolved';
+  const reject = suggestion ? 'rejected' : 'dismissed';
+  const table = suggestion ? 'opening_submissions' : 'reports';
+  return `<div class="owner-list-row community-case">
+    <div class="community-case-main">
+      <b>${escapeHtml(heading)}</b>
+      <div class="community-case-meta"><span>${escapeHtml(type || 'other')}</span><span>${escapeHtml(item.status || '')}</span></div>
+      ${details ? `<p>${escapeHtml(details)}</p>` : ''}
+      ${pgn ? `<code>${escapeHtml(pgn)}</code>` : ''}
+      <div class="community-case-actions">
+        <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="under_review">Reviewing</button>
+        <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="${approve}">${suggestion ? 'Approve' : 'Resolve'}</button>
+        <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="${reject}">${suggestion ? 'Reject' : 'Dismiss'}</button>
+      </div>
+    </div>
+    <small>${item.created_at ? new Date(item.created_at).toLocaleString() : ''}</small>
+  </div>`;
+}
+
+async function updateCommunityCase(table, id, status, panel) {
+  if (!id) return toast('This case has no ID.');
+  const { error } = await sb.from(table).update({ status }).eq('id', id);
+  if (error) return toast(readableError(error));
+  toast(`Case marked ${status.replace('_',' ')}.`);
+  loadOwnerPanel(panel);
 }
 
 function analyticsStat(value,label){return `<div class="analytics-stat"><b>${Number(value||0).toLocaleString()}</b><span>${label}</span></div>`}

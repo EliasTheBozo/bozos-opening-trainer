@@ -746,9 +746,45 @@
       <button data-route="home">Home</button>
       <button data-route="library">Opening Library</button>
       <button data-route="support">Support</button>
+      <button id="footer-report-issue" type="button">Report an issue</button>
     </div>
     <p>Independent, ad-free chess learning. © 2026 BOZO.</p>
   </footer>
+
+  <div id="community-feedback-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal community-feedback-modal">
+      <button id="close-community-feedback" class="modal-close" type="button">×</button>
+      <div class="auth-brand">
+        <img src="./assets/bozo-mascot.webp" alt="">
+        <div><span id="community-feedback-eyebrow">HELP IMPROVE BOZO</span><h2 id="community-feedback-title">Suggest an improvement</h2></div>
+      </div>
+
+      <form id="community-feedback-form">
+        <input id="community-feedback-mode" type="hidden" value="suggestion">
+        <input id="community-feedback-opening-id" type="hidden">
+        <label id="community-feedback-opening-label">Opening
+          <input id="community-feedback-opening-name" maxlength="160" readonly>
+        </label>
+        <label>Type
+          <select id="community-feedback-type" required></select>
+        </label>
+        <label id="community-feedback-pgn-label">Current line or proposed PGN
+          <textarea id="community-feedback-pgn" rows="4" maxlength="3000" placeholder="1. b4 e5 2. Bb2..."></textarea>
+        </label>
+        <label>Details
+          <textarea id="community-feedback-details" rows="6" maxlength="3000" required placeholder="Explain what should change and why. Sources or analysis links are welcome."></textarea>
+        </label>
+        <label id="community-feedback-source-label">Source or analysis link (optional)
+          <input id="community-feedback-source" type="url" maxlength="500" placeholder="https://...">
+        </label>
+        <div class="community-feedback-actions">
+          <button class="button primary" id="community-feedback-submit" type="submit">Submit suggestion</button>
+          <button class="button secondary" id="community-feedback-cancel" type="button">Cancel</button>
+        </div>
+        <p class="community-feedback-note">Submissions are reviewed before any opening content changes.</p>
+      </form>
+    </div>
+  </div>
 
   <div id="auth-modal" class="modal-backdrop" hidden>
     <div class="auth-modal">
