@@ -591,7 +591,10 @@
 
       <div id="profile-user" hidden>
         <div class="profile-hero">
-          <img id="profile-avatar" src="./assets/bozo-mascot.webp" alt="">
+          <div class="profile-avatar-shell">
+            <img id="profile-avatar" src="./assets/bozo-mascot.webp" alt="Profile picture">
+            <button id="profile-avatar-edit" class="profile-avatar-edit" type="button" aria-label="Change profile picture">✎</button>
+          </div>
           <div>
             <div id="profile-role-badge" class="role-badge">Member</div>
             <h1 id="profile-ign">Player</h1>
@@ -602,6 +605,20 @@
         <div class="profile-layout">
           <section class="panel">
             <div class="panel-heading"><div><span>PROFILE</span><h2>Edit your identity</h2></div></div>
+            <div class="profile-picture-editor">
+              <input id="profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <img id="profile-avatar-preview" src="./assets/bozo-mascot.webp" alt="New profile picture preview">
+              <div>
+                <b>Profile picture</b>
+                <span>JPG, PNG, or WebP. BOZO crops it to a square and optimizes it.</span>
+                <div class="profile-picture-actions">
+                  <button id="profile-avatar-choose" class="button secondary" type="button">Choose image</button>
+                  <button id="profile-avatar-upload" class="button primary" type="button" disabled>Upload picture</button>
+                  <button id="profile-avatar-remove" class="button ghost" type="button">Use BOZO mascot</button>
+                </div>
+                <small id="profile-avatar-status" class="profile-avatar-status">No new image selected.</small>
+              </div>
+            </div>
             <label>IGN<input id="profile-ign-input" maxlength="28"></label>
             <label>Username<input id="profile-username-input" maxlength="20"></label>
             <label>Bio<textarea id="profile-bio-input" maxlength="160"></textarea></label>
@@ -1149,8 +1166,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./mastery.js?v=2.5.0"></script>
-  <script src="./app.js?v=2.5.0"></script>
+  <script src="./mastery.js?v=2.6.0"></script>
+  <script src="./app.js?v=2.6.0"></script>
   <script src="./bozo-music-controller.js?v=2.3.3"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>

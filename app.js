@@ -219,6 +219,171 @@ $('dashboard-sync-button').addEventListener('click', async () => {
   toast('Cloud data refreshed');
 });
 
+
+const PROFILE_AVATAR_BUCKET = 'avatars';
+const PROFILE_AVATAR_FALLBACK = './assets/bozo-mascot.webp';
+let pendingAvatarBlob = null;
+let pendingAvatarObjectUrl = null;
+
+function setAvatarStatus(message, isError = false) {
+  const element = $('profile-avatar-status');
+  if (!element) return;
+  element.textContent = message;
+  element.classList.toggle('error', isError);
+}
+
+function clearPendingAvatar() {
+  pendingAvatarBlob = null;
+  if (pendingAvatarObjectUrl) URL.revokeObjectURL(pendingAvatarObjectUrl);
+  pendingAvatarObjectUrl = null;
+  if ($('profile-avatar-input')) $('profile-avatar-input').value = '';
+  if ($('profile-avatar-upload')) $('profile-avatar-upload').disabled = true;
+}
+
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('That image could not be opened.'));
+    };
+    image.src = url;
+  });
+}
+
+async function createSquareAvatar(file) {
+  if (!file) throw new Error('Choose an image first.');
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Use a JPG, PNG, or WebP image.');
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    throw new Error('Profile pictures must be smaller than 8 MB.');
+  }
+
+  const image = await loadImageFile(file);
+  const side = Math.min(image.naturalWidth, image.naturalHeight);
+  const sourceX = Math.floor((image.naturalWidth - side) / 2);
+  const sourceY = Math.floor((image.naturalHeight - side) / 2);
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+
+  const context = canvas.getContext('2d');
+  context.drawImage(image, sourceX, sourceY, side, side, 0, 0, 512, 512);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      blob => blob ? resolve(blob) : reject(new Error('The image could not be prepared.')),
+      'image/webp',
+      0.88
+    );
+  });
+}
+
+function avatarPublicUrl(path) {
+  return sb.storage.from(PROFILE_AVATAR_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+async function selectAvatarFile(file) {
+  try {
+    setAvatarStatus('Preparing image…');
+    pendingAvatarBlob = await createSquareAvatar(file);
+    if (pendingAvatarObjectUrl) URL.revokeObjectURL(pendingAvatarObjectUrl);
+    pendingAvatarObjectUrl = URL.createObjectURL(pendingAvatarBlob);
+    $('profile-avatar-preview').src = pendingAvatarObjectUrl;
+    $('profile-avatar-upload').disabled = false;
+    setAvatarStatus('Ready to upload. Your image will appear as a square.');
+  } catch (error) {
+    clearPendingAvatar();
+    setAvatarStatus(error.message || 'Could not prepare that image.', true);
+  }
+}
+
+async function uploadProfileAvatar() {
+  if (!state.session?.user || !pendingAvatarBlob) return;
+  const button = $('profile-avatar-upload');
+  button.disabled = true;
+  button.textContent = 'Uploading…';
+  setAvatarStatus('Uploading securely to your BOZO account…');
+
+  try {
+    const userId = state.session.user.id;
+    const path = `${userId}/avatar.webp`;
+    const { error: uploadError } = await sb.storage
+      .from(PROFILE_AVATAR_BUCKET)
+      .upload(path, pendingAvatarBlob, {
+        contentType: 'image/webp',
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (uploadError) throw uploadError;
+
+    const publicUrl = `${avatarPublicUrl(path)}?v=${Date.now()}`;
+    const { error: profileError } = await sb
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', userId);
+
+    if (profileError) throw profileError;
+
+    clearPendingAvatar();
+    await loadIdentity();
+    setAvatarStatus('Profile picture updated.');
+    toast('Profile picture updated');
+  } catch (error) {
+    console.error('Profile picture upload failed:', error);
+    button.disabled = false;
+    setAvatarStatus(readableError(error), true);
+  } finally {
+    button.textContent = 'Upload picture';
+  }
+}
+
+async function removeProfileAvatar() {
+  if (!state.session?.user) return;
+  if (!confirm('Replace your profile picture with the BOZO mascot?')) return;
+
+  const userId = state.session.user.id;
+  setAvatarStatus('Removing profile picture…');
+
+  const { error: profileError } = await sb
+    .from('profiles')
+    .update({ avatar_url: null })
+    .eq('id', userId);
+
+  if (profileError) {
+    setAvatarStatus(readableError(profileError), true);
+    return;
+  }
+
+  const { error: storageError } = await sb.storage
+    .from(PROFILE_AVATAR_BUCKET)
+    .remove([`${userId}/avatar.webp`]);
+
+  if (storageError) console.warn('Old avatar file could not be removed:', storageError);
+
+  clearPendingAvatar();
+  await loadIdentity();
+  setAvatarStatus('Using the BOZO mascot.');
+  toast('Profile picture removed');
+}
+
+$('profile-avatar-edit')?.addEventListener('click', () => $('profile-avatar-input')?.click());
+$('profile-avatar-choose')?.addEventListener('click', () => $('profile-avatar-input')?.click());
+$('profile-avatar-input')?.addEventListener('change', event => {
+  const file = event.target.files?.[0];
+  if (file) selectAvatarFile(file);
+});
+$('profile-avatar-upload')?.addEventListener('click', uploadProfileAvatar);
+$('profile-avatar-remove')?.addEventListener('click', removeProfileAvatar);
+
+
 function renderProfile() {
   const signedIn = Boolean(state.session?.user);
   $('profile-guest').hidden = signedIn;
@@ -226,7 +391,13 @@ function renderProfile() {
   if (!signedIn) return;
 
   const p = state.profile || {};
-  $('profile-avatar').src = p.avatar_url || './assets/bozo-mascot.webp';
+  const avatarUrl = p.avatar_url || PROFILE_AVATAR_FALLBACK;
+  $('profile-avatar').src = avatarUrl;
+  $('profile-avatar').onerror = () => { $('profile-avatar').src = PROFILE_AVATAR_FALLBACK; };
+  if (!pendingAvatarBlob) $('profile-avatar-preview').src = avatarUrl;
+  $('profile-avatar-preview').onerror = () => { $('profile-avatar-preview').src = PROFILE_AVATAR_FALLBACK; };
+  $('profile-avatar-remove').disabled = !p.avatar_url;
+  if (!pendingAvatarBlob) setAvatarStatus(p.avatar_url ? 'Current profile picture is saved to your account.' : 'Using the BOZO mascot.');
   $('profile-ign').textContent = p.ign || 'Player';
   $('profile-username').textContent = '@' + (p.username || 'username');
   $('profile-role-badge').textContent = roleLabel(state.role);

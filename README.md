@@ -526,3 +526,19 @@ preserving its shading and exact visual appearance.
 - Manual “Sync now” control added
 - Reset mastery clears both local and cloud data for signed-in users
 - Existing YouTube, chessboard, openings, profiles, friends, and challenge features remain intact
+
+
+## Web v2.6.0 — User Profile Pictures
+
+Before deploying, run `SUPABASE_AVATARS_SETUP.sql` once in the Supabase SQL Editor.
+
+Features:
+- Signed-in users can choose their own profile picture
+- JPG, PNG, and WebP input
+- Browser-side center crop to a 512 × 512 WebP image
+- Maximum source-file size of 8 MB
+- Images upload to the public `avatars` Supabase Storage bucket
+- Each user can write only inside their own user-ID folder
+- The profile `avatar_url` updates automatically
+- Users can restore the BOZO mascot
+- Broken or missing images fall back to the mascot
