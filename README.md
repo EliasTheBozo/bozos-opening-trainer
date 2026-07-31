@@ -580,3 +580,9 @@ Features:
 - Added signed-in submission forms with categories, PGN, details, and optional sources.
 - Expanded the Owner's Office queues to show full case details and support review, approval, rejection, resolution, and dismissal.
 - Added `SUPABASE_COMMUNITY_FEEDBACK_SETUP.sql` for the required fields and RLS policies.
+
+
+## v2.6.5
+- Replaced long native repertoire selects with searchable custom opening pickers.
+- Prevented dropdown clipping and improved mobile selection.
+- No Supabase changes required beyond the existing v2.6.4 migration.

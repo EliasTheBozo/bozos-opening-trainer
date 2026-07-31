@@ -225,20 +225,104 @@ const PROFILE_AVATAR_FALLBACK = './assets/bozo-mascot.webp';
 let repertoireOpeningNames = [];
 let repertoireOptionsLoaded = false;
 
-function setSelectValue(selectId, value = '') {
-  const select = $(selectId);
-  if (!select) return;
-  const normalized = value || '';
-  if (normalized && !Array.from(select.options).some(option => option.value === normalized)) {
-    select.add(new Option(normalized, normalized));
-  }
-  select.value = normalized;
+function openingPickerForInput(inputId) {
+  return document.querySelector(`.opening-picker[data-opening-picker="${inputId}"]`);
 }
 
+function setOpeningPickerValue(inputId, value = '') {
+  const input = $(inputId);
+  const picker = openingPickerForInput(inputId);
+  if (!input || !picker) return;
+  const normalized = value || '';
+  input.value = normalized;
+  const label = picker.querySelector('.opening-picker-value');
+  if (label) label.textContent = normalized || 'Not selected';
+}
+
+function closeOpeningPicker(picker) {
+  if (!picker) return;
+  const menu = picker.querySelector('.opening-picker-menu');
+  const trigger = picker.querySelector('.opening-picker-trigger');
+  if (menu) menu.hidden = true;
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  picker.classList.remove('open');
+}
+
+function closeAllOpeningPickers(except = null) {
+  document.querySelectorAll('.opening-picker.open').forEach(picker => {
+    if (picker !== except) closeOpeningPicker(picker);
+  });
+}
+
+function renderOpeningPickerResults(picker, query = '') {
+  const results = picker?.querySelector('.opening-picker-results');
+  if (!results) return;
+  const normalizedQuery = query.trim().toLowerCase();
+  const matches = repertoireOpeningNames
+    .filter(name => !normalizedQuery || name.toLowerCase().includes(normalizedQuery))
+    .slice(0, 150);
+
+  const choices = [''].concat(matches);
+  results.innerHTML = choices.map(name => {
+    const label = name || 'Not selected';
+    return `<button type="button" class="opening-picker-option" role="option" data-opening-value="${escapeHtml(name)}">${escapeHtml(label)}</button>`;
+  }).join('');
+
+  if (!matches.length && normalizedQuery) {
+    results.innerHTML = '<div class="opening-picker-empty">No matching openings found.</div>';
+  }
+}
+
+function initializeOpeningPickers() {
+  document.querySelectorAll('.opening-picker').forEach(picker => {
+    if (picker.dataset.ready === 'true') return;
+    picker.dataset.ready = 'true';
+    const inputId = picker.dataset.openingPicker;
+    const trigger = picker.querySelector('.opening-picker-trigger');
+    const menu = picker.querySelector('.opening-picker-menu');
+    const search = picker.querySelector('.opening-picker-search');
+    const results = picker.querySelector('.opening-picker-results');
+
+    trigger?.addEventListener('click', () => {
+      const willOpen = menu.hidden;
+      closeAllOpeningPickers(picker);
+      menu.hidden = !willOpen;
+      trigger.setAttribute('aria-expanded', String(willOpen));
+      picker.classList.toggle('open', willOpen);
+      if (willOpen) {
+        search.value = '';
+        renderOpeningPickerResults(picker);
+        requestAnimationFrame(() => search.focus());
+      }
+    });
+
+    search?.addEventListener('input', () => renderOpeningPickerResults(picker, search.value));
+    search?.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        closeOpeningPicker(picker);
+        trigger?.focus();
+      }
+    });
+
+    results?.addEventListener('click', event => {
+      const option = event.target.closest('.opening-picker-option');
+      if (!option) return;
+      setOpeningPickerValue(inputId, option.dataset.openingValue || '');
+      closeOpeningPicker(picker);
+      trigger?.focus();
+    });
+  });
+}
+
+document.addEventListener('click', event => {
+  if (!event.target.closest('.opening-picker')) closeAllOpeningPickers();
+});
+
 async function loadRepertoireOpeningOptions() {
+  initializeOpeningPickers();
   if (repertoireOptionsLoaded) return;
-  const ids = ['profile-white-opening-input', 'profile-black-e4-opening-input', 'profile-black-d4-opening-input'];
-  ids.forEach(id => { if ($(id)) $(id).disabled = true; });
+  const pickers = [...document.querySelectorAll('.opening-picker')];
+  pickers.forEach(picker => picker.classList.add('loading'));
 
   const { data, error } = await sb.from('openings')
     .select('name')
@@ -248,22 +332,16 @@ async function loadRepertoireOpeningOptions() {
 
   if (error) {
     console.warn('Could not load repertoire opening choices:', error);
-    ids.forEach(id => { if ($(id)) $(id).disabled = false; });
+    pickers.forEach(picker => picker.classList.remove('loading'));
     return;
   }
 
   repertoireOpeningNames = [...new Set((data || []).map(row => familyBaseName(row.name || '')).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
 
-  ids.forEach(id => {
-    const select = $(id);
-    if (!select) return;
-    const current = select.value;
-    select.innerHTML = '<option value="">Not selected</option>' + repertoireOpeningNames
-      .map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
-      .join('');
-    select.disabled = false;
-    setSelectValue(id, current);
+  pickers.forEach(picker => {
+    picker.classList.remove('loading');
+    renderOpeningPickerResults(picker);
   });
   repertoireOptionsLoaded = true;
 }
@@ -452,9 +530,9 @@ function renderProfile() {
   $('profile-bio-input').value = p.bio || '';
   $('profile-personality-input').value = p.opening_personality || 'Explorer';
   loadRepertoireOpeningOptions().then(() => {
-    setSelectValue('profile-white-opening-input', p.favorite_white_opening);
-    setSelectValue('profile-black-e4-opening-input', p.favorite_black_e4_opening);
-    setSelectValue('profile-black-d4-opening-input', p.favorite_black_d4_opening);
+    setOpeningPickerValue('profile-white-opening-input', p.favorite_white_opening);
+    setOpeningPickerValue('profile-black-e4-opening-input', p.favorite_black_e4_opening);
+    setOpeningPickerValue('profile-black-d4-opening-input', p.favorite_black_d4_opening);
   });
   $('profile-email').textContent = state.session.user.email || '';
   $('profile-user-id').textContent = state.session.user.id;

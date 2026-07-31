@@ -646,15 +646,45 @@
             <div class="profile-repertoire-editor">
               <div class="panel-heading"><div><span>FAVORITE REPERTOIRE</span><h3>Show how you like to play</h3></div></div>
               <p class="profile-repertoire-help">Choose one opening for White and your favorite replies to 1.e4 and 1.d4. You can leave any selection blank.</p>
-              <label>Favorite opening as White
-                <select id="profile-white-opening-input"><option value="">Not selected</option></select>
-              </label>
-              <label>Favorite response to 1.e4
-                <select id="profile-black-e4-opening-input"><option value="">Not selected</option></select>
-              </label>
-              <label>Favorite response to 1.d4
-                <select id="profile-black-d4-opening-input"><option value="">Not selected</option></select>
-              </label>
+              <div class="repertoire-picker-field">
+                <span class="repertoire-picker-label">Favorite opening as White</span>
+                <div class="opening-picker" data-opening-picker="profile-white-opening-input">
+                  <input id="profile-white-opening-input" type="hidden" value="">
+                  <button class="opening-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="opening-picker-value">Not selected</span><span aria-hidden="true">⌄</span>
+                  </button>
+                  <div class="opening-picker-menu" hidden>
+                    <input class="opening-picker-search" type="search" placeholder="Search White openings..." autocomplete="off" aria-label="Search White openings">
+                    <div class="opening-picker-results" role="listbox"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="repertoire-picker-field">
+                <span class="repertoire-picker-label">Favorite response to 1.e4</span>
+                <div class="opening-picker" data-opening-picker="profile-black-e4-opening-input">
+                  <input id="profile-black-e4-opening-input" type="hidden" value="">
+                  <button class="opening-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="opening-picker-value">Not selected</span><span aria-hidden="true">⌄</span>
+                  </button>
+                  <div class="opening-picker-menu" hidden>
+                    <input class="opening-picker-search" type="search" placeholder="Search replies to 1.e4..." autocomplete="off" aria-label="Search replies to 1.e4">
+                    <div class="opening-picker-results" role="listbox"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="repertoire-picker-field">
+                <span class="repertoire-picker-label">Favorite response to 1.d4</span>
+                <div class="opening-picker" data-opening-picker="profile-black-d4-opening-input">
+                  <input id="profile-black-d4-opening-input" type="hidden" value="">
+                  <button class="opening-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="opening-picker-value">Not selected</span><span aria-hidden="true">⌄</span>
+                  </button>
+                  <div class="opening-picker-menu" hidden>
+                    <input class="opening-picker-search" type="search" placeholder="Search replies to 1.d4..." autocomplete="off" aria-label="Search replies to 1.d4">
+                    <div class="opening-picker-results" role="listbox"></div>
+                  </div>
+                </div>
+              </div>
             </div>
             <button id="profile-save-button" class="button primary">Save profile</button>
           </section>
