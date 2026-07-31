@@ -635,3 +635,12 @@ Features:
 - Added deterministic board facts to BOZO Coach requests.
 - Added client-side filtering for unsupported tactical claims.
 - Run `SUPABASE_ANNOUNCEMENT_MANAGEMENT_SETUP.sql` before using the new announcement manager.
+
+
+## v2.7.4 — Collapsible music player
+- Added minimize and restore controls to YouTube and Spotify players.
+- Remembers the player state on the device.
+- Reserves page space while expanded so footer content remains reachable.
+- Defaults to a compact player on small screens.
+- Temporarily collapses while BOZO modal dialogs are open.
+- No Supabase migration required.

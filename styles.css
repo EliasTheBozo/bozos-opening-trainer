@@ -2895,3 +2895,95 @@ html[data-music-provider="spotify"] #spotify-mini-player {
 .profile-reports-panel{grid-column:1/-1}.profile-reports-help{color:var(--muted);margin-top:-8px}.profile-reports-list{display:grid;gap:9px}.profile-report-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:14px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025)}.profile-report-row b{text-transform:capitalize}.profile-report-row p{margin:5px 0;color:#d9c9df;line-height:1.45}.profile-report-row small{color:var(--muted)}.report-status{white-space:nowrap;padding:5px 8px;border-radius:999px;font-size:8px;font-weight:900;text-transform:uppercase;background:rgba(255,255,255,.07)}.report-status-fixed,.report-status-resolved{color:var(--mint);background:rgba(121,255,226,.1)}.report-status-needs_info{color:#ffd176;background:rgba(255,209,118,.1)}.report-status-closed,.report-status-dismissed,.report-status-duplicate{color:#ff91a5;background:rgba(255,145,165,.1)}
 .report-context-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}.report-context-grid span{display:flex;flex-direction:column;gap:3px;padding:9px;border:1px solid var(--border);border-radius:9px;color:#d9c9df;font-size:10px;overflow-wrap:anywhere}.report-context-grid b{font-size:8px;color:var(--mint);text-transform:uppercase}.report-pgn summary{cursor:pointer;color:#ffe4a5;font-weight:800;margin:8px 0}.report-screenshot-link{display:grid;gap:6px;width:min(360px,100%);margin-top:10px;color:#fff;text-decoration:none}.report-screenshot-link img{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}.report-screenshot-link span{font-size:9px;color:var(--mint);font-weight:800}
 @media(max-width:650px){.profile-report-row{display:block}.report-status{display:inline-block;margin-top:9px}.report-context-grid{grid-template-columns:1fr}}
+
+
+/* WEB v2.7.4 — COLLAPSIBLE MUSIC PLAYER */
+.music-player-collapse {
+  position:absolute;
+  top:-12px;
+  right:14px;
+  z-index:3;
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  padding:0;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:999px;
+  color:#fff;
+  background:rgba(18,9,22,.98);
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+  font-size:18px;
+  font-weight:900;
+  line-height:1;
+  cursor:pointer;
+}
+.music-player-collapse:hover,
+.music-player-collapse:focus-visible {
+  border-color:rgba(255,157,54,.72);
+  background:#2b1235;
+  outline:none;
+}
+
+html[data-music-active="true"][data-music-collapsed="false"] body {
+  padding-bottom:96px;
+}
+
+.spotify-mini-player.is-collapsed {
+  grid-template-columns:minmax(110px,190px) auto !important;
+  width:min(330px,calc(100vw - 24px)) !important;
+  padding:8px 10px !important;
+  gap:8px !important;
+  border-radius:999px !important;
+}
+.spotify-mini-player.is-collapsed .spotify-track-summary {
+  grid-template-columns:34px minmax(0,1fr);
+  gap:7px;
+}
+.spotify-mini-player.is-collapsed .spotify-track-summary img,
+.spotify-mini-player.is-collapsed .youtube-mini-art {
+  width:34px;
+  height:34px;
+  border-radius:999px;
+}
+.spotify-mini-player.is-collapsed .spotify-track-summary b {
+  font-size:10px;
+}
+.spotify-mini-player.is-collapsed .spotify-track-summary span {
+  font-size:8px;
+}
+.spotify-mini-player.is-collapsed .spotify-mini-controls button {
+  width:31px;
+  height:31px;
+}
+.spotify-mini-player.is-collapsed .spotify-progress-wrap,
+.spotify-mini-player.is-collapsed .spotify-volume-control {
+  display:none !important;
+}
+.spotify-mini-player.is-collapsed .music-player-collapse {
+  top:-9px;
+  right:10px;
+  width:25px;
+  height:25px;
+  font-size:15px;
+}
+
+/* Keep the player behind dialogs and avoid covering their actions. */
+.modal-backdrop { z-index:90; }
+.spotify-mini-player { z-index:65; }
+
+@media(max-width:700px) {
+  html[data-music-active="true"][data-music-collapsed="false"] body {
+    padding-bottom:82px;
+  }
+  .spotify-mini-player {
+    right:8px;
+    bottom:8px;
+    width:calc(100vw - 16px);
+  }
+  .spotify-mini-player.is-collapsed {
+    right:8px;
+    bottom:8px;
+    width:min(300px,calc(100vw - 16px)) !important;
+  }
+}
