@@ -606,9 +606,19 @@ Features:
 - Picker menus now expand in the document flow instead of covering the next field.
 - No Supabase migration is required beyond the existing repertoire-profile setup.
 
-## v2.7.1 — Friend profile date fix
+## v2.7.2 — Friend profile date fix
 
 - Friend profiles now fall back to the profile record's `created_at` value when the activity-summary RPC does not provide `member_since`.
 - Invalid or missing dates safely display as `—`.
 - Corrected the connected-experience SQL so accepted suggestions use BOZO's existing `approved` status.
 - No new Supabase migration is required if the corrected function has already been applied.
+
+
+## v2.7.2
+
+- Added owner announcement management: edit, pin/unpin, show/hide, and delete.
+- Added dismissible homepage bulletins and improved spacing below the mascot.
+- Added character limits and publishing feedback.
+- Added deterministic board facts to BOZO Coach requests.
+- Added client-side filtering for unsupported tactical claims.
+- Run `SUPABASE_ANNOUNCEMENT_MANAGEMENT_SETUP.sql` before using the new announcement manager.

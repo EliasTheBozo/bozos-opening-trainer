@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=2.7.2">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 </head>
@@ -102,11 +102,12 @@
 
       <div id="announcement-card" class="announcement-card" hidden>
         <div class="announcement-icon">📣</div>
-        <div>
+        <div class="announcement-copy">
           <span>BOZO BULLETIN</span>
           <h3 id="announcement-title"></h3>
           <p id="announcement-body"></p>
         </div>
+        <button id="announcement-dismiss" class="announcement-dismiss" type="button" aria-label="Dismiss announcement">×</button>
       </div>
 
       <section class="feature-section">
@@ -1373,7 +1374,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app.js?v=2.6.3"></script>
+  <script src="./app.js?v=2.7.2"></script>
   <script src="./bozo-music-controller.js?v=2.3.3"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>

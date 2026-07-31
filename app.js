@@ -703,16 +703,28 @@ $('sign-out-button').addEventListener('click', async () => {
 async function loadAnnouncement() {
   if (!state.session) return $('announcement-card').hidden = true;
   const { data, error } = await sb.from('announcements')
-    .select('title,body').eq('is_active', true)
+    .select('id,title,body,created_at').eq('is_active', true)
     .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(1).maybeSingle();
 
   if (error || !data) return $('announcement-card').hidden = true;
+  const dismissalKey = `bozo-dismissed-announcement:${data.id || data.created_at || data.title}`;
+  if (localStorage.getItem(dismissalKey) === '1') {
+    $('announcement-card').hidden = true;
+    return;
+  }
   $('announcement-title').textContent = data.title;
   $('announcement-body').textContent = data.body;
+  $('announcement-card').dataset.dismissalKey = dismissalKey;
   $('announcement-card').hidden = false;
 }
+
+$('announcement-dismiss')?.addEventListener('click', () => {
+  const card = $('announcement-card');
+  if (card?.dataset.dismissalKey) localStorage.setItem(card.dataset.dismissalKey, '1');
+  if (card) card.hidden = true;
+});
 
 $('opening-search-button').addEventListener('click', () => searchOpenings($('opening-search-input').value));
 $('opening-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') searchOpenings(e.target.value); });
@@ -1198,12 +1210,22 @@ async function loadOwnerPanel(panel) {
   if (panel === 'announcements') {
     target.innerHTML = `<div class="panel-heading"><div><span>BULLETIN</span><h2>Publish an announcement</h2></div></div>
       <div class="announcement-form">
-        <input id="owner-announcement-title" maxlength="80" placeholder="Title">
-        <textarea id="owner-announcement-body" maxlength="600" placeholder="Message"></textarea>
+        <input id="owner-announcement-title" maxlength="60" placeholder="Title">
+        <div class="announcement-character-count"><span id="owner-announcement-title-count">0</span>/60</div>
+        <textarea id="owner-announcement-body" maxlength="500" placeholder="Message"></textarea>
+        <div class="announcement-character-count"><span id="owner-announcement-body-count">0</span>/500</div>
         <label><input id="owner-announcement-pin" type="checkbox" checked> Pin announcement</label>
         <button id="owner-publish-announcement" class="button primary">Publish</button>
-      </div>`;
+      </div>
+      <section class="announcement-manager">
+        <div class="announcement-manager-head"><div><span class="eyebrow">MANAGE</span><h2>Existing announcements</h2></div><button id="owner-refresh-announcements" class="button secondary">Refresh</button></div>
+        <div id="owner-announcement-list" class="announcement-manager-list"><div class="empty-state"><div>⌛</div><b>Loading announcements…</b></div></div>
+      </section>`;
     $('owner-publish-announcement').addEventListener('click', publishAnnouncement);
+    $('owner-refresh-announcements').addEventListener('click', loadOwnerAnnouncements);
+    $('owner-announcement-title').addEventListener('input', e => $('owner-announcement-title-count').textContent = e.target.value.length);
+    $('owner-announcement-body').addEventListener('input', e => $('owner-announcement-body-count').textContent = e.target.value.length);
+    await loadOwnerAnnouncements();
     return;
   }
 
@@ -1284,6 +1306,77 @@ async function ownerSearchUsers() {
   `).join('') || 'No users found.';
 }
 
+async function loadOwnerAnnouncements() {
+  const list = $('owner-announcement-list');
+  if (!list) return;
+  list.innerHTML = '<div class="empty-state"><div>⌛</div><b>Loading announcements…</b></div>';
+  const { data, error } = await sb.rpc('owner_list_announcements');
+  if (error) {
+    list.innerHTML = `<div class="empty-state"><div>⚠</div><b>Could not load announcements</b><span>${escapeHtml(readableError(error))}</span></div>`;
+    return;
+  }
+  list.innerHTML = (data || []).map(item => `
+    <article class="announcement-manager-row" data-announcement-id="${escapeHtml(String(item.id))}">
+      <div>
+        <h3>${escapeHtml(item.title || 'Untitled')}</h3>
+        <p>${escapeHtml(item.body || '')}</p>
+        <div class="announcement-manager-meta">
+          <span>${item.is_pinned ? '📌 Pinned' : 'Not pinned'}</span>
+          <span>${item.is_active ? 'Live' : 'Hidden'}</span>
+          <span>${item.created_at ? new Date(item.created_at).toLocaleString() : ''}</span>
+        </div>
+      </div>
+      <div class="announcement-manager-actions">
+        <button class="button secondary" data-announcement-action="edit">Edit</button>
+        <button class="button secondary" data-announcement-action="pin">${item.is_pinned ? 'Unpin' : 'Pin'}</button>
+        <button class="button secondary" data-announcement-action="active">${item.is_active ? 'Hide' : 'Show'}</button>
+        <button class="button secondary" data-announcement-action="delete">Delete</button>
+      </div>
+    </article>`).join('') || '<div class="empty-state"><div>📣</div><b>No announcements yet</b></div>';
+
+  list.querySelectorAll('[data-announcement-action]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const row = button.closest('[data-announcement-id]');
+      const item = (data || []).find(entry => String(entry.id) === row?.dataset.announcementId);
+      if (!item) return;
+      const action = button.dataset.announcementAction;
+      if (action === 'edit') {
+        const title = prompt('Announcement title', item.title || '');
+        if (title === null) return;
+        const body = prompt('Announcement message', item.body || '');
+        if (body === null) return;
+        if (!title.trim() || !body.trim()) return toast('Title and message are required.');
+        const { error } = await sb.rpc('owner_update_announcement', {
+          announcement_id: item.id,
+          announcement_title: title.trim().slice(0, 60),
+          announcement_body: body.trim().slice(0, 500),
+          pin_announcement: item.is_pinned,
+          activate_announcement: item.is_active
+        });
+        if (error) return toast(readableError(error));
+        toast('Announcement updated.');
+      } else if (action === 'delete') {
+        if (!confirm(`Delete “${item.title}”?`)) return;
+        const { error } = await sb.rpc('owner_delete_announcement', { announcement_id: item.id });
+        if (error) return toast(readableError(error));
+        toast('Announcement deleted.');
+      } else {
+        const { error } = await sb.rpc('owner_update_announcement', {
+          announcement_id: item.id,
+          announcement_title: item.title,
+          announcement_body: item.body,
+          pin_announcement: action === 'pin' ? !item.is_pinned : item.is_pinned,
+          activate_announcement: action === 'active' ? !item.is_active : item.is_active
+        });
+        if (error) return toast(readableError(error));
+        toast(action === 'pin' ? (item.is_pinned ? 'Announcement unpinned.' : 'Announcement pinned.') : (item.is_active ? 'Announcement hidden.' : 'Announcement shown.'));
+      }
+      await loadOwnerAnnouncements();
+      await loadAnnouncement();
+    });
+  });
+}
+
 async function publishAnnouncement() {
   const title = $('owner-announcement-title').value.trim();
   const body = $('owner-announcement-body').value.trim();
@@ -1294,9 +1387,13 @@ async function publishAnnouncement() {
     pin_announcement:$('owner-announcement-pin').checked
   });
   if (error) return toast(readableError(error));
-  toast('Announcement published');
+  toast('Announcement published.');
+  $('owner-announcement-title').value = '';
+  $('owner-announcement-body').value = '';
+  $('owner-announcement-title-count').textContent = '0';
+  $('owner-announcement-body-count').textContent = '0';
+  await loadOwnerAnnouncements();
   await loadAnnouncement();
-  route('home');
 }
 
 
@@ -1856,6 +1953,129 @@ function paintStudy() {
 
 let lastCoachExplanation = null;
 
+const COACH_PIECE_NAMES = { p:'pawn', n:'knight', b:'bishop', r:'rook', q:'queen', k:'king' };
+
+function parseFenBoard(fen) {
+  const board = {};
+  const ranks = String(fen || '').split(' ')[0].split('/');
+  ranks.forEach((rank, rankIndex) => {
+    let file = 0;
+    for (const token of rank) {
+      if (/\d/.test(token)) { file += Number(token); continue; }
+      const square = `${'abcdefgh'[file]}${8-rankIndex}`;
+      board[square] = { type: token.toLowerCase(), color: token === token.toUpperCase() ? 'w' : 'b' };
+      file += 1;
+    }
+  });
+  return board;
+}
+
+function squareCoords(square) { return ['abcdefgh'.indexOf(square[0]), Number(square[1]) - 1]; }
+function coordsSquare(file, rank) { return file >= 0 && file < 8 && rank >= 0 && rank < 8 ? `${'abcdefgh'[file]}${rank+1}` : null; }
+
+function attackedSquaresForPiece(square, piece, board) {
+  const [file, rank] = squareCoords(square);
+  const out = [];
+  const add = (f,r) => { const sq = coordsSquare(f,r); if (sq) out.push(sq); };
+  if (piece.type === 'p') {
+    const direction = piece.color === 'w' ? 1 : -1;
+    add(file-1, rank+direction); add(file+1, rank+direction);
+  } else if (piece.type === 'n') {
+    [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]].forEach(([df,dr]) => add(file+df,rank+dr));
+  } else if (piece.type === 'k') {
+    for (let df=-1; df<=1; df++) for (let dr=-1; dr<=1; dr++) if (df || dr) add(file+df,rank+dr);
+  } else {
+    const directions = piece.type === 'b' ? [[1,1],[1,-1],[-1,1],[-1,-1]]
+      : piece.type === 'r' ? [[1,0],[-1,0],[0,1],[0,-1]]
+      : [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+    directions.forEach(([df,dr]) => {
+      let f=file+df, r=rank+dr;
+      while (coordsSquare(f,r)) {
+        const sq=coordsSquare(f,r); out.push(sq);
+        if (board[sq]) break;
+        f+=df; r+=dr;
+      }
+    });
+  }
+  return out;
+}
+
+function verifiedCoachFacts(fen, previousFen, playedMove) {
+  try {
+  const board = parseFenBoard(fen);
+  const attacked = { w: [], b: [] };
+  Object.entries(board).forEach(([from, piece]) => {
+    attackedSquaresForPiece(from, piece, board).forEach(to => {
+      const target = board[to];
+      if (target && target.color !== piece.color) {
+        attacked[target.color].push({
+          attacker: `${piece.color === 'w' ? 'White' : 'Black'} ${COACH_PIECE_NAMES[piece.type]} on ${from}`,
+          target: `${target.color === 'w' ? 'White' : 'Black'} ${COACH_PIECE_NAMES[target.type]} on ${to}`
+        });
+      }
+    });
+  });
+  const game = new Chess(fen);
+  const legalMoves = game.moves({ verbose:true });
+  const captures = legalMoves.filter(move => move.flags?.includes('c') || move.flags?.includes('e')).map(move => `${move.san} captures on ${move.to}`);
+  const sideToMove = String(fen || '').split(' ')[1] === 'b' ? 'Black' : 'White';
+  return {
+    playedMove: playedMove || '',
+    sideToMove,
+    inCheck: typeof game.in_check === 'function' ? game.in_check() : false,
+    legalCaptureCount: captures.length,
+    legalCaptures: captures.slice(0, 20),
+    attackedWhitePieces: attacked.w.map(item => item.target),
+    attackedBlackPieces: attacked.b.map(item => item.target),
+    attackRelations: [...attacked.w, ...attacked.b].slice(0, 40),
+    groundingRules: [
+      'Only state that a piece is attacked, pinned, trapped, forked, hanging, or won when the verified facts explicitly support it.',
+      'Do not infer an immediate attack from a generic opening idea.',
+      'When tactical verification is absent, explain development, central control, king safety, pawn structure, or long-term plans instead.',
+      'Use cautious language for plans and future possibilities.'
+    ],
+    previousFen: previousFen || ''
+  };
+  } catch (error) {
+    console.warn('Could not calculate verified coach facts:', error);
+    return { playedMove: playedMove || '', sideToMove: '', inCheck:false, legalCaptureCount:0, legalCaptures:[], attackedWhitePieces:[], attackedBlackPieces:[], attackRelations:[], groundingRules:['Do not make tactical claims unless directly verified from the board.'], previousFen: previousFen || '' };
+  }
+}
+
+function textClaimsUnsupportedAttack(text, facts) {
+  if (!text || !/attack(?:s|ed|ing)?|threaten(?:s|ed|ing)?|fork(?:s|ed|ing)?|pin(?:s|ned|ning)?|hang(?:s|ing)?/i.test(text)) return false;
+  const whiteTargets = (facts.attackedWhitePieces || []).join(' ').toLowerCase();
+  const blackTargets = (facts.attackedBlackPieces || []).join(' ').toLowerCase();
+  const checks = [
+    [/white(?:'s)?\s+bishop|white bishop/i, whiteTargets.includes('white bishop')],
+    [/black(?:'s)?\s+bishop|black bishop/i, blackTargets.includes('black bishop')],
+    [/white(?:'s)?\s+knight|white knight/i, whiteTargets.includes('white knight')],
+    [/black(?:'s)?\s+knight|black knight/i, blackTargets.includes('black knight')],
+    [/white(?:'s)?\s+queen|white queen/i, whiteTargets.includes('white queen')],
+    [/black(?:'s)?\s+queen|black queen/i, blackTargets.includes('black queen')],
+    [/white(?:'s)?\s+rook|white rook/i, whiteTargets.includes('white rook')],
+    [/black(?:'s)?\s+rook|black rook/i, blackTargets.includes('black rook')]
+  ];
+  return checks.some(([pattern, supported]) => pattern.test(text) && !supported);
+}
+
+function sanitizeCoachExplanation(explanation, facts) {
+  if (!explanation || typeof explanation !== 'object') return explanation;
+  const cleanText = value => {
+    if (typeof value !== 'string') return value;
+    const sentences = value.split(/(?<=[.!?])\s+/).filter(sentence => !textClaimsUnsupportedAttack(sentence, facts));
+    return sentences.join(' ').trim() || 'This move should be understood through its verified positional effects rather than an unconfirmed tactical claim.';
+  };
+  const output = Array.isArray(explanation) ? explanation.map(item => typeof item === 'string' ? cleanText(item) : sanitizeCoachExplanation(item, facts)) : {};
+  if (!Array.isArray(explanation)) Object.entries(explanation).forEach(([key,value]) => {
+    output[key] = typeof value === 'string' ? cleanText(value)
+      : Array.isArray(value) ? value.map(item => typeof item === 'string' ? cleanText(item) : sanitizeCoachExplanation(item, facts))
+      : value && typeof value === 'object' ? sanitizeCoachExplanation(value, facts) : value;
+  });
+  output.groundingVerified = true;
+  return output;
+}
+
 function updateCoachMoveLabel() {
   const label = $('coach-move-label');
   if (!label) return;
@@ -1903,6 +2123,7 @@ async function askCurrentStudyMove() {
 
   const question = $('coach-question').value.trim();
   const playedMove = studyMoves[studyPly - 1];
+  const coachFacts = verifiedCoachFacts(studyGame.fen(), replayBefore.fen(), playedMove);
 
   button.disabled = true;
   button.textContent = 'BOZO Coach is thinking…';
@@ -1921,7 +2142,9 @@ async function askCurrentStudyMove() {
         question: question || 'Why is this move played?',
         mode: 'study',
         gameStatus: 'study',
-        moveHistory: studyMoves.slice(0, studyPly)
+        moveHistory: studyMoves.slice(0, studyPly),
+        verifiedBoardFacts: coachFacts,
+        strictGrounding: true
       }
     });
 
@@ -1937,8 +2160,9 @@ async function askCurrentStudyMove() {
     if (data?.error) throw new Error(data.error);
     if (!data?.explanation) throw new Error('BOZO Coach returned no explanation.');
 
-    lastCoachExplanation = data.explanation;
-    renderCoachExplanation(data.explanation);
+    const groundedExplanation = sanitizeCoachExplanation(data.explanation, coachFacts);
+    lastCoachExplanation = groundedExplanation;
+    renderCoachExplanation(groundedExplanation);
   } catch (error) {
     answer.innerHTML = `<div class="coach-error">${escapeHtml(
       error?.message || 'BOZO Coach could not respond.'
@@ -1979,6 +2203,7 @@ function renderCoachExplanation(explanation) {
         ${escapeHtml(explanation.suggestedQuestion)}
       </button>
     ` : ''}
+    <div class="coach-grounding-note">Tactical claims are checked against the current board. Unsupported claims are omitted.</div>
   `;
 
   const followUp = $('coach-answer').querySelector('[data-coach-question]');
@@ -3117,6 +3342,7 @@ async function askReviewCoach() {
       reviewData.rows.length,
       row.fen
     );
+    const reviewCoachFacts = verifiedCoachFacts(row.fen, row.previousFen, row.san);
 
     const { data, error } = await sb.functions.invoke('explain-move', {
       body: {
@@ -3159,7 +3385,9 @@ async function askReviewCoach() {
         openingAccuracy: reviewAccuracyFor(
           reviewData.rows.filter(item => item.ply <= 16)
         ),
-        overallAccuracy: reviewAccuracyFor(reviewData.rows)
+        overallAccuracy: reviewAccuracyFor(reviewData.rows),
+        verifiedBoardFacts: reviewCoachFacts,
+        strictGrounding: true
       }
     });
 
@@ -3175,8 +3403,9 @@ async function askReviewCoach() {
     if (data?.error) throw new Error(data.error);
     if (!data?.explanation) throw new Error('BOZO Coach returned no explanation.');
 
-    reviewCoachExplanation = data.explanation;
-    renderReviewCoachExplanation(data.explanation);
+    const groundedExplanation = sanitizeCoachExplanation(data.explanation, reviewCoachFacts);
+    reviewCoachExplanation = groundedExplanation;
+    renderReviewCoachExplanation(groundedExplanation);
   } catch (error) {
     answer.innerHTML = `<div class="coach-error">${escapeHtml(
       error?.message || 'BOZO Coach could not respond.'
@@ -3268,6 +3497,7 @@ function renderReviewCoachExplanation(explanation) {
         ${escapeHtml(explanation.suggestedQuestion)}
       </button>
     ` : ''}
+    <div class="coach-grounding-note">Tactical claims are checked against the current board. Unsupported claims are omitted.</div>
   `;
 
   const followUp = $('review-coach-answer').querySelector('[data-review-follow-up]');
@@ -5818,6 +6048,7 @@ async function askStudyCoach() {
     cursor = next;
   }
 
+  const studyCoachFacts = verifiedCoachFacts(node.fen_after, node.fen_before, node.san || '');
   const button = $('ask-study-coach');
   button.disabled = true;
   button.textContent = 'Thinking…';
@@ -5840,12 +6071,14 @@ async function askStudyCoach() {
         actualContinuation: continuation,
         siblingVariations: siblings.map(item => item.san),
         existingNote: node.comment || '',
-        classification: 'Study move'
+        classification: 'Study move',
+        verifiedBoardFacts: studyCoachFacts,
+        strictGrounding: true
       }
     });
     if (error) throw error;
 
-    const explanation = data?.explanation || data;
+    const explanation = sanitizeCoachExplanation(data?.explanation || data, studyCoachFacts);
     latestStudyCoachText = [
       explanation?.summary,
       explanation?.howWeGotHere,
