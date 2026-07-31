@@ -586,3 +586,10 @@ Features:
 - Replaced long native repertoire selects with searchable custom opening pickers.
 - Prevented dropdown clipping and improved mobile selection.
 - No Supabase changes required beyond the existing v2.6.4 migration.
+
+## v2.6.6
+- Fixed repertoire pickers sometimes opening before published openings were available.
+- Reuses the public Opening Library query shape and loads large libraries in pages.
+- Added explicit loading, retry, and error states.
+- Picker menus now expand in the document flow instead of covering the next field.
+- No Supabase migration is required beyond the existing repertoire-profile setup.

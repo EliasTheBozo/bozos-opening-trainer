@@ -224,6 +224,8 @@ const PROFILE_AVATAR_BUCKET = 'avatars';
 const PROFILE_AVATAR_FALLBACK = './assets/bozo-mascot.webp';
 let repertoireOpeningNames = [];
 let repertoireOptionsLoaded = false;
+let repertoireOptionsPromise = null;
+let repertoireOptionsError = '';
 
 function openingPickerForInput(inputId) {
   return document.querySelector(`.opening-picker[data-opening-picker="${inputId}"]`);
@@ -257,20 +259,32 @@ function closeAllOpeningPickers(except = null) {
 function renderOpeningPickerResults(picker, query = '') {
   const results = picker?.querySelector('.opening-picker-results');
   if (!results) return;
+
+  if (!repertoireOptionsLoaded && !repertoireOptionsError) {
+    results.innerHTML = '<div class="opening-picker-empty">Loading published openings…</div>';
+    return;
+  }
+
+  if (repertoireOptionsError && !repertoireOpeningNames.length) {
+    results.innerHTML = `<div class="opening-picker-empty">Could not load openings.<br><button type="button" class="opening-picker-retry">Try again</button></div>`;
+    return;
+  }
+
   const normalizedQuery = query.trim().toLowerCase();
   const matches = repertoireOpeningNames
     .filter(name => !normalizedQuery || name.toLowerCase().includes(normalizedQuery))
     .slice(0, 150);
+
+  if (!matches.length && normalizedQuery) {
+    results.innerHTML = '<div class="opening-picker-empty">No matching openings found.</div>';
+    return;
+  }
 
   const choices = [''].concat(matches);
   results.innerHTML = choices.map(name => {
     const label = name || 'Not selected';
     return `<button type="button" class="opening-picker-option" role="option" data-opening-value="${escapeHtml(name)}">${escapeHtml(label)}</button>`;
   }).join('');
-
-  if (!matches.length && normalizedQuery) {
-    results.innerHTML = '<div class="opening-picker-empty">No matching openings found.</div>';
-  }
 }
 
 function initializeOpeningPickers() {
@@ -283,7 +297,7 @@ function initializeOpeningPickers() {
     const search = picker.querySelector('.opening-picker-search');
     const results = picker.querySelector('.opening-picker-results');
 
-    trigger?.addEventListener('click', () => {
+    trigger?.addEventListener('click', async () => {
       const willOpen = menu.hidden;
       closeAllOpeningPickers(picker);
       menu.hidden = !willOpen;
@@ -293,6 +307,10 @@ function initializeOpeningPickers() {
         search.value = '';
         renderOpeningPickerResults(picker);
         requestAnimationFrame(() => search.focus());
+        if (!repertoireOptionsLoaded) {
+          await loadRepertoireOpeningOptions();
+          if (picker.classList.contains('open')) renderOpeningPickerResults(picker, search.value);
+        }
       }
     });
 
@@ -304,7 +322,16 @@ function initializeOpeningPickers() {
       }
     });
 
-    results?.addEventListener('click', event => {
+    results?.addEventListener('click', async event => {
+      const retry = event.target.closest('.opening-picker-retry');
+      if (retry) {
+        repertoireOptionsLoaded = false;
+        repertoireOptionsError = '';
+        renderOpeningPickerResults(picker, search.value);
+        await loadRepertoireOpeningOptions(true);
+        renderOpeningPickerResults(picker, search.value);
+        return;
+      }
       const option = event.target.closest('.opening-picker-option');
       if (!option) return;
       setOpeningPickerValue(inputId, option.dataset.openingValue || '');
@@ -318,33 +345,58 @@ document.addEventListener('click', event => {
   if (!event.target.closest('.opening-picker')) closeAllOpeningPickers();
 });
 
-async function loadRepertoireOpeningOptions() {
+async function loadRepertoireOpeningOptions(force = false) {
   initializeOpeningPickers();
-  if (repertoireOptionsLoaded) return;
+  if (repertoireOptionsLoaded && !force) return repertoireOpeningNames;
+  if (repertoireOptionsPromise && !force) return repertoireOptionsPromise;
+
   const pickers = [...document.querySelectorAll('.opening-picker')];
-  pickers.forEach(picker => picker.classList.add('loading'));
-
-  const { data, error } = await sb.from('openings')
-    .select('name')
-    .eq('status', 'published')
-    .order('name')
-    .limit(10000);
-
-  if (error) {
-    console.warn('Could not load repertoire opening choices:', error);
-    pickers.forEach(picker => picker.classList.remove('loading'));
-    return;
-  }
-
-  repertoireOpeningNames = [...new Set((data || []).map(row => familyBaseName(row.name || '')).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b));
-
   pickers.forEach(picker => {
-    picker.classList.remove('loading');
+    picker.classList.add('loading');
     renderOpeningPickerResults(picker);
   });
-  repertoireOptionsLoaded = true;
+  repertoireOptionsError = '';
+
+  repertoireOptionsPromise = (async () => {
+    // Use the same published-opening shape as the public Opening Library.
+    // Fetch in pages so projects with more than Supabase's row cap still work.
+    const rows = [];
+    const pageSize = 1000;
+    for (let from = 0; from < 10000; from += pageSize) {
+      const { data, error } = await sb.from('openings')
+        .select('id,name,status')
+        .eq('status', 'published')
+        .order('name', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+
+    repertoireOpeningNames = [...new Set(rows
+      .map(row => familyBaseName(String(row.name || '').trim()))
+      .filter(name => name && name !== 'Unnamed Opening'))]
+      .sort((a, b) => a.localeCompare(b));
+
+    repertoireOptionsLoaded = true;
+    return repertoireOpeningNames;
+  })().catch(error => {
+    repertoireOptionsError = readableError(error);
+    repertoireOptionsLoaded = false;
+    console.warn('Could not load repertoire opening choices:', error);
+    return [];
+  }).finally(() => {
+    repertoireOptionsPromise = null;
+    pickers.forEach(picker => {
+      picker.classList.remove('loading');
+      renderOpeningPickerResults(picker, picker.querySelector('.opening-picker-search')?.value || '');
+    });
+  });
+
+  return repertoireOptionsPromise;
 }
+
 let pendingAvatarBlob = null;
 let pendingAvatarObjectUrl = null;
 
