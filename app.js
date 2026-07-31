@@ -672,7 +672,28 @@ function renderProfile() {
   });
   $('profile-email').textContent = state.session.user.email || '';
   $('profile-user-id').textContent = state.session.user.id;
+  loadMyReports();
 }
+
+async function loadMyReports() {
+  const list = $('profile-reports-list');
+  if (!list || !state.session?.user) return;
+  list.innerHTML = '<div class="empty-state"><div>⌛</div><b>Loading reports…</b></div>';
+  const { data, error } = await sb.from('reports')
+    .select('id,report_type,severity,reason,status,created_at,updated_at')
+    .eq('reporter_id', state.session.user.id)
+    .order('created_at', { ascending:false })
+    .limit(25);
+  if (error) {
+    list.innerHTML = `<div class="empty-state"><div>⚠</div><b>Could not load reports</b><span>${escapeHtml(readableError(error))}</span></div>`;
+    return;
+  }
+  list.innerHTML = (data || []).map(report => `<article class="profile-report-row">
+    <div><b>${escapeHtml((report.report_type || 'issue').replaceAll('_',' '))}</b><p>${escapeHtml(report.reason || '')}</p><small>${new Date(report.created_at).toLocaleString()}</small></div>
+    <span class="report-status report-status-${escapeHtml(report.status || 'open')}">${escapeHtml(reportStatusLabel(report.status))}</span>
+  </article>`).join('') || '<div class="empty-state"><div>✓</div><b>No reports submitted</b><span>Issues you report will appear here.</span></div>';
+}
+$('profile-reports-refresh')?.addEventListener('click', loadMyReports);
 
 $('profile-save-button').addEventListener('click', async () => {
   const username = $('profile-username-input').value.trim().replace(/^@/, '').replace(/[^A-Za-z0-9_]/g, '');
@@ -1012,14 +1033,66 @@ const SUGGESTION_TYPES = [
   ['other','Other improvement']
 ];
 const REPORT_TYPES = [
-  ['bug','Website bug'],
+  ['ai_coach','AI Coach response'],
+  ['game_review','Game Review'],
+  ['opening_content','Opening information'],
+  ['ui_design','UI or design'],
+  ['performance','Performance or loading'],
+  ['account','Account or cloud sync'],
   ['broken_page','Broken page or feature'],
-  ['incorrect_content','Incorrect chess content'],
-  ['spam','Spam or abuse'],
-  ['copyright','Copyright concern'],
   ['accessibility','Accessibility problem'],
+  ['copyright','Copyright concern'],
+  ['spam','Spam or abuse'],
+  ['suggestion','Feature suggestion'],
   ['other','Other issue']
 ];
+
+const REPORT_SCREENSHOT_BUCKET = 'issue-screenshots';
+
+function currentReportContext() {
+  const context = {
+    page_url: location.href,
+    route: location.hash || '#home',
+    user_agent: navigator.userAgent,
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    reported_at: new Date().toISOString()
+  };
+  try {
+    if (typeof reviewData !== 'undefined' && reviewData?.rows?.length) {
+      const row = reviewData.rows[Math.max(0, Math.min(reviewStepIndex || 0, reviewData.rows.length - 1))];
+      context.fen = row?.fen || '';
+      context.move_number = row?.ply ? Math.ceil(row.ply / 2) : null;
+      context.pgn = document.getElementById('review-pgn-input')?.value?.trim() || '';
+      context.board_orientation = 'white';
+    } else if (typeof studyGame !== 'undefined' && studyGame?.fen) {
+      context.fen = studyGame.fen();
+      context.pgn = studyGame.pgn?.() || '';
+      context.move_number = Math.ceil((studyGame.history?.().length || 0) / 2);
+      context.board_orientation = typeof studyOrientation !== 'undefined' ? studyOrientation : 'white';
+    }
+  } catch (error) {
+    console.warn('Could not collect board context:', error);
+  }
+  return context;
+}
+
+async function uploadReportScreenshot(file) {
+  if (!file) return null;
+  if (!state.session?.user) throw new Error('Sign in before uploading a screenshot.');
+  if (file.size > 10 * 1024 * 1024) throw new Error('Screenshot must be 10 MB or smaller.');
+  if (!['image/jpeg','image/png','image/webp'].includes(file.type)) throw new Error('Screenshot must be PNG, JPG, or WebP.');
+  const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+  const path = `${state.session.user.id}/${Date.now()}-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}.${extension}`;
+  const { error } = await sb.storage.from(REPORT_SCREENSHOT_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+function reportStatusLabel(status = '') {
+  const labels = { open:'Submitted', under_review:'Under review', needs_info:'Needs information', duplicate:'Duplicate', fixed:'Fixed', closed:'Closed', resolved:'Fixed', dismissed:'Closed' };
+  return labels[status] || status.replaceAll('_',' ');
+}
+
 
 function openCommunityFeedback(mode = 'suggestion', opening = {}) {
   if (!state.session?.user) {
@@ -1034,6 +1107,17 @@ function openCommunityFeedback(mode = 'suggestion', opening = {}) {
   $('community-feedback-pgn').value = opening.pgn || '';
   $('community-feedback-details').value = '';
   $('community-feedback-source').value = '';
+  $('community-feedback-screenshot').value = '';
+  $('community-feedback-severity').value = 'minor';
+  $('community-feedback-board-context').checked = true;
+  $('community-feedback-severity-label').hidden = suggestion;
+  $('community-feedback-screenshot-label').hidden = suggestion;
+  $('community-feedback-board-context-label').hidden = suggestion;
+  $('community-feedback-auto-context').hidden = suggestion;
+  if (!suggestion) {
+    const auto = currentReportContext();
+    $('community-feedback-auto-context').innerHTML = `<b>Automatically included</b><span>${escapeHtml(auto.route)} · ${escapeHtml(auto.viewport)} · ${auto.fen ? 'board position available' : 'page context only'}</span>`;
+  }
   $('community-feedback-title').textContent = suggestion ? 'Suggest an improvement' : 'Report an issue';
   $('community-feedback-eyebrow').textContent = suggestion ? 'COMMUNITY OPENING REVIEW' : 'HELP US FIX IT';
   $('community-feedback-submit').textContent = suggestion ? 'Submit suggestion' : 'Submit report';
@@ -1091,6 +1175,8 @@ $('community-feedback-form').addEventListener('submit', async event => {
   const pgn = $('community-feedback-pgn').value.trim();
   const details = $('community-feedback-details').value.trim();
   const source = $('community-feedback-source').value.trim();
+  const severity = $('community-feedback-severity').value || 'minor';
+  const screenshotFile = $('community-feedback-screenshot').files?.[0] || null;
   if (!details) return toast('Please describe the suggestion or issue.');
 
   submit.disabled = true;
@@ -1115,14 +1201,34 @@ $('community-feedback-form').addEventListener('submit', async event => {
       }));
     }
   } else {
+    let screenshotPath = null;
+    try { screenshotPath = await uploadReportScreenshot(screenshotFile); }
+    catch (uploadError) {
+      submit.disabled = false;
+      submit.textContent = 'Submit report';
+      return toast(`Could not upload screenshot: ${readableError(uploadError)}`);
+    }
+    const auto = currentReportContext();
+    const includeBoard = $('community-feedback-board-context').checked;
     const context = [openingName ? `Context: ${openingName}` : '', openingId ? `Opening ID: ${openingId}` : '', details].filter(Boolean).join('\n');
     const richPayload = {
       reporter_id: state.session.user.id,
       report_type: type,
+      severity,
       target_type: openingId ? 'opening' : 'website',
       target_id: openingId,
+      opening_name: openingName || null,
       reason: details,
       details: context,
+      page_url: auto.page_url,
+      route: auto.route,
+      browser_info: auto.user_agent,
+      viewport: auto.viewport,
+      screenshot_path: screenshotPath,
+      fen: includeBoard ? (auto.fen || null) : null,
+      pgn: includeBoard ? (auto.pgn || null) : null,
+      move_number: includeBoard ? (auto.move_number || null) : null,
+      board_orientation: includeBoard ? (auto.board_orientation || null) : null,
       status: 'open'
     };
     ({ error } = await sb.from('reports').insert(richPayload));
@@ -1237,12 +1343,20 @@ async function loadOwnerPanel(panel) {
   const [table, title] = map[panel];
   let request = sb.from(table).select('*').order('created_at',{ascending:false}).limit(50);
   if (panel === 'submissions') request = request.in('status',['pending','changes_requested']);
-  if (panel === 'reports') request = request.in('status',['open','under_review']);
+  if (panel === 'reports') request = request.in('status',['open','under_review','needs_info','duplicate','fixed','closed','resolved','dismissed']);
   const { data, error } = await request;
   if (error) return ownerError(error);
+  let rows = data || [];
+  if (panel === 'reports') {
+    rows = await Promise.all(rows.map(async item => {
+      if (!item.screenshot_path) return item;
+      const { data: signed } = await sb.storage.from(REPORT_SCREENSHOT_BUCKET).createSignedUrl(item.screenshot_path, 60 * 60);
+      return { ...item, _screenshot_url: signed?.signedUrl || '' };
+    }));
+  }
 
   target.innerHTML = `<div class="panel-heading"><div><span>OWNER</span><h2>${title}</h2></div></div>
-    <div class="owner-list">${(data || []).map(item => ownerCaseMarkup(panel, item)).join('') || '<div class="empty-state"><div>✓</div><b>Nothing waiting</b></div>'}</div>`;
+    <div class="owner-list">${rows.map(item => ownerCaseMarkup(panel, item)).join('') || '<div class="empty-state"><div>✓</div><b>Nothing waiting</b></div>'}</div>`;
 
   target.querySelectorAll('[data-case-status]').forEach(button => {
     button.addEventListener('click', () => updateCommunityCase(
@@ -1263,19 +1377,25 @@ function ownerCaseMarkup(panel, item) {
   const type = suggestion ? item.submission_type : item.report_type;
   const details = item.notes || item.details || item.reason || '';
   const pgn = item.proposed_pgn || '';
-  const approve = suggestion ? 'approved' : 'resolved';
-  const reject = suggestion ? 'rejected' : 'dismissed';
+  const approve = suggestion ? 'approved' : 'fixed';
+  const reject = suggestion ? 'rejected' : 'closed';
   const table = suggestion ? 'opening_submissions' : 'reports';
+  const screenshotUrl = !suggestion ? (item._screenshot_url || '') : '';
   return `<div class="owner-list-row community-case">
     <div class="community-case-main">
       <b>${escapeHtml(heading)}</b>
-      <div class="community-case-meta"><span>${escapeHtml(type || 'other')}</span><span>${escapeHtml(item.status || '')}</span></div>
+      <div class="community-case-meta"><span>${escapeHtml(type || 'other')}</span><span>${escapeHtml(item.status || '')}</span>${!suggestion && item.severity ? `<span>${escapeHtml(item.severity)}</span>` : ''}</div>
       ${details ? `<p>${escapeHtml(details)}</p>` : ''}
+      ${!suggestion && item.page_url ? `<div class="report-context-grid"><span><b>Page</b>${escapeHtml(item.page_url)}</span><span><b>Viewport</b>${escapeHtml(item.viewport || '—')}</span><span><b>Opening</b>${escapeHtml(item.opening_name || item.target_id || '—')}</span><span><b>Move</b>${escapeHtml(String(item.move_number || '—'))}</span></div>` : ''}
+      ${!suggestion && item.fen ? `<code>FEN: ${escapeHtml(item.fen)}</code>` : ''}
+      ${!suggestion && item.pgn ? `<details class="report-pgn"><summary>View attached PGN</summary><code>${escapeHtml(item.pgn)}</code></details>` : ''}
+      ${screenshotUrl ? `<a class="report-screenshot-link" href="${escapeHtml(screenshotUrl)}" target="_blank" rel="noopener"><img src="${escapeHtml(screenshotUrl)}" alt="Attached issue screenshot"><span>Open full screenshot ↗</span></a>` : ''}
       ${pgn ? `<code>${escapeHtml(pgn)}</code>` : ''}
       <div class="community-case-actions">
         <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="under_review">Reviewing</button>
-        <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="${approve}">${suggestion ? 'Approve' : 'Resolve'}</button>
-        <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="${reject}">${suggestion ? 'Reject' : 'Dismiss'}</button>
+        ${suggestion ? '' : `<button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="needs_info">Needs info</button><button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="duplicate">Duplicate</button>`}
+        <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="${approve}">${suggestion ? 'Approve' : 'Fixed'}</button>
+        <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="${reject}">${suggestion ? 'Reject' : 'Close'}</button>
       </div>
     </div>
     <small>${item.created_at ? new Date(item.created_at).toLocaleString() : ''}</small>

@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles.css?v=2.7.2">
+  <link rel="stylesheet" href="./styles.css?v=2.7.3">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 </head>
@@ -710,6 +710,12 @@
             <button id="profile-save-button" class="button primary">Save profile</button>
           </section>
 
+          <section class="panel profile-reports-panel">
+            <div class="panel-heading"><div><span>FEEDBACK</span><h2>My reports</h2></div><button id="profile-reports-refresh" class="button secondary" type="button">Refresh</button></div>
+            <p class="profile-reports-help">Track issues you have submitted and see when they are reviewed or fixed.</p>
+            <div id="profile-reports-list" class="profile-reports-list"><div class="empty-state"><div>⌛</div><b>Loading reports…</b></div></div>
+          </section>
+
           <section class="panel">
             <div class="panel-heading"><div><span>ACCOUNT</span><h2>Cloud session</h2></div></div>
             <div class="account-summary">
@@ -832,6 +838,14 @@
         <label>Type
           <select id="community-feedback-type" required></select>
         </label>
+        <label id="community-feedback-severity-label">Severity
+          <select id="community-feedback-severity">
+            <option value="cosmetic">Cosmetic</option>
+            <option value="minor" selected>Minor</option>
+            <option value="major">Major</option>
+            <option value="critical">Critical</option>
+          </select>
+        </label>
         <label id="community-feedback-pgn-label">Current line or proposed PGN
           <textarea id="community-feedback-pgn" rows="4" maxlength="3000" placeholder="1. b4 e5 2. Bb2..."></textarea>
         </label>
@@ -841,6 +855,14 @@
         <label id="community-feedback-source-label">Source or analysis link (optional)
           <input id="community-feedback-source" type="url" maxlength="500" placeholder="https://...">
         </label>
+        <label id="community-feedback-screenshot-label">Screenshot (optional)
+          <input id="community-feedback-screenshot" type="file" accept="image/jpeg,image/png,image/webp">
+          <small>PNG, JPG, or WebP up to 10 MB.</small>
+        </label>
+        <label id="community-feedback-board-context-label" class="feedback-check-row">
+          <input id="community-feedback-board-context" type="checkbox" checked> Include the current board position and game context when available
+        </label>
+        <div id="community-feedback-auto-context" class="feedback-auto-context"></div>
         <div class="community-feedback-actions">
           <button class="button primary" id="community-feedback-submit" type="submit">Submit suggestion</button>
           <button class="button secondary" id="community-feedback-cancel" type="button">Cancel</button>
@@ -1374,7 +1396,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app.js?v=2.7.2"></script>
+  <script src="./app.js?v=2.7.3"></script>
   <script src="./bozo-music-controller.js?v=2.3.3"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
