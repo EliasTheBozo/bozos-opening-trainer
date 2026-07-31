@@ -1,3 +1,13 @@
+## v2.6.4 — Favorite Repertoire Profiles
+
+- Added favorite opening selections for White, Black vs 1.e4, and Black vs 1.d4
+- Added "Not selected" states when a player leaves a repertoire slot blank
+- Expanded friend profiles with a dedicated Favorite Repertoire section
+- Added `SUPABASE_REPERTOIRE_PROFILES_SETUP.sql` for the new profile fields and secure friend-profile RPC
+
+### Required Supabase step
+Run `SUPABASE_REPERTOIRE_PROFILES_SETUP.sql` in the Supabase SQL Editor before saving or viewing favorite repertoires.
+
 ## v2.6.3 — Public Library & Friend Profiles
 
 - Published openings can be browsed and searched while signed out

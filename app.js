@@ -222,6 +222,51 @@ $('dashboard-sync-button').addEventListener('click', async () => {
 
 const PROFILE_AVATAR_BUCKET = 'avatars';
 const PROFILE_AVATAR_FALLBACK = './assets/bozo-mascot.webp';
+let repertoireOpeningNames = [];
+let repertoireOptionsLoaded = false;
+
+function setSelectValue(selectId, value = '') {
+  const select = $(selectId);
+  if (!select) return;
+  const normalized = value || '';
+  if (normalized && !Array.from(select.options).some(option => option.value === normalized)) {
+    select.add(new Option(normalized, normalized));
+  }
+  select.value = normalized;
+}
+
+async function loadRepertoireOpeningOptions() {
+  if (repertoireOptionsLoaded) return;
+  const ids = ['profile-white-opening-input', 'profile-black-e4-opening-input', 'profile-black-d4-opening-input'];
+  ids.forEach(id => { if ($(id)) $(id).disabled = true; });
+
+  const { data, error } = await sb.from('openings')
+    .select('name')
+    .eq('status', 'published')
+    .order('name')
+    .limit(10000);
+
+  if (error) {
+    console.warn('Could not load repertoire opening choices:', error);
+    ids.forEach(id => { if ($(id)) $(id).disabled = false; });
+    return;
+  }
+
+  repertoireOpeningNames = [...new Set((data || []).map(row => familyBaseName(row.name || '')).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+
+  ids.forEach(id => {
+    const select = $(id);
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = '<option value="">Not selected</option>' + repertoireOpeningNames
+      .map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+      .join('');
+    select.disabled = false;
+    setSelectValue(id, current);
+  });
+  repertoireOptionsLoaded = true;
+}
 let pendingAvatarBlob = null;
 let pendingAvatarObjectUrl = null;
 
@@ -406,6 +451,11 @@ function renderProfile() {
   $('profile-username-input').value = p.username || '';
   $('profile-bio-input').value = p.bio || '';
   $('profile-personality-input').value = p.opening_personality || 'Explorer';
+  loadRepertoireOpeningOptions().then(() => {
+    setSelectValue('profile-white-opening-input', p.favorite_white_opening);
+    setSelectValue('profile-black-e4-opening-input', p.favorite_black_e4_opening);
+    setSelectValue('profile-black-d4-opening-input', p.favorite_black_d4_opening);
+  });
   $('profile-email').textContent = state.session.user.email || '';
   $('profile-user-id').textContent = state.session.user.id;
 }
@@ -418,7 +468,10 @@ $('profile-save-button').addEventListener('click', async () => {
     ign: $('profile-ign-input').value.trim(),
     username,
     bio: $('profile-bio-input').value.trim(),
-    opening_personality: $('profile-personality-input').value
+    opening_personality: $('profile-personality-input').value,
+    favorite_white_opening: $('profile-white-opening-input').value || null,
+    favorite_black_e4_opening: $('profile-black-e4-opening-input').value || null,
+    favorite_black_d4_opening: $('profile-black-d4-opening-input').value || null
   }).eq('id', state.session.user.id);
 
   if (error) return toast(readableError(error));
@@ -1281,9 +1334,13 @@ function challengeWebFriend(username) {
   }, 80);
 }
 
-function openFriendProfile(username) {
+async function openFriendProfile(username) {
   const friend = webFriends.find(item => item.username === username && item.status === 'accepted');
   if (!friend) return toast('That friend profile could not be loaded.');
+
+  const modal = $('friend-profile-modal');
+  modal.hidden = false;
+  modal.querySelector('.friend-profile-modal')?.classList.add('friend-profile-loading');
 
   $('friend-profile-avatar').src = friend.avatar_url || './assets/bozo-mascot.webp';
   $('friend-profile-avatar').onerror = () => { $('friend-profile-avatar').src = './assets/bozo-mascot.webp'; };
@@ -1291,8 +1348,30 @@ function openFriendProfile(username) {
   $('friend-profile-ign').textContent = friend.ign || 'Player';
   $('friend-profile-username').textContent = '@' + (friend.username || 'username');
   $('friend-profile-bio').textContent = friend.bio?.trim() || 'This player has not added a bio yet.';
+  $('friend-profile-white-opening').textContent = 'Loading…';
+  $('friend-profile-black-e4-opening').textContent = 'Loading…';
+  $('friend-profile-black-d4-opening').textContent = 'Loading…';
   $('friend-profile-challenge').dataset.username = friend.username || '';
-  $('friend-profile-modal').hidden = false;
+
+  const { data, error } = await sb.rpc('get_friend_profile', { target_username: username });
+  const profile = Array.isArray(data) ? data[0] : data;
+  if (error) {
+    console.warn('Could not load extended friend profile:', error);
+    $('friend-profile-white-opening').textContent = friend.favorite_white_opening || 'Not selected';
+    $('friend-profile-black-e4-opening').textContent = friend.favorite_black_e4_opening || 'Not selected';
+    $('friend-profile-black-d4-opening').textContent = friend.favorite_black_d4_opening || 'Not selected';
+  } else {
+    const detail = profile || {};
+    $('friend-profile-avatar').src = detail.avatar_url || friend.avatar_url || './assets/bozo-mascot.webp';
+    $('friend-profile-personality').textContent = detail.opening_personality || friend.opening_personality || 'Player';
+    $('friend-profile-ign').textContent = detail.ign || friend.ign || 'Player';
+    $('friend-profile-username').textContent = '@' + (detail.username || friend.username || 'username');
+    $('friend-profile-bio').textContent = detail.bio?.trim() || friend.bio?.trim() || 'This player has not added a bio yet.';
+    $('friend-profile-white-opening').textContent = detail.favorite_white_opening || 'Not selected';
+    $('friend-profile-black-e4-opening').textContent = detail.favorite_black_e4_opening || 'Not selected';
+    $('friend-profile-black-d4-opening').textContent = detail.favorite_black_d4_opening || 'Not selected';
+  }
+  modal.querySelector('.friend-profile-modal')?.classList.remove('friend-profile-loading');
 }
 
 function closeFriendProfile() {

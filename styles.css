@@ -2728,3 +2728,15 @@ html[data-music-provider="spotify"] #spotify-mini-player {
 .friend-profile-actions{display:flex;gap:10px;flex-wrap:wrap}
 .friend-card-actions{flex-wrap:wrap}
 @media(max-width:650px){.friend-profile-hero{align-items:flex-start}.friend-profile-hero img{width:72px;height:72px}.friend-profile-hero h2{font-size:26px}.friend-profile-actions .button{flex:1}}
+
+/* v2.6.4 repertoire profiles */
+.profile-repertoire-editor{margin:22px 0 4px;padding:18px;border:1px solid rgba(168,85,247,.28);border-radius:18px;background:rgba(20,8,28,.35)}
+.profile-repertoire-editor .panel-heading{margin-bottom:6px}
+.profile-repertoire-editor .panel-heading h3{margin:3px 0 0;font-size:20px}
+.profile-repertoire-help{margin:0 0 14px;color:var(--muted);line-height:1.55}
+.friend-repertoire-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+.friend-repertoire-grid article{min-height:92px;padding:14px;border:1px solid rgba(255,255,255,.09);border-radius:15px;background:rgba(255,255,255,.035);display:flex;flex-direction:column;gap:8px}
+.friend-repertoire-grid span{font-size:11px;letter-spacing:.11em;color:var(--mint);font-weight:900}
+.friend-repertoire-grid b{line-height:1.35;color:#fff7ea}
+.friend-profile-loading{opacity:.65}
+@media(max-width:650px){.friend-repertoire-grid{grid-template-columns:1fr}.friend-repertoire-grid article{min-height:auto}}

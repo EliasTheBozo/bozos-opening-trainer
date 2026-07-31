@@ -643,6 +643,19 @@
                 <option>Defender</option>
               </select>
             </label>
+            <div class="profile-repertoire-editor">
+              <div class="panel-heading"><div><span>FAVORITE REPERTOIRE</span><h3>Show how you like to play</h3></div></div>
+              <p class="profile-repertoire-help">Choose one opening for White and your favorite replies to 1.e4 and 1.d4. You can leave any selection blank.</p>
+              <label>Favorite opening as White
+                <select id="profile-white-opening-input"><option value="">Not selected</option></select>
+              </label>
+              <label>Favorite response to 1.e4
+                <select id="profile-black-e4-opening-input"><option value="">Not selected</option></select>
+              </label>
+              <label>Favorite response to 1.d4
+                <select id="profile-black-d4-opening-input"><option value="">Not selected</option></select>
+              </label>
+            </div>
             <button id="profile-save-button" class="button primary">Save profile</button>
           </section>
 
@@ -857,6 +870,14 @@
           <div id="friend-profile-personality" class="role-badge">Player</div>
           <h2 id="friend-profile-ign">Player</h2>
           <p id="friend-profile-username">@username</p>
+        </div>
+      </div>
+      <div class="friend-profile-section">
+        <span class="eyebrow">FAVORITE REPERTOIRE</span>
+        <div class="friend-repertoire-grid">
+          <article><span>WHITE</span><b id="friend-profile-white-opening">Not selected</b></article>
+          <article><span>BLACK VS 1.e4</span><b id="friend-profile-black-e4-opening">Not selected</b></article>
+          <article><span>BLACK VS 1.d4</span><b id="friend-profile-black-d4-opening">Not selected</b></article>
         </div>
       </div>
       <div class="friend-profile-section">
