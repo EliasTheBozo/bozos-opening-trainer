@@ -1,3 +1,12 @@
+## v2.6.3 — Public Library & Friend Profiles
+
+- Published openings can be browsed and searched while signed out
+- Added a Supabase migration that grants anonymous access only to published opening rows
+- Fixed anonymous execution access for the `has_any_role` helper used by opening policies
+- Added a View Profile action for accepted friends
+- Friend profiles display avatar, IGN, username, opening personality, and bio
+- Friends can be challenged directly from the profile viewer
+
 # BOZO'S Opening Trainer — Web v1
 
 This folder is ready to deploy as a static Cloudflare Pages website.

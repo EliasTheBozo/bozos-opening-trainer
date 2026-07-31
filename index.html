@@ -847,6 +847,29 @@
     </div>
   </div>
 
+
+  <div id="friend-profile-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal friend-profile-modal">
+      <button id="close-friend-profile" class="modal-close" type="button">×</button>
+      <div class="friend-profile-hero">
+        <img id="friend-profile-avatar" src="./assets/bozo-mascot.webp" alt="Friend profile picture">
+        <div>
+          <div id="friend-profile-personality" class="role-badge">Player</div>
+          <h2 id="friend-profile-ign">Player</h2>
+          <p id="friend-profile-username">@username</p>
+        </div>
+      </div>
+      <div class="friend-profile-section">
+        <span class="eyebrow">ABOUT</span>
+        <p id="friend-profile-bio">This player has not added a bio yet.</p>
+      </div>
+      <div class="friend-profile-actions">
+        <button id="friend-profile-challenge" class="button primary" type="button">Challenge</button>
+        <button id="friend-profile-close-button" class="button secondary" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="study-modal" class="modal-backdrop" hidden>
     <div class="duel-game-modal study-modal">
       <button id="close-study-modal" class="modal-close">×</button>
@@ -1265,8 +1288,8 @@
 
 <div id="toast" class="toast" hidden></div>
 
-  <script src="./mastery.js?v=2.6.1"></script>
-  <script src="./app.js?v=2.6.1"></script>
+  <script src="./mastery.js?v=2.6.3"></script>
+  <script src="./app.js?v=2.6.3"></script>
   <script src="./bozo-music-controller.js?v=2.3.3"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>

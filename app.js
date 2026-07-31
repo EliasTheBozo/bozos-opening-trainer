@@ -1231,7 +1231,8 @@ function paintWebFriends() {
       </div>
       <div class="friend-card-actions">
         ${friend.status === 'accepted' ? `
-          <button class="button primary" onclick="challengeWebFriend('${escapeHtml(friend.username).replace(/'/g,"\\'")}')">Challenge</button>
+          <button class="button primary" onclick="openFriendProfile('${escapeHtml(friend.username).replace(/'/g,"\'")}')">View profile</button>
+          <button class="button secondary" onclick="challengeWebFriend('${escapeHtml(friend.username).replace(/'/g,"\'")}')">Challenge</button>
           <button class="button secondary" onclick="removeWebFriend('${friend.friendship_id}')">Remove</button>
         ` : friend.direction === 'incoming' ? `
           <button class="button primary" onclick="respondWebFriend('${friend.friendship_id}',true)">Accept</button>
@@ -1279,6 +1280,35 @@ function challengeWebFriend(username) {
     $('duel-opponent').value = '@' + username;
   }, 80);
 }
+
+function openFriendProfile(username) {
+  const friend = webFriends.find(item => item.username === username && item.status === 'accepted');
+  if (!friend) return toast('That friend profile could not be loaded.');
+
+  $('friend-profile-avatar').src = friend.avatar_url || './assets/bozo-mascot.webp';
+  $('friend-profile-avatar').onerror = () => { $('friend-profile-avatar').src = './assets/bozo-mascot.webp'; };
+  $('friend-profile-personality').textContent = friend.opening_personality || 'Player';
+  $('friend-profile-ign').textContent = friend.ign || 'Player';
+  $('friend-profile-username').textContent = '@' + (friend.username || 'username');
+  $('friend-profile-bio').textContent = friend.bio?.trim() || 'This player has not added a bio yet.';
+  $('friend-profile-challenge').dataset.username = friend.username || '';
+  $('friend-profile-modal').hidden = false;
+}
+
+function closeFriendProfile() {
+  $('friend-profile-modal').hidden = true;
+}
+
+$('close-friend-profile')?.addEventListener('click', closeFriendProfile);
+$('friend-profile-close-button')?.addEventListener('click', closeFriendProfile);
+$('friend-profile-modal')?.addEventListener('click', event => {
+  if (event.target.id === 'friend-profile-modal') closeFriendProfile();
+});
+$('friend-profile-challenge')?.addEventListener('click', () => {
+  const username = $('friend-profile-challenge').dataset.username;
+  closeFriendProfile();
+  if (username) challengeWebFriend(username);
+});
 
 
 function groupMovesByTurn(moves = []) {
