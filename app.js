@@ -1604,7 +1604,11 @@ async function openFriendProfile(username) {
     $('friend-profile-openings-studied').textContent = Number(social?.openings_studied || 0).toLocaleString();
     $('friend-profile-reviews').textContent = Number(social?.games_reviewed || 0).toLocaleString();
     $('friend-profile-suggestions').textContent = Number(social?.accepted_suggestions || 0).toLocaleString();
-    $('friend-profile-member-since').textContent = social?.member_since ? new Date(social.member_since).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : '—';
+    const memberSinceValue = social?.member_since || profile?.created_at || friend?.created_at;
+    const memberSinceDate = memberSinceValue ? new Date(memberSinceValue) : null;
+    $('friend-profile-member-since').textContent = memberSinceDate && !Number.isNaN(memberSinceDate.getTime())
+      ? memberSinceDate.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+      : '—';
     $('friend-profile-activity').innerHTML = activityMarkup(social?.recent_activity || [], 'This player has not shared any recent BOZO activity.');
   }
   modal.querySelector('.friend-profile-modal')?.classList.remove('friend-profile-loading');

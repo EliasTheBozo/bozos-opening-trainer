@@ -82,7 +82,7 @@ begin
     (select count(*)
        from public.opening_submissions os
       where os.submitted_by = target_id
-        and os.status in ('approved', 'accepted', 'published'))::bigint,
+        and os.status in ('approved', 'published'))::bigint,
     (select p.created_at from public.profiles p where p.id = target_id),
     coalesce((
       select jsonb_agg(jsonb_build_object(
