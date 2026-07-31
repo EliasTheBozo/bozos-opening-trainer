@@ -2796,3 +2796,78 @@ html[data-music-provider="spotify"] #spotify-mini-player {
   }
   .opening-picker-results{max-height:260px}
 }
+
+/* BOZO 2.7 Connected Experience */
+.connected-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin: 20px 0;
+}
+.dashboard-focus-card {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid rgba(255, 143, 55, .25);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255, 126, 35, .09), rgba(48, 15, 59, .3));
+}
+.dashboard-focus-card h3 { margin: 0; font-size: 1.45rem; }
+.dashboard-focus-card p { margin: 0 0 8px; color: var(--muted); }
+.activity-feed { display: grid; gap: 10px; }
+.activity-feed.compact { max-height: 230px; overflow: auto; padding-right: 4px; }
+.activity-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid rgba(167, 104, 192, .2);
+  border-radius: 14px;
+  background: rgba(12, 5, 18, .3);
+}
+.activity-row .activity-icon { font-size: 1.15rem; width: 30px; text-align: center; }
+.activity-row div { display: grid; gap: 2px; }
+.activity-row b { font-size: .92rem; }
+.activity-row small { color: var(--muted); }
+.achievement-grid { display: grid; gap: 9px; }
+.achievement-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(167, 104, 192, .18);
+  opacity: .58;
+}
+.achievement-card.unlocked { opacity: 1; border-color: rgba(255, 175, 76, .38); background: rgba(255, 142, 36, .07); }
+.achievement-card > span { font-size: 1.35rem; }
+.achievement-card div { display: grid; gap: 2px; }
+.achievement-card small { color: var(--muted); }
+.review-opening-recommendation {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin: 20px 0;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(91, 255, 199, .25);
+  background: linear-gradient(135deg, rgba(37, 235, 166, .08), rgba(37, 12, 46, .65));
+}
+.review-opening-recommendation[hidden] { display: none; }
+.review-opening-recommendation h2 { margin: 4px 0 6px; }
+.review-opening-recommendation p { margin: 0; color: var(--muted); }
+.friend-stats-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.friend-stats-grid article { padding: 12px; border-radius: 14px; background: rgba(255,255,255,.035); border: 1px solid rgba(167,104,192,.18); display: grid; gap: 3px; }
+.friend-stats-grid b { font-size: 1.15rem; }
+.friend-stats-grid span { color: var(--muted); font-size: .78rem; }
+.empty-state.mini { min-height: 90px; padding: 16px; }
+@media (max-width: 980px) { .connected-dashboard-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .review-opening-recommendation { align-items: flex-start; flex-direction: column; }
+  .friend-stats-grid { grid-template-columns: 1fr 1fr; }
+}

@@ -1,3 +1,15 @@
+
+## v2.7.0 Connected Experience
+
+- Dashboard "next move" recommendations
+- Personal activity feed
+- Derived achievements and milestones
+- Game Review links directly into detected opening study
+- Expanded friend profiles with stats and recent activity
+- Activity logging for studies, reviews, profile updates, friends, and suggestions
+
+Run `SUPABASE_CONNECTED_EXPERIENCE_SETUP.sql` in Supabase before testing the connected features.
+
 ## v2.6.4 — Favorite Repertoire Profiles
 
 - Added favorite opening selections for White, Black vs 1.e4, and Black vs 1.d4

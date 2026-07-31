@@ -231,6 +231,21 @@
           <article><span>Current Streak</span><b id="dashboard-streak">0</b><small>Days</small></article>
         </div>
 
+        <div class="connected-dashboard-grid">
+          <section class="panel dashboard-focus-panel">
+            <div class="panel-heading"><div><span>CONTINUE</span><h2>Your next move</h2></div></div>
+            <div id="dashboard-focus-card" class="dashboard-focus-card"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><div><span>RECENT ACTIVITY</span><h2>Your BOZO journey</h2></div></div>
+            <div id="dashboard-activity-feed" class="activity-feed"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading"><div><span>ACHIEVEMENTS</span><h2>Milestones</h2></div></div>
+            <div id="dashboard-achievements" class="achievement-grid"></div>
+          </section>
+        </div>
+
         <div class="dashboard-columns">
           <section class="panel">
             <div class="panel-heading">
@@ -402,6 +417,11 @@
             <small id="review-turning-detail">Largest evaluation swing</small>
           </article>
         </div>
+
+        <section id="review-opening-recommendation" class="review-opening-recommendation" hidden>
+          <div><span class="eyebrow">KEEP LEARNING</span><h2 id="review-recommendation-title">Study this opening</h2><p id="review-recommendation-copy"></p></div>
+          <button id="review-recommendation-button" class="button primary">Open in Study Mode</button>
+        </section>
 
         <div class="review-workspace">
           <div class="review-board-column">
@@ -909,6 +929,19 @@
           <article><span>BLACK VS 1.e4</span><b id="friend-profile-black-e4-opening">Not selected</b></article>
           <article><span>BLACK VS 1.d4</span><b id="friend-profile-black-d4-opening">Not selected</b></article>
         </div>
+      </div>
+      <div class="friend-profile-section">
+        <span class="eyebrow">BOZO STATS</span>
+        <div class="friend-stats-grid">
+          <article><b id="friend-profile-openings-studied">0</b><span>Openings studied</span></article>
+          <article><b id="friend-profile-reviews">0</b><span>Games reviewed</span></article>
+          <article><b id="friend-profile-suggestions">0</b><span>Suggestions accepted</span></article>
+          <article><b id="friend-profile-member-since">—</b><span>Member since</span></article>
+        </div>
+      </div>
+      <div class="friend-profile-section">
+        <span class="eyebrow">RECENT ACTIVITY</span>
+        <div id="friend-profile-activity" class="activity-feed compact"></div>
       </div>
       <div class="friend-profile-section">
         <span class="eyebrow">ABOUT</span>

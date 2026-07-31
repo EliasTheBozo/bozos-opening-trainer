@@ -187,6 +187,88 @@ function masteryStats() {
   };
 }
 
+
+function activityLabel(item = {}) {
+  const payload = item.payload || {};
+  const labels = {
+    opening_studied: ['♟️', `Studied ${payload.opening || 'an opening'}`],
+    game_reviewed: ['🔎', `Reviewed ${payload.opening || 'a game'}`],
+    profile_updated: ['👤', 'Updated profile'],
+    friend_added: ['👥', `Became friends with ${payload.username ? '@' + payload.username : 'a player'}`],
+    suggestion_submitted: ['💡', `Suggested an improvement${payload.opening ? ` to ${payload.opening}` : ''}`],
+    challenge_completed: ['⚔️', `Completed a challenge${payload.opening ? ` in ${payload.opening}` : ''}`]
+  };
+  return labels[item.activity_type] || ['•', String(item.activity_type || 'BOZO activity').replaceAll('_', ' ')];
+}
+
+function relativeActivityTime(value) {
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return '';
+  const seconds = Math.max(0, Math.round((Date.now() - time) / 1000));
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function activityMarkup(rows = [], emptyCopy = 'No activity yet. Start studying to build your timeline.') {
+  if (!rows.length) return `<div class="empty-state mini"><b>Nothing here yet</b><span>${escapeHtml(emptyCopy)}</span></div>`;
+  return rows.map(item => {
+    const [icon, label] = activityLabel(item);
+    return `<article class="activity-row"><span class="activity-icon">${icon}</span><div><b>${escapeHtml(label)}</b><small>${escapeHtml(relativeActivityTime(item.created_at))}</small></div></article>`;
+  }).join('');
+}
+
+async function logActivity(activityType, payload = {}) {
+  if (!state.session?.user) return;
+  const { error } = await sb.from('user_activity').insert({
+    user_id: state.session.user.id,
+    activity_type: activityType,
+    payload
+  });
+  if (error && !/relation .* does not exist|permission denied/i.test(error.message || '')) console.warn('Activity log failed:', error);
+}
+
+async function loadDashboardConnectedData() {
+  if (!state.session?.user) return;
+  const uid = state.session.user.id;
+  const [{ data: activity, error: activityError }, { data: studies, error: studiesError }] = await Promise.all([
+    sb.from('user_activity').select('activity_type,payload,created_at').eq('user_id', uid).order('created_at', { ascending: false }).limit(8),
+    sb.from('user_activity').select('activity_type,payload,created_at').eq('user_id', uid).eq('activity_type', 'opening_studied').order('created_at', { ascending: false }).limit(1)
+  ]);
+
+  const feed = $('dashboard-activity-feed');
+  if (feed) feed.innerHTML = activityError
+    ? `<div class="empty-state mini"><b>Activity setup needed</b><span>Run the BOZO 2.7 Supabase migration.</span></div>`
+    : activityMarkup(activity || []);
+
+  const latestStudy = !studiesError && studies?.[0];
+  const focus = $('dashboard-focus-card');
+  if (focus) {
+    if (latestStudy?.payload?.opening_id) {
+      focus.innerHTML = `<span class="eyebrow">CONTINUE STUDYING</span><h3>${escapeHtml(latestStudy.payload.opening || 'Opening')}</h3><p>Pick up where your recent study session left off.</p><button class="button primary" data-focus-opening="${escapeHtml(String(latestStudy.payload.opening_id))}">Continue</button>`;
+      focus.querySelector('[data-focus-opening]')?.addEventListener('click', e => openStudyById(e.currentTarget.dataset.focusOpening));
+    } else {
+      focus.innerHTML = `<span class="eyebrow">BUILD YOUR REPERTOIRE</span><h3>Choose your next opening</h3><p>Browse published theory and begin a study session.</p><button class="button primary" data-route="library">Browse openings</button>`;
+      focus.querySelector('[data-route]')?.addEventListener('click', () => route('library'));
+    }
+  }
+
+  const mastery = masteryStats();
+  const types = new Set((activity || []).map(item => item.activity_type));
+  const achievements = [
+    ['First Study', 'Study your first opening', types.has('opening_studied')],
+    ['Game Detective', 'Complete a game review', types.has('game_reviewed')],
+    ['Profile Ready', 'Customize your BOZO identity', Boolean(state.profile?.bio || state.profile?.favorite_white_opening)],
+    ['Opening Specialist', 'Master your first opening', mastery.mastered > 0],
+    ['On a Roll', 'Reach a 7-day streak', Number(state.progress?.current_streak || 0) >= 7],
+    ['Community Voice', 'Submit an opening improvement', types.has('suggestion_submitted')]
+  ];
+  const achievementTarget = $('dashboard-achievements');
+  if (achievementTarget) achievementTarget.innerHTML = achievements.map(([name, description, unlocked]) => `<article class="achievement-card ${unlocked ? 'unlocked' : ''}"><span>${unlocked ? '🏅' : '🔒'}</span><div><b>${escapeHtml(name)}</b><small>${escapeHtml(description)}</small></div></article>`).join('');
+}
+
 function renderDashboard() {
   const signedIn = Boolean(state.session?.user);
   $('dashboard-guest').hidden = signedIn;
@@ -204,6 +286,8 @@ function renderDashboard() {
   const records = mastery.records
     .filter(r => Array.isArray(r.stars) && r.stars.some(Boolean))
     .sort((a,b) => Number(b.masteryAwarded)-Number(a.masteryAwarded) || b.stars.filter(Boolean).length-a.stars.filter(Boolean).length);
+
+  loadDashboardConnectedData();
 
   room.innerHTML = records.length ? records.slice(0, 12).map(r => `
     <div class="trophy-row">
@@ -605,6 +689,7 @@ $('profile-save-button').addEventListener('click', async () => {
   }).eq('id', state.session.user.id);
 
   if (error) return toast(readableError(error));
+  await logActivity('profile_updated', {});
   await loadIdentity();
   toast('Profile saved');
 });
@@ -1037,6 +1122,7 @@ $('community-feedback-form').addEventListener('submit', async event => {
   submit.textContent = mode === 'suggestion' ? 'Submit suggestion' : 'Submit report';
   if (error) return toast(`Could not send feedback: ${readableError(error)}`);
   closeCommunityFeedback();
+  if (mode === 'suggestion') await logActivity('suggestion_submitted', { opening: openingName || '' });
   toast(mode === 'suggestion' ? 'Suggestion sent for review. Thank you!' : 'Report submitted. Thank you!');
 });
 
@@ -1444,6 +1530,7 @@ async function respondWebFriend(id, accept) {
     accept_request: accept
   });
   if (error) return toast(readableError(error));
+  if (accept) await logActivity('friend_added', {});
   toast(accept ? 'Friend added' : 'Request declined');
   await loadWebFriends();
 }
@@ -1482,8 +1569,16 @@ async function openFriendProfile(username) {
   $('friend-profile-black-e4-opening').textContent = 'Loading…';
   $('friend-profile-black-d4-opening').textContent = 'Loading…';
   $('friend-profile-challenge').dataset.username = friend.username || '';
+  $('friend-profile-openings-studied').textContent = '—';
+  $('friend-profile-reviews').textContent = '—';
+  $('friend-profile-suggestions').textContent = '—';
+  $('friend-profile-member-since').textContent = '—';
+  $('friend-profile-activity').innerHTML = '<div class="empty-state mini"><span>Loading activity…</span></div>';
 
-  const { data, error } = await sb.rpc('get_friend_profile', { target_username: username });
+  const [{ data, error }, { data: socialData, error: socialError }] = await Promise.all([
+    sb.rpc('get_friend_profile', { target_username: username }),
+    sb.rpc('get_friend_activity_summary', { target_username: username })
+  ]);
   const profile = Array.isArray(data) ? data[0] : data;
   if (error) {
     console.warn('Could not load extended friend profile:', error);
@@ -1500,6 +1595,17 @@ async function openFriendProfile(username) {
     $('friend-profile-white-opening').textContent = detail.favorite_white_opening || 'Not selected';
     $('friend-profile-black-e4-opening').textContent = detail.favorite_black_e4_opening || 'Not selected';
     $('friend-profile-black-d4-opening').textContent = detail.favorite_black_d4_opening || 'Not selected';
+  }
+  if (socialError) {
+    console.warn('Could not load friend activity summary:', socialError);
+    $('friend-profile-activity').innerHTML = '<div class="empty-state mini"><span>Stats unavailable until the BOZO 2.7 migration is installed.</span></div>';
+  } else {
+    const social = Array.isArray(socialData) ? socialData[0] : socialData;
+    $('friend-profile-openings-studied').textContent = Number(social?.openings_studied || 0).toLocaleString();
+    $('friend-profile-reviews').textContent = Number(social?.games_reviewed || 0).toLocaleString();
+    $('friend-profile-suggestions').textContent = Number(social?.accepted_suggestions || 0).toLocaleString();
+    $('friend-profile-member-since').textContent = social?.member_since ? new Date(social.member_since).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : '—';
+    $('friend-profile-activity').innerHTML = activityMarkup(social?.recent_activity || [], 'This player has not shared any recent BOZO activity.');
   }
   modal.querySelector('.friend-profile-modal')?.classList.remove('friend-profile-loading');
 }
@@ -1659,6 +1765,9 @@ function setStudyPly(nextPly) {
   const previousStudyPly = studyPly;
   studyPly = Math.max(0, Math.min(studyMoves.length, nextPly));
   window.BozoMastery?.recordStudyPly?.(studyOpening, studyPly, studyMoves.length, previousStudyPly);
+  if (studyOpening && studyMoves.length && studyPly === studyMoves.length && previousStudyPly < studyMoves.length) {
+    logActivity('opening_studied', { opening_id: studyOpening.id, opening: studyOpening.name, variation: studyOpening.variation || 'Main Line' });
+  }
   studyGame = new Chess();
   for (let i = 0; i < studyPly; i++) {
     studyGame.move(studyMoves[i], { sloppy: true });
@@ -2130,6 +2239,10 @@ $('review-pgn-file').addEventListener('change', async event => {
 });
 
 $('start-game-review').addEventListener('click', startGameReview);
+$('review-recommendation-button')?.addEventListener('click', event => {
+  const id = event.currentTarget.dataset.openingId;
+  if (id) openStudyById(id);
+});
 $('review-start').addEventListener('click', () => setReviewStep(0));
 $('review-prev').addEventListener('click', () => setReviewStep(reviewStepIndex - 1));
 $('review-next').addEventListener('click', () => setReviewStep(reviewStepIndex + 1));
@@ -2734,6 +2847,15 @@ async function startGameReview() {
     clearReviewCoach();
     paintGameReview();
     $('review-results').hidden = false;
+    const matchedOpening = openingMatch?.opening || openingMatch?.data || openingMatch;
+    const recommendation = $('review-opening-recommendation');
+    if (recommendation && matchedOpening?.id) {
+      recommendation.hidden = false;
+      $('review-recommendation-title').textContent = matchedOpening.name || 'Study the detected opening';
+      $('review-recommendation-copy').textContent = `BOZO recognized ${matchedOpening.name || 'this opening'} in your game. Review the line while the positions are still fresh.`;
+      $('review-recommendation-button').dataset.openingId = matchedOpening.id;
+    } else if (recommendation) recommendation.hidden = true;
+    await logActivity('game_reviewed', { opening_id: matchedOpening?.id || null, opening: matchedOpening?.name || 'Unknown opening', accuracy: reviewAccuracyFor(reviewData.rows) });
     $('review-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     console.error(error);
