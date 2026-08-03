@@ -5,7 +5,7 @@
 - Optional FEN, PGN, move number, and board orientation capture
 - AI Coach, Game Review, UI, performance, account, and other report categories
 - Cosmetic, minor, major, and critical severity levels
-- Owner report workflow: reviewing, needs info, duplicate, fixed, and closed
+- Owner report workflow: reviewing, needs info, fixed, and closed
 - Profile “My Reports” tracking section
 - Private signed screenshot links in the Owner’s Office
 

@@ -1089,7 +1089,7 @@ async function uploadReportScreenshot(file) {
 }
 
 function reportStatusLabel(status = '') {
-  const labels = { open:'Submitted', under_review:'Under review', needs_info:'Needs information', duplicate:'Duplicate', fixed:'Fixed', closed:'Closed', resolved:'Fixed', dismissed:'Closed' };
+  const labels = { open:'Submitted', under_review:'Under review', resolved:'Fixed', dismissed:'Closed' };
   return labels[status] || status.replaceAll('_',' ');
 }
 
@@ -1343,7 +1343,7 @@ async function loadOwnerPanel(panel) {
   const [table, title] = map[panel];
   let request = sb.from(table).select('*').order('created_at',{ascending:false}).limit(50);
   if (panel === 'submissions') request = request.in('status',['pending','changes_requested']);
-  if (panel === 'reports') request = request.in('status',['open','under_review','needs_info','duplicate','fixed','closed','resolved','dismissed']);
+  if (panel === 'reports') request = request.in('status',['open','under_review','resolved','dismissed']);
   const { data, error } = await request;
   if (error) return ownerError(error);
   let rows = data || [];
@@ -1377,8 +1377,8 @@ function ownerCaseMarkup(panel, item) {
   const type = suggestion ? item.submission_type : item.report_type;
   const details = item.notes || item.details || item.reason || '';
   const pgn = item.proposed_pgn || '';
-  const approve = suggestion ? 'approved' : 'fixed';
-  const reject = suggestion ? 'rejected' : 'closed';
+  const approve = suggestion ? 'approved' : 'resolved';
+  const reject = suggestion ? 'rejected' : 'dismissed';
   const table = suggestion ? 'opening_submissions' : 'reports';
   const screenshotUrl = !suggestion ? (item._screenshot_url || '') : '';
   return `<div class="owner-list-row community-case">
@@ -1393,7 +1393,7 @@ function ownerCaseMarkup(panel, item) {
       ${pgn ? `<code>${escapeHtml(pgn)}</code>` : ''}
       <div class="community-case-actions">
         <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="under_review">Reviewing</button>
-        ${suggestion ? '' : `<button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="needs_info">Needs info</button><button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="duplicate">Duplicate</button>`}
+        ${suggestion ? '' : `<button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="under_review">Needs info</button>`}
         <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="${approve}">${suggestion ? 'Approve' : 'Fixed'}</button>
         <button data-case-table="${table}" data-case-id="${escapeHtml(String(item.id || ''))}" data-case-status="${reject}">${suggestion ? 'Reject' : 'Close'}</button>
       </div>
