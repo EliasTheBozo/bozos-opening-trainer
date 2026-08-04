@@ -2987,3 +2987,17 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
     width:min(300px,calc(100vw - 16px)) !important;
   }
 }
+
+
+/* BOZO v2.7.6 — public beta notice */
+.public-beta-banner{
+  position:relative;z-index:20;width:100%;min-height:48px;padding:8px max(24px,calc((100vw - 1220px)/2));
+  display:flex;align-items:center;justify-content:space-between;gap:18px;
+  border-bottom:1px solid rgba(255,211,77,.24);
+  background:linear-gradient(90deg,rgba(255,122,24,.16),rgba(168,85,247,.14),rgba(77,215,255,.08));
+  box-shadow:0 10px 30px rgba(0,0,0,.12);
+}
+.public-beta-copy{display:flex;align-items:center;gap:12px;min-width:0}.public-beta-copy p{margin:0;color:#dfd0e2;font-size:11px;line-height:1.45}.public-beta-copy b{color:#fff8ed}.public-beta-badge{flex:none;padding:6px 9px;border:1px solid rgba(255,211,77,.42);border-radius:999px;background:rgba(255,211,77,.12);color:#ffd34d;font-size:8px;font-weight:950;letter-spacing:1.2px}.public-beta-actions{display:flex;gap:8px;flex:none}.public-beta-actions button{padding:7px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);color:#fff;font-size:9px;font-weight:850;cursor:pointer}.public-beta-actions button:last-child{border-color:rgba(255,122,24,.38);background:rgba(255,122,24,.12);color:#ffd6b4}.public-beta-actions button:hover{background:rgba(255,255,255,.08)}
+.public-beta-modal{width:min(560px,100%)}.public-beta-intro{margin:18px 0;color:var(--muted);line-height:1.7}.public-beta-points{display:grid;gap:9px}.public-beta-points article{display:flex;align-items:flex-start;gap:12px;padding:13px;border:1px solid rgba(255,255,255,.07);border-radius:13px;background:rgba(255,255,255,.025)}.public-beta-points article>span{font-size:20px}.public-beta-points b,.public-beta-points small{display:block}.public-beta-points small{margin-top:4px;color:var(--muted);line-height:1.5}.public-beta-thanks{margin:17px 0;color:#d9c8df;font-size:11px;line-height:1.6}.public-beta-modal-actions{display:flex;gap:9px;flex-wrap:wrap}.public-beta-modal-actions .button{flex:1;min-width:170px}
+@media(max-width:760px){.public-beta-banner{align-items:flex-start;padding:10px 14px;gap:10px}.public-beta-copy{align-items:flex-start}.public-beta-copy p{font-size:10px}.public-beta-actions{flex-direction:column}.public-beta-actions button{padding:6px 8px}.public-beta-badge{margin-top:1px}}
+@media(max-width:520px){.public-beta-banner{display:block}.public-beta-copy{display:block}.public-beta-badge{display:inline-flex;margin-bottom:6px}.public-beta-actions{margin-top:8px;display:flex;flex-direction:row}.public-beta-actions button{flex:1}}

@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles.css?v=2.7.3">
+  <link rel="stylesheet" href="./styles.css?v=2.7.6">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 </head>
@@ -59,6 +59,17 @@
     <button data-route="profile">Profile</button>
     <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
   </div>
+
+  <aside class="public-beta-banner" aria-label="Public beta notice">
+    <div class="public-beta-copy">
+      <span class="public-beta-badge">PUBLIC BETA</span>
+      <p><b>BOZO is still being improved.</b> Expect occasional bugs or unfinished features while the platform grows.</p>
+    </div>
+    <div class="public-beta-actions">
+      <button id="public-beta-learn-more" type="button">Learn more</button>
+      <button id="public-beta-report" type="button">Report an issue</button>
+    </div>
+  </aside>
 
   <main>
     <section id="view-home" class="view active">
@@ -821,6 +832,28 @@
     <p>Independent, ad-free chess learning. © 2026 BOZO.</p>
   </footer>
 
+
+  <div id="public-beta-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal public-beta-modal">
+      <button id="close-public-beta-modal" class="modal-close" type="button" aria-label="Close">×</button>
+      <div class="auth-brand">
+        <img src="./assets/bozo-mascot.webp" alt="Professor Bozo">
+        <div><span>WELCOME TO THE</span><h2>Public Beta</h2></div>
+      </div>
+      <p class="public-beta-intro">BOZO is ready to use, but it is not finished. Early players are helping test the platform and shape what comes next.</p>
+      <div class="public-beta-points">
+        <article><span>🧠</span><div><b>AI Coach</b><small>Responses and board understanding are still being refined.</small></div></article>
+        <article><span>🔎</span><div><b>Game Review</b><small>Opening recognition and explanations will continue improving.</small></div></article>
+        <article><span>📚</span><div><b>Opening Library</b><small>Community-reviewed theory and coverage will keep expanding.</small></div></article>
+      </div>
+      <p class="public-beta-thanks">Found something wrong or confusing? Send a report directly through BOZO so it can be reviewed.</p>
+      <div class="public-beta-modal-actions">
+        <button id="public-beta-modal-report" class="button primary" type="button">Report an issue</button>
+        <button id="public-beta-modal-close-button" class="button secondary" type="button">Continue to BOZO</button>
+      </div>
+    </div>
+  </div>
+
   <div id="community-feedback-modal" class="modal-backdrop" hidden>
     <div class="auth-modal community-feedback-modal">
       <button id="close-community-feedback" class="modal-close" type="button">×</button>
@@ -1398,7 +1431,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app.js?v=2.7.4"></script>
+  <script src="./app.js?v=2.7.6"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>

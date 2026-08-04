@@ -6356,3 +6356,20 @@ sb.auth.onAuthStateChange(async (_event, session) => {
   await loadIdentity();
   route((location.hash || '#home').slice(1));
 })();
+
+
+// BOZO v2.7.6 — public beta notice
+function openPublicBetaModal() { $('public-beta-modal').hidden = false; }
+function closePublicBetaModal() { $('public-beta-modal').hidden = true; }
+$('public-beta-learn-more').addEventListener('click', openPublicBetaModal);
+$('close-public-beta-modal').addEventListener('click', closePublicBetaModal);
+$('public-beta-modal-close-button').addEventListener('click', closePublicBetaModal);
+$('public-beta-modal').addEventListener('click', event => {
+  if (event.target.id === 'public-beta-modal') closePublicBetaModal();
+});
+function openBetaIssueReport() {
+  closePublicBetaModal();
+  openCommunityFeedback('report');
+}
+$('public-beta-report').addEventListener('click', openBetaIssueReport);
+$('public-beta-modal-report').addEventListener('click', openBetaIssueReport);
