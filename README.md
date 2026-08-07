@@ -1,3 +1,10 @@
+## v2.7.9 — Premium tournament pieces
+
+- Switched every shared chess board to the realistic Staunton-style `bozo-custom` set already bundled with the project.
+- Tuned sizing and shadows for readability on BOZO's cream/purple board.
+- Added an automatic fallback to `bozo-classic` if a piece asset ever fails to load.
+- No database or Supabase changes required.
+
 ## v2.7.3 — Advanced issue reporting
 
 - Screenshot attachments stored privately in Supabase Storage

@@ -5197,11 +5197,12 @@ function webPiece(symbol) {
   if (!id) return '';
 
   const color = id[0] === 'w' ? 'white' : 'black';
-  const source = `./assets/pieces/bozo-classic/${id}.svg?v=2.7.8`;
+  const source = `./assets/pieces/bozo-custom/${id}.svg?v=2.7.9`;
 
   return `<img
     class="bozo-chess-piece bozo-chess-piece-${color}"
     src="${source}"
+    onerror="this.onerror=null;this.src='./assets/pieces/bozo-classic/${id}.svg?v=2.7.9'"
     alt=""
     draggable="false"
     aria-hidden="true">`;
