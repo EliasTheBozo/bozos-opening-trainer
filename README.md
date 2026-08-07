@@ -644,3 +644,9 @@ Features:
 - Defaults to a compact player on small screens.
 - Temporarily collapses while BOZO modal dialogs are open.
 - No Supabase migration required.
+
+## v2.7.7 — Premium Classic Chess Pieces
+- Replaced the default BOZO board pieces with a familiar Staunton-style set.
+- Added warm ivory shading to White and graphite shading to Black for improved board contrast.
+- Preserved the original custom BOZO set in `assets/pieces/bozo-custom/` as a fallback.
+- No database or Supabase changes required.
