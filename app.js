@@ -1532,7 +1532,84 @@ const BOZO_CLOUD_OPENINGS = [
     variation:'Bozo Main Line',
     pgn:'1. Nf3 d5 2. b4 Nf6 3. Bb2 g6 4. h3 Bg7 5. g4 Qd6 6. a3 c5 7. g5 Nh5 8. Bxg7 Nxg7 9. bxc5 Qxc5 10. e3 O-O 11. d4 Qc7 12. Nbd2 Be6 13. h4 Nd7 14. Qb1 Bg4 15. Bd3 e5 16. Nxe5 Nxe5 17. dxe5 Qxe5 18. O-O Bh3 19. Re1 f6 20. f4 Qe6 21. Qd1 Bg4 22. Nf3 Qd6 23. gxf6 Qxf6 24. Be2 Rad8 25. Qd4 Qe7 26. Ng5 Bxe2 27. Rxe2 Nf5 28. Qd3 Nxh4 29. Rh2 Rf5 30. Kh1 h6 31. Rg1 hxg5 32. Rxh4 gxh4 33. Rxg6+ Kh7 34. Qxf5 Qe4+ 35. Qxe4 dxe4 36. Re6 Rd2 37. c4 Re2 38. Rxe4',
     source_type:'bozo',
-    notes:'A BOZO custom Réti system that develops into a Polish-Grob pawn expansion.'
+    notes:'A BOZO custom Réti system that develops into a Polish-Grob pawn expansion.',
+    author_explanations: {
+      "1": "This move develops our knight to control e5 allowing for b4 and bb2 hitting g7 without an easy central pawn expansion from black to block the diagonal which leads to black playing Nf6 where we then go for h3 g4.",
+      "2": "This move aims to expand into the center, allowing the queen to come out on the d file and play for e6 or c5.",
+      "3": "This move prepares a flank fianchetto for our bishop, which will land on the b2 square next move, given black cannot easily play e5 to cut off the diagonal reaching to g7 where if taken by white’s bishop the black rook on h8 would become undefended.",
+      "4": "This move aims to defend the aforementioned diagonal from white’s bishop on b2 while developing a knight towards the center, defending d5 if black plans to bring the queen out.",
+      "5": "As stated before, this move looks to apply pressure on the long diagonal, which is currently guarded by black’s knight on f6, our next few moves will look to weaken the knight and force it to move.",
+      "6": "This move aims to fianchetto black’s bishop and prepare for a king side castle which would then anchor black’s knight and prevent white from creating doubled pawns (*note - doubled pawns on the kingside aren't always a bad thing depending on where the opponent has castled and how active your rook on that side of the board is, many counterattacks succeed because of doubled pawns that open a file for attack.)",
+      "7": "This move aims to anchor a g4 push so that we can then play g5 and kick away the knight, while also creating a luft for our king if we plan to king side castle.",
+      "8": "Fianchettos the black bishop and prepares to king side castle.",
+      "9": "As previously stated, this move aims to play g5 eventually and kick out the black knight.",
+      "10": "This move temporarily disrupts white’s plan of attack as the b4 pawn is now hanging.",
+      "11": "This defends our b4 pawn allowing us to play g5 without having to worry about losing a pawn later on. As for why we didn’t play g5 immediately as the threat on black’s knight would be greater than their threat on our pawn, that is just how I prefer to play the opening, if you wish to play g5 and play out that sequence and then a3, more power to you, I just find that defending b4 first is a more flexible option.",
+      "12": "Black aims to further threaten the b4 pawn and expand into the center.",
+      "13": "This is where the main idea of this opening finally shines, as we kick out the black knight and aim to trade bishops, making the black structure seem a bit incoherent.",
+      "14": "This guards black’s bishop, aiming to recapture after white trades.",
+      "15": "Trading off black’s strong bishop allows white to not have to worry about repositioning their own bishop later on as black continues to expand into the center.",
+      "16": "Recaptures.",
+      "17": "Since our queenside expansion has served its purpose, we capture one of blacks central pawns, weakening their control over the board.",
+      "18": "Recaptures.",
+      "19": "Aims to develop our bishop and eventually castle, this move also opens up our queen.",
+      "20": "Black castles, aiming to place a rook on e8 and play for e5 to gain more central control.",
+      "21": "This move aims to gain central control and attack black’s queen, while building a potential outpost for our knight to go to e5.",
+      "22": "Black retreats the queen and repositions it to target our kingside.",
+      "23": "Develops our knight and plans to replace the f3 knight once it goes to e5.",
+      "24": "Develops the bishop and prevents us from immediately playing c4 to challenge black’s center.",
+      "25": "This move aims to strengthen the g5 pawn and potentially play for h5 in the future to strike at black’s kingside.",
+      "26": "Black further completes their development and prepares to play e5 once their bishop relocates to strike at our center.",
+      "27": "This move aims to target the open b-file and potentially capture on b7 after black initiates trades in the center, however we would need to castle before acting on this plan so that our rook on a1 isn’t unprotected.",
+      "28": "Black relocates their bishop and aims to either play e5 immediately or trade off their bad bishop for our active knight.",
+      "29": "We develop our bishop to both target black’s kingside should our plan to play h5 come into fruition and allows us to castle king side after trading off in the center.",
+      "30": "Black initiates a sequence of trades in the center to move into the endgame.",
+      "31": "Trading sequence.",
+      "32": "Trading sequence.",
+      "33": "Trading sequence.",
+      "34": "Trading sequence.",
+      "35": "We king side castle, which may seem a bit unorthodox given we played a pawn storm on this side of the board earlier on, but black has no real way to threaten a checkmate currently as we traded off their dark squared bishop and their knight would take multiple moves to reposition itself in a meaningful way.",
+      "36": "Black plays a one move threat on our rook.",
+      "37": "Retreats our rook to a safe square while defending e4 so that we can later play f4 and kick away black’s queen.",
+      "38": "Black aims to weaken our kingside and infiltrate with the queen after an exchange of pawns.",
+      "39": "Kicks away the black queen and further strengthens g5.",
+      "40": "Black retreats their queen and aims to infiltrate on g4.",
+      "41": "This move prevents black from play Qg4+ without trading off queens.",
+      "42": "Black makes a threat onto our queen.",
+      "43": "We both activate our knight onto a better square and defend our queen, and while this also may seem a bit counterintuitive as we walk into a pin, but the worst black can really do is just trade off our knight for their bishop, which just kills off their attack.",
+      "44": "Black just plays a waiting move as they don’t really have any initiative in the current position.",
+      "45": "This move both aims to open up black’s king and allow us to reposition our knight to g5 later on.",
+      "46": "Recapturing with the queen creates a battery on the f-file and discourages us from playing e4.",
+      "47": "This move breaks the pin on our knight to our queen, giving both pieces freedom of mobility to reposition and attack black’s weakened king side.",
+      "48": "Black repositions their inactive rook and aims to potentially play d4 and initiate a trading sequence that could leave our f4 pawn vulnerable.",
+      "49": "Stops black from playing d4 and aims to trade queens and reposition our knight upon recapturing.",
+      "50": "Black retreats their queen.",
+      "51": "We bring our knight into the attack and look to trade off black’s active bishop, allowing us to position our rook on h2 upon recapturing to further coordinate with our attack.",
+      "52": "Trading sequence.",
+      "53": "Trading sequence, our rook is now more active on the 2nd rank and can reposition to h2 to pressure black’s king.",
+      "54": "Black forks our queen and h4 pawn.",
+      "55": "We retreat our queen.",
+      "56": "Black takes our undefended pawn.",
+      "57": "We attack black’s undefended knight.",
+      "58": "Black plays a rather tricky move, and if we simply take their hanging knight they sack their rook for our knight, and upon our pawn recapture the take our pawn with their queen, delivering both a check and threat onto our hanging rook on h4 should we just take their hanging knight.",
+      "59": "Slide our king out of the way to both avoid black’s trick and allow our rook on a1 to get into the game on g1.",
+      "60": "Black attacks our knight.",
+      "61": "We play a trick of our own, as the following sequence will not only result in an equal trade, but also result in us having a severe threat on the black king.",
+      "62": "This begins the sequence after Rg1.",
+      "63": "This continues the sequence after Rg1.",
+      "64": "This continues the sequence after Rg1.",
+      "65": "This continues the sequence after Rg1.",
+      "66": "This continues the sequence after Rg1.",
+      "67": "After this sequence black only has 1 move to not lose on the spot.",
+      "68": "This is black’s ONLY move here, as any other move would result in a discovered check to win black’s queen.",
+      "69": "We trade queens.",
+      "70": "We trade queens.",
+      "71": "We target black’s weak e4 pawn.",
+      "72": "Black attacks our c2 pawn.",
+      "73": "We advance our pawn to defend it from black’s rook.",
+      "74": "Black attacks our e3 pawn and aims to advance their h pawn down the board.",
+      "75": "We capture black’s hanging pawn."
+}
   },
   {
     eco:'A00',
@@ -1622,7 +1699,8 @@ async function importOpeningLibrary() {
         imported_from: row.source_type === 'official'
           ? 'lichess-org/chess-openings'
           : 'bozos-opening-trainer',
-        imported_at: new Date().toISOString()
+        imported_at: new Date().toISOString(),
+        author_explanations: row.author_explanations || null
       }
     })).filter(row => {
       const key = `${row.name}|${row.variation || ''}|${row.pgn}`;
@@ -1950,9 +2028,45 @@ $('coach-question').addEventListener('keydown', event => {
   if (event.key === 'Enter') askCurrentStudyMove();
 });
 
+function matchingBozoOpeningDefinition(opening) {
+  if (!opening) return null;
+  return BOZO_CLOUD_OPENINGS.find(item =>
+    item.eco === opening.eco &&
+    item.name === opening.name &&
+    (item.variation || 'Main Line') === (opening.variation || 'Main Line')
+  ) || null;
+}
+
+function studyAuthorExplanation(ply = studyPly) {
+  if (!studyOpening || !ply) return '';
+  const definition = matchingBozoOpeningDefinition(studyOpening);
+  const explanations = definition?.author_explanations || studyOpening?.metadata?.author_explanations || {};
+  return explanations?.[String(ply)] || explanations?.[ply] || '';
+}
+
+function updateStudyAuthorExplanation() {
+  const panel = document.getElementById('study-author-explanation');
+  const text = document.getElementById('study-author-explanation-text');
+  const move = document.getElementById('study-author-explanation-move');
+  if (!panel || !text || !move) return;
+
+  const explanation = studyAuthorExplanation();
+  if (!studyPly || !explanation) {
+    panel.hidden = true;
+    text.textContent = '';
+    move.textContent = '';
+    return;
+  }
+
+  const san = studyMoves[studyPly - 1] || '';
+  move.textContent = `${Math.ceil(studyPly / 2)}${studyPly % 2 ? '.' : '...'} ${san}`;
+  text.textContent = explanation;
+  panel.hidden = false;
+}
+
 async function openStudyOpening(openingId) {
   const { data, error } = await sb.from('openings')
-    .select('id,eco,name,variation,pgn,notes')
+    .select('id,eco,name,variation,pgn,notes,metadata')
     .eq('id', openingId)
     .maybeSingle();
 
@@ -1973,6 +2087,7 @@ async function openStudyOpening(openingId) {
   $('study-pgn').textContent = data.pgn;
   $('study-modal').hidden = false;
   clearCoach();
+  updateStudyAuthorExplanation();
   paintStudy();
   requestAnimationFrame(() => paintStudy());
   setTimeout(() => paintStudy(), 80);
@@ -1995,6 +2110,7 @@ function setStudyPly(nextPly) {
   }
   clearCoachAnnotations();
   updateCoachMoveLabel();
+  updateStudyAuthorExplanation();
   paintStudy();
 }
 
@@ -2362,6 +2478,7 @@ async function askCurrentStudyMove() {
         mode: 'study',
         gameStatus: 'study',
         moveHistory: studyMoves.slice(0, studyPly),
+        authoritativeOpeningNote: studyAuthorExplanation(studyPly),
         verifiedBoardFacts: coachFacts,
         strictGrounding: true
       }

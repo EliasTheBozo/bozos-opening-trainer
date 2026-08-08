@@ -3026,3 +3026,9 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
 :root[data-bozo-board-size="large"] .bozo-chess-piece {
   width: 93% !important; height: 93% !important; max-width:93% !important; max-height:93% !important;
 }
+
+.study-author-explanation{padding:1rem;border:1px solid rgba(245,158,11,.34);border-radius:16px;background:linear-gradient(180deg,rgba(245,158,11,.09),rgba(139,92,246,.06));}
+.study-author-explanation[hidden]{display:none!important}
+.study-author-explanation-heading{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.55rem}
+.study-author-explanation-heading strong{font-size:.82rem;color:#f59e0b;white-space:nowrap}
+.study-author-explanation p{margin:0;color:var(--text);font-size:.9rem;line-height:1.6;white-space:pre-wrap}
