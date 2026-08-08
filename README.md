@@ -1,3 +1,11 @@
+## v2.7.10 — Board-grounded BOZO Coach
+
+- BOZO Coach now receives an explicit current-board piece map in addition to FEN.
+- The selected move is replayed from the previous FEN so the coach gets verified from/to/capture/castling facts.
+- Client-side validation removes stale piece-square claims such as calling a pawn on g5 the "g4 pawn".
+- Study Coach and Game Review Coach use the same grounding checks.
+- No Supabase schema changes are required. The existing `explain-move` Edge Function continues to receive the richer `verifiedBoardFacts` payload.
+
 ## v2.7.9 — Premium tournament pieces
 
 - Switched every shared chess board to the realistic Staunton-style `bozo-custom` set already bundled with the project.

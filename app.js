@@ -2139,6 +2139,45 @@ function verifiedCoachFacts(fen, previousFen, playedMove) {
   const legalMoves = game.moves({ verbose:true });
   const captures = legalMoves.filter(move => move.flags?.includes('c') || move.flags?.includes('e')).map(move => `${move.san} captures on ${move.to}`);
   const sideToMove = String(fen || '').split(' ')[1] === 'b' ? 'Black' : 'White';
+
+  // Build an explicit, machine-checkable inventory of the CURRENT board. This is
+  // deliberately redundant with FEN: the edge function receives both so it does
+  // not have to "remember" where a piece used to be several moves ago.
+  const pieceMap = Object.entries(board).reduce((acc, [square, piece]) => {
+    acc[square] = `${piece.color === 'w' ? 'White' : 'Black'} ${COACH_PIECE_NAMES[piece.type]}`;
+    return acc;
+  }, {});
+  const whitePieces = Object.entries(pieceMap).filter(([,label]) => label.startsWith('White')).map(([sq,label]) => `${label} on ${sq}`);
+  const blackPieces = Object.entries(pieceMap).filter(([,label]) => label.startsWith('Black')).map(([sq,label]) => `${label} on ${sq}`);
+  const boardStateText = [...whitePieces, ...blackPieces].join('; ');
+
+  // Verify what the selected move ACTUALLY did by replaying it from previousFen.
+  // This gives the coach exact from/to/capture information instead of asking the
+  // model to infer it from notation and history.
+  let moveFacts = null;
+  try {
+    if (previousFen && playedMove) {
+      const before = new Chess(previousFen);
+      const verbose = before.move(playedMove, { sloppy: true });
+      if (verbose) {
+        moveFacts = {
+          san: verbose.san || playedMove,
+          color: verbose.color === 'w' ? 'White' : 'Black',
+          piece: COACH_PIECE_NAMES[verbose.piece] || verbose.piece,
+          from: verbose.from,
+          to: verbose.to,
+          captured: verbose.captured ? (COACH_PIECE_NAMES[verbose.captured] || verbose.captured) : null,
+          promotion: verbose.promotion ? (COACH_PIECE_NAMES[verbose.promotion] || verbose.promotion) : null,
+          isCapture: Boolean(verbose.captured),
+          isCastle: /O-O/.test(verbose.san || playedMove),
+          resultingFen: before.fen()
+        };
+      }
+    }
+  } catch (moveError) {
+    console.warn('Could not verify selected coach move:', moveError);
+  }
+
   return {
     playedMove: playedMove || '',
     sideToMove,
@@ -2148,7 +2187,17 @@ function verifiedCoachFacts(fen, previousFen, playedMove) {
     attackedWhitePieces: attacked.w.map(item => item.target),
     attackedBlackPieces: attacked.b.map(item => item.target),
     attackRelations: [...attacked.w, ...attacked.b].slice(0, 40),
+    pieceMap,
+    whitePieces,
+    blackPieces,
+    boardStateText,
+    moveFacts,
+    currentFen: fen || '',
     groundingRules: [
+      'Treat currentFen and pieceMap as the source of truth for the CURRENT position.',
+      'Never describe a piece as being on a square unless pieceMap contains that exact piece and square.',
+      'Do not refer to a pawn by an old square from moveHistory. For example, if a pawn moved g4-g5, it is now the g5 pawn, not the g4 pawn.',
+      'Use moveFacts as the source of truth for what the selected move moved, captured, or castled.',
       'Only state that a piece is attacked, pinned, trapped, forked, hanging, or won when the verified facts explicitly support it.',
       'Do not infer an immediate attack from a generic opening idea.',
       'When tactical verification is absent, explain development, central control, king safety, pawn structure, or long-term plans instead.',
@@ -2158,7 +2207,7 @@ function verifiedCoachFacts(fen, previousFen, playedMove) {
   };
   } catch (error) {
     console.warn('Could not calculate verified coach facts:', error);
-    return { playedMove: playedMove || '', sideToMove: '', inCheck:false, legalCaptureCount:0, legalCaptures:[], attackedWhitePieces:[], attackedBlackPieces:[], attackRelations:[], groundingRules:['Do not make tactical claims unless directly verified from the board.'], previousFen: previousFen || '' };
+    return { playedMove: playedMove || '', sideToMove: '', inCheck:false, legalCaptureCount:0, legalCaptures:[], attackedWhitePieces:[], attackedBlackPieces:[], attackRelations:[], pieceMap:{}, whitePieces:[], blackPieces:[], boardStateText:'', moveFacts:null, currentFen:fen || '', groundingRules:['Do not make tactical claims unless directly verified from the board.'], previousFen: previousFen || '' };
   }
 }
 
@@ -2179,12 +2228,62 @@ function textClaimsUnsupportedAttack(text, facts) {
   return checks.some(([pattern, supported]) => pattern.test(text) && !supported);
 }
 
+function textClaimsImpossibleBoardReference(text, facts) {
+  if (!text || !facts?.pieceMap) return false;
+  const pieceMap = facts.pieceMap || {};
+  const lower = String(text).toLowerCase();
+
+  // Catch explicit current-square claims. Curly apostrophes and optional hyphens
+  // are supported because model prose often varies typographically.
+  const patterns = [
+    /\b(white|black)(?:['’]s)?\s+([a-h][1-8])[-\s]+(pawn|knight|bishop|rook|queen|king)\b/gi,
+    /\b(white|black)(?:['’]s)?\s+(pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+([a-h][1-8])\b/gi,
+    /\bthe\s+(white|black)\s+(pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+([a-h][1-8])\b/gi
+  ];
+
+  for (let index = 0; index < patterns.length; index++) {
+    const pattern = patterns[index];
+    let match;
+    while ((match = pattern.exec(lower))) {
+      let color, square, piece;
+      if (index === 0) { color = match[1]; square = match[2]; piece = match[3]; }
+      else { color = match[1]; piece = match[2]; square = match[3]; }
+      const expected = `${color === 'white' ? 'White' : 'Black'} ${piece}`;
+      if (pieceMap[square] !== expected) return true;
+    }
+  }
+
+  // Catch colorless forms such as "g4 pawn", "g4-pawn", or "pawn on g4".
+  const squarePiece = /\b([a-h][1-8])[-\s]+(pawn|knight|bishop|rook|queen|king)\b/gi;
+  let match;
+  while ((match = squarePiece.exec(lower))) {
+    const [, square, piece] = match;
+    const actual = pieceMap[square];
+    if (!actual || !actual.toLowerCase().endsWith(` ${piece}`)) return true;
+  }
+
+  const pieceOnSquare = /\b(pawn|knight|bishop|rook|queen|king)\s+(?:on|at)\s+([a-h][1-8])\b/gi;
+  while ((match = pieceOnSquare.exec(lower))) {
+    const [, piece, square] = match;
+    const actual = pieceMap[square];
+    if (!actual || !actual.toLowerCase().endsWith(` ${piece}`)) return true;
+  }
+
+  return false;
+}
+
+function coachSentenceIsGrounded(text, facts) {
+  return !textClaimsImpossibleBoardReference(text, facts) && !textClaimsUnsupportedAttack(text, facts);
+}
+
 function sanitizeCoachExplanation(explanation, facts) {
   if (!explanation || typeof explanation !== 'object') return explanation;
   const cleanText = value => {
     if (typeof value !== 'string') return value;
-    const sentences = value.split(/(?<=[.!?])\s+/).filter(sentence => !textClaimsUnsupportedAttack(sentence, facts));
-    return sentences.join(' ').trim() || 'This move should be understood through its verified positional effects rather than an unconfirmed tactical claim.';
+    const sentences = value
+      .split(/(?<=[.!?])\s+/)
+      .filter(sentence => coachSentenceIsGrounded(sentence, facts));
+    return sentences.join(' ').trim() || 'The coach removed an unsupported board claim from this explanation. Ask again for a position-grounded explanation.';
   };
   const output = Array.isArray(explanation) ? explanation.map(item => typeof item === 'string' ? cleanText(item) : sanitizeCoachExplanation(item, facts)) : {};
   if (!Array.isArray(explanation)) Object.entries(explanation).forEach(([key,value]) => {
@@ -2323,7 +2422,7 @@ function renderCoachExplanation(explanation) {
         ${escapeHtml(explanation.suggestedQuestion)}
       </button>
     ` : ''}
-    <div class="coach-grounding-note">Tactical claims are checked against the current board. Unsupported claims are omitted.</div>
+    <div class="coach-grounding-note">Piece locations and tactical claims are checked against the current board. Unsupported or stale claims are omitted.</div>
   `;
 
   const followUp = $('coach-answer').querySelector('[data-coach-question]');
@@ -3617,7 +3716,7 @@ function renderReviewCoachExplanation(explanation) {
         ${escapeHtml(explanation.suggestedQuestion)}
       </button>
     ` : ''}
-    <div class="coach-grounding-note">Tactical claims are checked against the current board. Unsupported claims are omitted.</div>
+    <div class="coach-grounding-note">Piece locations and tactical claims are checked against the current board. Unsupported or stale claims are omitted.</div>
   `;
 
   const followUp = $('review-coach-answer').querySelector('[data-review-follow-up]');
@@ -5197,12 +5296,12 @@ function webPiece(symbol) {
   if (!id) return '';
 
   const color = id[0] === 'w' ? 'white' : 'black';
-  const source = `./assets/pieces/bozo-custom/${id}.svg?v=2.7.9`;
+  const source = `./assets/pieces/bozo-custom/${id}.svg?v=2.7.10`;
 
   return `<img
     class="bozo-chess-piece bozo-chess-piece-${color}"
     src="${source}"
-    onerror="this.onerror=null;this.src='./assets/pieces/bozo-classic/${id}.svg?v=2.7.9'"
+    onerror="this.onerror=null;this.src='./assets/pieces/bozo-classic/${id}.svg?v=2.7.10'"
     alt=""
     draggable="false"
     aria-hidden="true">`;
