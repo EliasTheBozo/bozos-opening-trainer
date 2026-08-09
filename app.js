@@ -2431,6 +2431,7 @@ function paintStudy() {
         const piece = boardMatrix[rowIndex][columnIndex];
         const square = document.createElement('div');
         square.className = 'opening-study-square';
+        square.dataset.square = `${String.fromCharCode(97 + columnIndex)}${8 - rowIndex}`;
 
         if (piece) {
           const color = piece.color === 'w' ? 'white' : 'black';
@@ -2444,6 +2445,7 @@ function paintStudy() {
     }
 
     boardElement.replaceChildren(fragment);
+    syncBoardUserAnnotationPosition('study-board', `${studyGame.fen()}|${studyOrientation}`);
 
     const progress = document.getElementById('study-progress');
     if (progress) {
@@ -2860,6 +2862,209 @@ function squareCenter(square, orientation = 'white') {
 
 function validSquare(square) {
   return typeof square === 'string' && /^[a-h][1-8]$/.test(square);
+}
+
+// Universal user annotations for every non-live board that did not already
+// have its own annotation implementation. Right-drag draws arrows; right-click
+// highlights squares. Modifiers follow familiar analysis-board conventions:
+// green = default, red = Shift, blue = Ctrl/Cmd, yellow = Alt.
+const boardUserAnnotationState = new Map();
+
+function boardAnnotationColor(event) {
+  if (event?.shiftKey) return 'red';
+  if (event?.ctrlKey || event?.metaKey) return 'blue';
+  if (event?.altKey) return 'yellow';
+  return 'green';
+}
+
+function boardAnnotationSquareFromTarget(target, board) {
+  const squareEl = target?.closest?.('[data-square],[data-study-square]');
+  if (!squareEl || !board.contains(squareEl)) return '';
+  return squareEl.dataset.square || squareEl.dataset.studySquare || '';
+}
+
+function ensureBoardAnnotationState(boardId) {
+  if (!boardUserAnnotationState.has(boardId)) {
+    boardUserAnnotationState.set(boardId, {
+      items: [],
+      dragStart: '',
+      dragging: false,
+      suppressContextMenu: false,
+      positionKey: null
+    });
+  }
+  return boardUserAnnotationState.get(boardId);
+}
+
+function toggleBoardUserArrow(boardId, from, to, color = 'green') {
+  if (!validSquare(from) || !validSquare(to) || from === to) return;
+  const state = ensureBoardAnnotationState(boardId);
+  const sameRoute = state.items.findIndex(item => item.type === 'arrow' && item.from === from && item.to === to);
+  if (sameRoute >= 0) {
+    const existing = state.items[sameRoute];
+    if (existing.color === color) state.items.splice(sameRoute, 1);
+    else existing.color = color;
+  } else {
+    state.items.push({ type:'arrow', from, to, color });
+  }
+  state.items = state.items.slice(-64);
+  paintBoardUserAnnotations(boardId);
+}
+
+function toggleBoardUserSquare(boardId, square, color = 'green') {
+  if (!validSquare(square)) return;
+  const state = ensureBoardAnnotationState(boardId);
+  const existingIndex = state.items.findIndex(item => item.type === 'square' && item.square === square);
+  if (existingIndex >= 0) {
+    const existing = state.items[existingIndex];
+    if (existing.color === color) state.items.splice(existingIndex, 1);
+    else existing.color = color;
+  } else {
+    state.items.push({ type:'square', square, color });
+  }
+  state.items = state.items.slice(-64);
+  paintBoardUserAnnotations(boardId);
+}
+
+function clearBoardUserAnnotations(boardId) {
+  const state = ensureBoardAnnotationState(boardId);
+  state.items = [];
+  state.dragStart = '';
+  state.dragging = false;
+  state.suppressContextMenu = false;
+  paintBoardUserAnnotations(boardId);
+}
+
+function syncBoardUserAnnotationPosition(boardId, positionKey) {
+  const state = ensureBoardAnnotationState(boardId);
+  const nextKey = String(positionKey || '');
+  if (state.positionKey !== null && state.positionKey !== nextKey) {
+    state.items = [];
+  }
+  state.positionKey = nextKey;
+  paintBoardUserAnnotations(boardId);
+}
+
+function boardAnnotationOrientation(boardId) {
+  if (boardId === 'study-board') return studyOrientation;
+  if (boardId === 'game-review-board') return reviewOrientation;
+  if (boardId === 'study-builder-board') return studyBuilderOrientation;
+  if (boardId === 'train-board') return trainUserSide;
+  if (boardId === 'puzzle-board') return puzzleUserSide;
+  return 'white';
+}
+
+function boardAnnotationLayerId(boardId) {
+  return {
+    'study-board': 'study-user-arrow-layer',
+    'game-review-board': 'review-user-arrow-layer',
+    'study-builder-board': 'study-builder-user-arrow-layer',
+    'train-board': 'train-user-arrow-layer',
+    'puzzle-board': 'puzzle-user-arrow-layer'
+  }[boardId] || '';
+}
+
+function paintBoardUserAnnotations(boardId) {
+  const layerId = boardAnnotationLayerId(boardId);
+  const svg = layerId ? $(layerId) : null;
+  if (!svg) return;
+  const state = ensureBoardAnnotationState(boardId);
+  const orientation = boardAnnotationOrientation(boardId);
+  const colors = {
+    green:'#78c850',
+    red:'#ef5350',
+    blue:'#42a5f5',
+    yellow:'#f6c945'
+  };
+  const safeId = boardId.replace(/[^a-z0-9-]/gi, '-');
+  const markers = Object.entries(colors).map(([name,color]) => `
+    <marker id="user-arrow-${safeId}-${name}" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="${color}"></path>
+    </marker>`).join('');
+  const markup = state.items.map(item => {
+    const color = colors[item.color] || colors.green;
+    if (item.type === 'square' && validSquare(item.square)) {
+      const center = squareCenter(item.square, orientation);
+      return `<rect x="${center.x-48}" y="${center.y-48}" width="96" height="96" rx="9" fill="${color}" opacity=".28"></rect>`;
+    }
+    if (item.type === 'arrow' && validSquare(item.from) && validSquare(item.to)) {
+      const from = squareCenter(item.from, orientation);
+      const to = squareCenter(item.to, orientation);
+      const dx = to.x-from.x, dy = to.y-from.y;
+      const length = Math.hypot(dx,dy) || 1;
+      const shorten = 23;
+      const endX = to.x-(dx/length)*shorten;
+      const endY = to.y-(dy/length)*shorten;
+      const colorName = colors[item.color] ? item.color : 'green';
+      return `<line x1="${from.x}" y1="${from.y}" x2="${endX}" y2="${endY}" stroke="${color}" stroke-width="14" stroke-linecap="round" opacity=".88" marker-end="url(#user-arrow-${safeId}-${colorName})"></line>`;
+    }
+    return '';
+  }).join('');
+  svg.innerHTML = `<defs>${markers}</defs>${markup}`;
+}
+
+function registerUniversalBoardAnnotations(boardId) {
+  const board = $(boardId);
+  if (!board || board.dataset.userAnnotationsReady === '1') return;
+  board.dataset.userAnnotationsReady = '1';
+  const state = ensureBoardAnnotationState(boardId);
+
+  board.addEventListener('mousedown', event => {
+    if (event.button !== 2) return;
+    const square = boardAnnotationSquareFromTarget(event.target, board);
+    if (!validSquare(square)) return;
+    event.preventDefault();
+    state.dragStart = square;
+    state.dragging = true;
+    state.suppressContextMenu = false;
+  });
+
+  board.addEventListener('mouseup', event => {
+    if (event.button !== 2 || !state.dragging) return;
+    const end = boardAnnotationSquareFromTarget(event.target, board);
+    const start = state.dragStart;
+    const color = boardAnnotationColor(event);
+    event.preventDefault();
+    state.dragStart = '';
+    state.dragging = false;
+    if (validSquare(start) && validSquare(end)) {
+      state.suppressContextMenu = true;
+      if (end === start) toggleBoardUserSquare(boardId, start, color);
+      else toggleBoardUserArrow(boardId, start, end, color);
+      setTimeout(() => { state.suppressContextMenu = false; }, 50);
+    }
+  });
+
+  board.addEventListener('contextmenu', event => {
+    const square = boardAnnotationSquareFromTarget(event.target, board);
+    if (!validSquare(square)) return;
+    // Annotation creation is handled deterministically on right-button mouseup.
+    // This handler only suppresses the browser menu, avoiding event-order quirks.
+    event.preventDefault();
+  });
+
+  window.addEventListener('mouseup', event => {
+    if (event.button === 2 && state.dragging) {
+      state.dragStart = '';
+      state.dragging = false;
+    }
+  });
+}
+
+function initializeUniversalBoardAnnotations() {
+  ['study-board','game-review-board','study-builder-board','train-board','puzzle-board']
+    .forEach(registerUniversalBoardAnnotations);
+
+  const clearButtons = {
+    'study-clear-marks':'study-board',
+    'review-clear-marks':'game-review-board',
+    'study-builder-clear-marks':'study-builder-board',
+    'train-clear-marks':'train-board',
+    'puzzle-clear-marks':'puzzle-board'
+  };
+  Object.entries(clearButtons).forEach(([buttonId, boardId]) => {
+    $(buttonId)?.addEventListener('click', () => clearBoardUserAnnotations(boardId));
+  });
 }
 
 function drawCoachAnnotations(arrows = [], highlights = []) {
@@ -4013,9 +4218,11 @@ function paintGameReview() {
         ? (symbol === symbol.toUpperCase() ? 'white' : 'black')
         : '';
       return `<div class="${last ? 'review-last-square' : ''}"
+                   data-square="${square}"
                    data-piece-color="${color}">${webPiece(symbol)}</div>`;
     })
   ).join('');
+  syncBoardUserAnnotationPosition('game-review-board', `${fen}|${reviewOrientation}`);
 
   $$('[data-review-step]').forEach(button =>
     button.classList.toggle('active', Number(button.dataset.reviewStep) === reviewStepIndex)
@@ -5103,6 +5310,7 @@ $('clear-bot-arrows').addEventListener('click', () => {
   botUserArrows = [];
   paintBotUserAnnotations();
 });
+$('duel-clear-marks')?.addEventListener('click', () => { duelUserAnnotations = []; paintDuelAnnotations(); });
 
 function botSquareCenter(square) {
   const orientation = webBotSession?.playerColor === 'b' ? 'black' : 'white';
@@ -5898,7 +6106,7 @@ function webPiece(symbol) {
   if (!id) return '';
 
   const color = id[0] === 'w' ? 'white' : 'black';
-  const source = `./assets/pieces/bozo-universal/${id}.png?v=3.0.3`;
+  const source = `./assets/pieces/bozo-universal/${id}.png?v=3.2.0`;
 
   return `<img
     class="bozo-chess-piece bozo-chess-piece-${color}"
@@ -6382,6 +6590,7 @@ function paintStudyBoard() {
               </button>`;
     })
   ).join('');
+  syncBoardUserAnnotationPosition('study-builder-board', `${game.fen()}|${studyBuilderOrientation}`);
 
   $$('[data-study-square]').forEach(button =>
     button.addEventListener('click', () => handleStudySquare(button.dataset.studySquare))
@@ -7189,6 +7398,7 @@ function paintTrainBoard() {
     html.push(`<button type="button" data-square="${square}" data-piece-color="${piece?.color === 'w' ? 'white' : piece?.color === 'b' ? 'black' : ''}" class="${trainSelectedSquare === square ? 'selected' : ''}">${webPiece(symbol)}</button>`);
   }
   boardEl.innerHTML = html.join('');
+  syncBoardUserAnnotationPosition('train-board', `${trainGame.fen()}|${trainUserSide}`);
   boardEl.querySelectorAll('button').forEach(button => button.addEventListener('click', () => clickTrainSquare(button.dataset.square)));
 }
 
@@ -7502,6 +7712,7 @@ function paintPuzzleBoard() {
     html.push(`<button type="button" data-square="${square}" data-piece-color="${piece?.color==='w'?'white':piece?.color==='b'?'black':''}" class="${puzzleSelectedSquare===square?'selected':''}">${webPiece(symbol)}</button>`);
   }
   boardEl.innerHTML=html.join('');
+  syncBoardUserAnnotationPosition('puzzle-board', `${puzzleGame.fen()}|${puzzleUserSide}`);
   boardEl.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>clickPuzzleSquare(button.dataset.square)));
 }
 
@@ -7601,3 +7812,8 @@ function finishPuzzleSession() {
   } catch {}
   logActivity?.('opening_puzzles_completed',{ opening_id:puzzleOpening?.id||null, opening:puzzleOpening?.name||'Random openings', score:puzzleStats.score, accuracy, best_streak:puzzleStats.bestStreak }).catch?.(()=>{});
 }
+
+
+// BOZO universal board annotations
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeUniversalBoardAnnotations);
+else initializeUniversalBoardAnnotations();

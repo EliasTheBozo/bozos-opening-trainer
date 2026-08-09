@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles.css?v=3.0.1">
+  <link rel="stylesheet" href="./styles.css?v=3.2.0">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 </head>
@@ -275,12 +275,12 @@
         </div>
         <div class="train-layout">
           <div>
-            <div class="study-board-shell train-board-shell"><div id="train-board" class="web-duel-board train-board"></div></div>
+            <div class="study-board-shell train-board-shell"><div id="train-board" class="web-duel-board train-board"></div><svg id="train-user-arrow-layer" class="board-arrow-layer board-user-arrow-layer" viewBox="0 0 800 800" aria-hidden="true"></svg></div>
             <div id="train-feedback" class="train-feedback" data-state="neutral"><b>Your move.</b><span>Play the highlighted side's repertoire move from memory.</span></div>
             <div class="train-actions">
               <button id="train-hint" class="button secondary" type="button">Hint</button>
               <button id="train-show-answer" class="button secondary" type="button">Show answer</button>
-              <button id="train-restart" class="button secondary" type="button">Restart line</button>
+              <button id="train-restart" class="button secondary" type="button">Restart line</button><button id="train-clear-marks" class="button secondary" type="button">Clear marks</button>
             </div>
           </div>
           <aside class="panel train-sidebar">
@@ -319,9 +319,9 @@
           </div>
           <div class="train-layout">
             <div>
-              <div class="study-board-shell train-board-shell puzzle-board-shell"><div id="puzzle-board" class="web-duel-board train-board"></div></div>
+              <div class="study-board-shell train-board-shell puzzle-board-shell"><div id="puzzle-board" class="web-duel-board train-board"></div><svg id="puzzle-user-arrow-layer" class="board-arrow-layer board-user-arrow-layer" viewBox="0 0 800 800" aria-hidden="true"></svg></div>
               <div id="puzzle-feedback" class="train-feedback" data-state="neutral"><b>Your move.</b><span>Find the continuation from this opening position.</span></div>
-              <div class="train-actions"><button id="puzzle-hint" class="button secondary" type="button">Hint</button><button id="puzzle-answer" class="button secondary" type="button">Show answer</button><button id="puzzle-skip" class="button secondary" type="button">Skip puzzle</button></div>
+              <div class="train-actions"><button id="puzzle-hint" class="button secondary" type="button">Hint</button><button id="puzzle-answer" class="button secondary" type="button">Show answer</button><button id="puzzle-skip" class="button secondary" type="button">Skip puzzle</button><button id="puzzle-clear-marks" class="button secondary" type="button">Clear marks</button></div>
             </div>
             <aside class="panel train-sidebar puzzle-sidebar">
               <span class="eyebrow">POSITION</span>
@@ -609,6 +609,10 @@
                      class="board-arrow-layer"
                      viewBox="0 0 800 800"
                      aria-hidden="true"></svg>
+                <svg id="review-user-arrow-layer"
+                     class="board-arrow-layer board-user-arrow-layer"
+                     viewBox="0 0 800 800"
+                     aria-hidden="true"></svg>
               </div>
             </div>
 
@@ -617,7 +621,7 @@
               <button id="review-prev" class="button secondary">← Previous</button>
               <button id="review-next" class="button primary">Next →</button>
               <button id="review-end" class="button secondary">End ⏭</button>
-              <button id="review-flip" class="button secondary">Flip board</button>
+              <button id="review-flip" class="button secondary">Flip board</button><button id="review-clear-marks" class="button secondary">Clear marks</button>
             </div>
 
 
@@ -719,13 +723,13 @@
       <div class="study-editor-layout">
         <div class="study-board-column">
           <div class="study-board-shell">
-            <div id="study-builder-board" class="web-duel-board study-board study-builder-board"></div>
+            <div id="study-builder-board" class="web-duel-board study-board study-builder-board"></div><svg id="study-builder-user-arrow-layer" class="board-arrow-layer board-user-arrow-layer" viewBox="0 0 800 800" aria-hidden="true"></svg>
           </div>
 
           <div class="study-board-actions">
             <button id="study-start-button" class="button secondary">⏮ Start</button>
             <button id="study-previous-button" class="button secondary">← Previous</button>
-            <button id="study-flip-button" class="button secondary">Flip board</button>
+            <button id="study-flip-button" class="button secondary">Flip board</button><button id="study-builder-clear-marks" class="button secondary">Clear marks</button>
           </div>
 
           <div class="study-position-strip">
@@ -1194,13 +1198,17 @@
                  class="board-arrow-layer"
                  viewBox="0 0 800 800"
                  aria-hidden="true"></svg>
+            <svg id="study-user-arrow-layer"
+                 class="board-arrow-layer board-user-arrow-layer"
+                 viewBox="0 0 800 800"
+                 aria-hidden="true"></svg>
           </div>
           <div class="study-controls">
             <button id="study-start" class="button secondary">⏮ Start</button>
             <button id="study-prev" class="button secondary">← Previous</button>
             <button id="study-next" class="button primary">Next →</button>
             <button id="study-end" class="button secondary">End ⏭</button>
-            <button id="study-flip" class="button secondary">Flip board</button>
+            <button id="study-flip" class="button secondary">Flip board</button><button id="study-clear-marks" class="button secondary">Clear marks</button>
           </div>
         </div>
         <aside class="duel-sidebar">
@@ -1366,7 +1374,7 @@
           <div class="duel-actions">
             <button id="duel-offer-draw-button" class="button secondary">Offer draw</button>
             <button id="duel-resign-button" class="button secondary">Resign</button>
-            <button id="duel-refresh-button" class="button secondary">Refresh</button>
+            <button id="duel-refresh-button" class="button secondary">Refresh</button><button id="duel-clear-marks" class="button secondary">Clear marks</button>
           </div>
 
           <div id="duel-draw-offer-panel" class="duel-draw-offer-panel" hidden>
@@ -1604,7 +1612,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app.js?v=3.0.1"></script>
+  <script src="./app.js?v=3.2.0"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
