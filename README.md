@@ -678,3 +678,7 @@ Features:
 - Strengthened piece separation with ivory/graphite fills, outlines, and a restrained drop shadow.
 - Updated CSS/JS cache versions so browsers do not keep stale piece paths.
 - No Supabase or database changes are required.
+
+## v3.1.0 — Mission and Free-Learning Promise
+
+The homepage now states BOZO's core mission: powerful chess-learning tools should be available to every player regardless of rating or budget. A dedicated mission section and updated Support language make clear that contributions are optional and do not unlock stronger learning features. See `VISION.md` for the product principles guiding future development.
