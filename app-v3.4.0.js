@@ -3815,7 +3815,7 @@ function reviewPhaseRows(phase) {
 
 function reviewPhaseSummary(phase, rows) {
   if (!rows.length) return 'This game did not contain a clearly detected phase here.';
-  const accuracy = reviewAccuracyFor(rows);
+  const accuracy = reviewPhaseAccuracyFor(rows);
   const worst = [...rows].sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)[0];
   const serious = rows.filter(row => ['mistake','blunder'].includes(row.cls)).length;
   const clean = rows.filter(row => ['book','best','excellent','good'].includes(row.cls)).length;
@@ -4042,6 +4042,40 @@ function reviewAccuracyFor(rows) {
   return value == null ? null : Math.round(value * 10) / 10;
 }
 
+function reviewRowsForSide(rows = [], side = 'w') {
+  return rows.filter(row => row.mover === side);
+}
+
+function reviewErrorCounts(rows = []) {
+  return rows.reduce((counts, row) => {
+    if (row?.cls === 'inaccuracy') counts.inaccuracy++;
+    if (row?.cls === 'mistake') counts.mistake++;
+    if (row?.cls === 'blunder') counts.blunder++;
+    return counts;
+  }, { inaccuracy:0, mistake:0, blunder:0 });
+}
+
+// A phase score should communicate how well the phase was actually played, not
+// let a run of book/best moves visually erase a costly error. Start from the
+// engine-derived move accuracy, then apply a transparent severity penalty.
+function reviewPhaseAccuracyFor(rows = []) {
+  if (!rows.length) return null;
+  const base = reviewAccuracyFor(rows);
+  if (base == null) return null;
+  const errors = reviewErrorCounts(rows);
+  const penalty = errors.inaccuracy * 1.5 + errors.mistake * 4 + errors.blunder * 9;
+  return Math.max(0, Math.round((base - penalty) * 10) / 10);
+}
+
+function reviewErrorSummary(rows = []) {
+  const errors = reviewErrorCounts(rows);
+  const parts = [];
+  if (errors.inaccuracy) parts.push(`${errors.inaccuracy} inaccuracy${errors.inaccuracy === 1 ? '' : 'ies'}`.replace('inaccuracys','inaccuracies'));
+  if (errors.mistake) parts.push(`${errors.mistake} mistake${errors.mistake === 1 ? '' : 's'}`);
+  if (errors.blunder) parts.push(`${errors.blunder} blunder${errors.blunder === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' · ') : 'No inaccuracies, mistakes, or blunders';
+}
+
 async function startGameReview() {
   const message = $('review-import-message');
   const button = $('start-game-review');
@@ -4166,14 +4200,24 @@ function renderReviewSummary() {
 
   const phaseMarkup = ['opening','middlegame','endgame'].map(phase => {
     const phaseRows = rows.filter(row => row.phase === phase);
-    const accuracy = reviewAccuracyFor(phaseRows);
+    const whiteRows = reviewRowsForSide(phaseRows, 'w');
+    const blackRows = reviewRowsForSide(phaseRows, 'b');
+    const whiteAccuracy = reviewPhaseAccuracyFor(whiteRows);
+    const blackAccuracy = reviewPhaseAccuracyFor(blackRows);
     const range = phaseRows.length
       ? `${reviewMoveNotation(phaseRows[0]).split(' ')[0]}–${reviewMoveNotation(phaseRows[phaseRows.length - 1]).split(' ')[0]}`
       : 'Not detected';
     return `<article class="review-phase-card ${phaseRows.length ? '' : 'muted'}">
       <span>${reviewPhaseLabel(phase)}</span>
-      <strong>${phaseRows.length && accuracy != null ? `${accuracy}%` : '—'}</strong>
-      <small>${escapeHtml(range)}</small>
+      <div class="review-phase-accuracy-pair">
+        <div><small>White</small><strong>${whiteRows.length && whiteAccuracy != null ? `${whiteAccuracy}%` : '—'}</strong></div>
+        <div><small>Black</small><strong>${blackRows.length && blackAccuracy != null ? `${blackAccuracy}%` : '—'}</strong></div>
+      </div>
+      <small class="review-phase-range">${escapeHtml(range)}</small>
+      <div class="review-phase-errors">
+        <span><b>White:</b> ${escapeHtml(reviewErrorSummary(whiteRows))}</span>
+        <span><b>Black:</b> ${escapeHtml(reviewErrorSummary(blackRows))}</span>
+      </div>
       <p>${escapeHtml(reviewPhaseSummary(phase, phaseRows))}</p>
     </article>`;
   }).join('');
@@ -4495,17 +4539,29 @@ async function askReviewCoach() {
         classification: row.label,
         centipawnLoss: row.rawEngineLoss,
         moveAccuracy: Math.round(row.accuracy * 10) / 10,
-        openingAccuracy: reviewAccuracyFor(
+        openingAccuracy: reviewPhaseAccuracyFor(
           reviewData.rows.filter(item => item.phase === 'opening')
         ),
-        middlegameAccuracy: reviewAccuracyFor(
+        middlegameAccuracy: reviewPhaseAccuracyFor(
           reviewData.rows.filter(item => item.phase === 'middlegame')
         ),
-        endgameAccuracy: reviewAccuracyFor(
+        endgameAccuracy: reviewPhaseAccuracyFor(
           reviewData.rows.filter(item => item.phase === 'endgame')
         ),
-        phaseAccuracy: reviewAccuracyFor(
+        phaseAccuracy: reviewPhaseAccuracyFor(
           reviewData.rows.filter(item => item.phase === gamePhase)
+        ),
+        whitePhaseAccuracy: reviewPhaseAccuracyFor(
+          reviewData.rows.filter(item => item.phase === gamePhase && item.mover === 'w')
+        ),
+        blackPhaseAccuracy: reviewPhaseAccuracyFor(
+          reviewData.rows.filter(item => item.phase === gamePhase && item.mover === 'b')
+        ),
+        whitePhaseErrors: reviewErrorCounts(
+          reviewData.rows.filter(item => item.phase === gamePhase && item.mover === 'w')
+        ),
+        blackPhaseErrors: reviewErrorCounts(
+          reviewData.rows.filter(item => item.phase === gamePhase && item.mover === 'b')
         ),
         overallAccuracy: reviewAccuracyFor(reviewData.rows),
         verifiedBoardFacts: reviewCoachFacts,
