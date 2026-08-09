@@ -389,6 +389,8 @@ If Current mode = game_review:
   verified game phase, phase summary, game story, and important events.
 - Ignore opening-author teaching notes. They are not authoritative for the later game.
 - Address the player from the Selected side perspective when that side is known.
+- Selected game-review side is the side the USER PLAYED and is authoritative. Never infer the user's side from the selected move, mover, opening, or board orientation.
+- If the selected move was played by the opposite side, describe it as the opponent's move and explain how it affected the user's position.
 - The goal is to explain this decision in the context of the whole game without inventing a story.
 
 If Current mode is NOT game_review:
@@ -407,7 +409,7 @@ Selected game-review side: ${selectedSide}
 Side that played the current move: ${moveSide}
 Explanation perspective: ${effectivePerspective}
 
-In game_review, "OUR" means the selected player's side, not necessarily the repertoire side.
+In game_review, "OUR" means the selected player's side, which is the side the user explicitly said they played. It does not change when an opponent move is selected.
 Outside game_review, "OUR" means the repertoire side.
 
 Interpret the explanation perspective exactly as follows:

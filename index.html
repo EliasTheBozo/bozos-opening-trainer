@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v3.5.1.css">
+  <link rel="stylesheet" href="./styles-v3.5.3.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -521,7 +521,18 @@
           </label>
         </div>
 
-        <div class="review-settings review-settings-simple">
+        <div class="review-settings review-settings-player-side">
+          <label>
+            You played
+            <select id="review-player-side" aria-describedby="review-side-help">
+              <option value="" selected>Choose White or Black</option>
+              <option value="white">White</option>
+              <option value="black">Black</option>
+            </select>
+            <small id="review-side-help" class="review-setting-help">
+              BOZO uses this for coaching perspective and board orientation.
+            </small>
+          </label>
           <label>
             Analysis quality
             <select id="review-depth" aria-describedby="review-quality-help">
@@ -1603,7 +1614,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v3.5.1.js"></script>
+  <script src="./app-v3.5.3.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>

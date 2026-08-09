@@ -171,6 +171,33 @@ Deno.serve(async (request) => {
     const developmentStatusText = developmentStatusToPromptText(currentBoard);
     const materialStatusText = materialStatusToPromptText(currentBoard);
     const pawnStructureText = pawnStructureToPromptText(currentBoard);
+
+    // Rich, deterministic position awareness for Game Review. These facts are
+    // calculated from the actual FENs so BOZO can explain concrete chess ideas
+    // without guessing them from notation or relying on pattern-matching alone.
+    const currentPositionFeatures = derivePositionFeatures(currentBoard);
+    const previousPositionFeatures = previousBoard
+      ? derivePositionFeatures(previousBoard)
+      : null;
+    const bestMoveBoard = bestMoveFen ? parseFenBoard(bestMoveFen) : null;
+    const bestMovePositionFeatures = bestMoveBoard
+      ? derivePositionFeatures(bestMoveBoard)
+      : null;
+    const positionFeaturesText = positionFeaturesToPromptText(currentPositionFeatures);
+    const moveFeatureChangesText = comparePositionFeaturesToPromptText(
+      previousPositionFeatures,
+      currentPositionFeatures,
+      "before the played move",
+      "after the played move",
+    );
+    const betterMoveComparisonText = bestMovePositionFeatures
+      ? comparePositionFeaturesToPromptText(
+          currentPositionFeatures,
+          bestMovePositionFeatures,
+          "after the played move",
+          "after the better move",
+        )
+      : "Not supplied";
     const isGameReview = mode === "game_review";
 
     const moverEvaluationSwing =
@@ -285,11 +312,25 @@ ${materialStatusText}
 ${pawnStructureText}
 ${developmentStatusText}
 
+POSITION-AWARE COACHING FACTS — DETERMINISTIC:
+${positionFeaturesText}
+
+WHAT THE PLAYED MOVE CHANGED:
+${moveFeatureChangesText}
+
+PLAYED POSITION VS BETTER-MOVE POSITION:
+${betterMoveComparisonText}
+
 EVIDENCE DISCIPLINE:
 - Treat the supplied classification, evaluations, best move, continuation, verified phase,
   phase summary, game story, selected-move importance, and important events as authoritative.
 - Do not independently relabel the position as opening, middlegame, or endgame.
 - Do not invent a phase transition, turning point, tactical motif, strategic plan, or event.
+- POSITION-AWARE COACHING FACTS are deterministic board facts and may be used directly.
+- A hanging-piece label means the piece is currently attacked and has no geometric defender; it does not by itself prove the piece can be won. Check the continuation/evaluation before calling it a tactical loss.
+- A passed-pawn label is a structural fact, not proof that the pawn will promote.
+- King-zone and file facts describe the current board only; do not turn them into a king attack unless a concrete threat or continuation supports it.
+- When PLAYED POSITION VS BETTER-MOVE POSITION names a concrete difference, prefer that difference over generic advice when explaining why the better move was stronger.
 - A phase transition and a turning point are different concepts unless the supplied evidence
   explicitly makes them the same move.
 - Use the game story only as context. For claims about this exact move, prefer the board,
@@ -348,6 +389,8 @@ If Current mode = game_review:
   verified game phase, phase summary, game story, and important events.
 - Ignore opening-author teaching notes. They are not authoritative for the later game.
 - Address the player from the Selected side perspective when that side is known.
+- Selected game-review side is the side the USER PLAYED and is authoritative. Never infer the user's side from the selected move, mover, opening, or board orientation.
+- If the selected move was played by the opposite side, describe it as the opponent's move and explain how it affected the user's position.
 - The goal is to explain this decision in the context of the whole game without inventing a story.
 
 If Current mode is NOT game_review:
@@ -366,7 +409,7 @@ Selected game-review side: ${selectedSide}
 Side that played the current move: ${moveSide}
 Explanation perspective: ${effectivePerspective}
 
-In game_review, "OUR" means the selected player's side, not necessarily the repertoire side.
+In game_review, "OUR" means the selected player's side, which is the side the user explicitly said they played. It does not change when an opponent move is selected.
 Outside game_review, "OUR" means the repertoire side.
 
 Interpret the explanation perspective exactly as follows:
@@ -1234,6 +1277,176 @@ function pawnStructureToPromptText(board: ParsedBoard): string {
     `White semi-open files: ${whiteSemiOpen.join(", ") || "none"}`,
     `Black semi-open files: ${blackSemiOpen.join(", ") || "none"}`,
   ].join("\n");
+}
+
+
+type PositionFeatures = {
+  passedPawns: string[];
+  hangingPieces: string[];
+  attackedPieces: string[];
+  defendedPieces: string[];
+  kingZones: string[];
+  rookFileActivity: string[];
+};
+
+function derivePositionFeatures(board: ParsedBoard): PositionFeatures {
+  const files = "abcdefgh";
+  const pieceValue: Record<BoardPiece["type"], number> = {
+    King: 100, Queen: 9, Rook: 5, Bishop: 3, Knight: 3, Pawn: 1,
+  };
+
+  const attacksBy = new Map<string, string[]>();
+  const defendersBy = new Map<string, string[]>();
+
+  const attacksFrom = (from: string, piece: BoardPiece): string[] => {
+    const file = files.indexOf(from[0]);
+    const rank = Number(from[1]);
+    const out: string[] = [];
+    const add = (f: number, r: number) => {
+      if (f >= 0 && f < 8 && r >= 1 && r <= 8) out.push(`${files[f]}${r}`);
+    };
+
+    if (piece.type === "Pawn") {
+      const dr = piece.color === "White" ? 1 : -1;
+      add(file - 1, rank + dr); add(file + 1, rank + dr);
+      return out;
+    }
+    if (piece.type === "Knight") {
+      for (const [df, dr] of [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]]) add(file + df, rank + dr);
+      return out;
+    }
+    if (piece.type === "King") {
+      for (let df = -1; df <= 1; df++) for (let dr = -1; dr <= 1; dr++) if (df || dr) add(file + df, rank + dr);
+      return out;
+    }
+
+    const directions = piece.type === "Bishop"
+      ? [[1,1],[1,-1],[-1,1],[-1,-1]]
+      : piece.type === "Rook"
+        ? [[1,0],[-1,0],[0,1],[0,-1]]
+        : [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+    for (const [df, dr] of directions) {
+      let f = file + df, r = rank + dr;
+      while (f >= 0 && f < 8 && r >= 1 && r <= 8) {
+        const sq = `${files[f]}${r}`;
+        out.push(sq);
+        if (board.pieces.has(sq)) break;
+        f += df; r += dr;
+      }
+    }
+    return out;
+  };
+
+  for (const [from, piece] of board.pieces.entries()) {
+    for (const to of attacksFrom(from, piece)) {
+      const target = board.pieces.get(to);
+      if (!target) continue;
+      const bucket = target.color === piece.color ? defendersBy : attacksBy;
+      const list = bucket.get(to) ?? [];
+      list.push(`${piece.color} ${piece.type} ${from}`);
+      bucket.set(to, list);
+    }
+  }
+
+  const attackedPieces: string[] = [];
+  const defendedPieces: string[] = [];
+  const hangingPieces: string[] = [];
+  for (const [square, piece] of board.pieces.entries()) {
+    if (piece.type === "King") continue;
+    const attackers = attacksBy.get(square) ?? [];
+    const defenders = defendersBy.get(square) ?? [];
+    if (attackers.length) attackedPieces.push(`${piece.color} ${piece.type} ${square} attacked by ${attackers.join(", ")}`);
+    if (defenders.length) defendedPieces.push(`${piece.color} ${piece.type} ${square} defended by ${defenders.join(", ")}`);
+    if (attackers.length && !defenders.length) {
+      hangingPieces.push(`${piece.color} ${piece.type} ${square} (value ${pieceValue[piece.type]}; attackers: ${attackers.join(", ")})`);
+    }
+  }
+
+  const passedPawns: string[] = [];
+  for (const [square, piece] of board.pieces.entries()) {
+    if (piece.type !== "Pawn") continue;
+    const fileIndex = files.indexOf(square[0]);
+    const rank = Number(square[1]);
+    const opponent = piece.color === "White" ? "Black" : "White";
+    const blockedByEnemyPawn = [...board.pieces.entries()].some(([otherSquare, other]) => {
+      if (other.color !== opponent || other.type !== "Pawn") return false;
+      const otherFile = files.indexOf(otherSquare[0]);
+      const otherRank = Number(otherSquare[1]);
+      if (Math.abs(otherFile - fileIndex) > 1) return false;
+      return piece.color === "White" ? otherRank > rank : otherRank < rank;
+    });
+    if (!blockedByEnemyPawn) passedPawns.push(`${piece.color} pawn ${square}`);
+  }
+
+  const kingZones: string[] = [];
+  for (const color of ["White", "Black"] as const) {
+    const king = [...board.pieces.entries()].find(([, p]) => p.color === color && p.type === "King");
+    if (!king) continue;
+    const [kingSquare] = king;
+    const kf = files.indexOf(kingSquare[0]);
+    const kr = Number(kingSquare[1]);
+    const forward = color === "White" ? 1 : -1;
+    const shield: string[] = [];
+    for (let df = -1; df <= 1; df++) {
+      const f = kf + df;
+      const r = kr + forward;
+      if (f < 0 || f > 7 || r < 1 || r > 8) continue;
+      const sq = `${files[f]}${r}`;
+      const p = board.pieces.get(sq);
+      if (p?.color === color && p.type === "Pawn") shield.push(sq);
+    }
+    kingZones.push(`${color} king ${kingSquare}: ${shield.length} adjacent forward shield pawn${shield.length === 1 ? "" : "s"}${shield.length ? ` (${shield.join(", ")})` : ""}`);
+  }
+
+  const rookFileActivity: string[] = [];
+  const pawnFiles = (color: "White" | "Black") => new Set([...board.pieces.entries()].filter(([,p]) => p.color === color && p.type === "Pawn").map(([sq]) => sq[0]));
+  const whitePawnFiles = pawnFiles("White"), blackPawnFiles = pawnFiles("Black");
+  for (const [square, piece] of board.pieces.entries()) {
+    if (piece.type !== "Rook") continue;
+    const file = square[0];
+    const own = piece.color === "White" ? whitePawnFiles : blackPawnFiles;
+    const opp = piece.color === "White" ? blackPawnFiles : whitePawnFiles;
+    if (!own.has(file) && !opp.has(file)) rookFileActivity.push(`${piece.color} rook ${square} on open ${file}-file`);
+    else if (!own.has(file) && opp.has(file)) rookFileActivity.push(`${piece.color} rook ${square} on semi-open ${file}-file`);
+  }
+
+  return { passedPawns, hangingPieces, attackedPieces, defendedPieces, kingZones, rookFileActivity };
+}
+
+function positionFeaturesToPromptText(features: PositionFeatures): string {
+  const line = (label: string, values: string[]) => `${label}: ${values.length ? values.join("; ") : "none"}`;
+  return [
+    line("Passed pawns", features.passedPawns),
+    line("Attacked pieces", features.attackedPieces.slice(0, 16)),
+    line("Attacked and currently undefended pieces", features.hangingPieces.slice(0, 12)),
+    line("King zones", features.kingZones),
+    line("Rook file activity", features.rookFileActivity),
+  ].join("\n");
+}
+
+function comparePositionFeaturesToPromptText(
+  before: PositionFeatures | null,
+  after: PositionFeatures | null,
+  beforeLabel: string,
+  afterLabel: string,
+): string {
+  if (!before || !after) return "Not supplied";
+  const categories: Array<[string, keyof PositionFeatures]> = [
+    ["passed pawns", "passedPawns"],
+    ["hanging pieces", "hangingPieces"],
+    ["rook file activity", "rookFileActivity"],
+    ["king zones", "kingZones"],
+  ];
+  const changes: string[] = [];
+  for (const [label, key] of categories) {
+    const a = new Set(before[key]);
+    const b = new Set(after[key]);
+    const added = [...b].filter(x => !a.has(x));
+    const removed = [...a].filter(x => !b.has(x));
+    if (added.length) changes.push(`New ${label} ${afterLabel}: ${added.join("; ")}`);
+    if (removed.length) changes.push(`${label} no longer present ${afterLabel}: ${removed.join("; ")}`);
+  }
+  return changes.length ? changes.join("\n") : `No major deterministic structural change detected between ${beforeLabel} and ${afterLabel}.`;
 }
 
 function sanitizeCoachExplanation(
