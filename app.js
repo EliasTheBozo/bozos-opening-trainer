@@ -3815,17 +3815,18 @@ function reviewPhaseRows(phase) {
 
 function reviewPhaseSummary(phase, rows) {
   if (!rows.length) return 'This game did not contain a clearly detected phase here.';
-  const accuracy = reviewAccuracyFor(rows);
+  const whiteAccuracy = reviewSideAccuracy(rows, 'w');
+  const blackAccuracy = reviewSideAccuracy(rows, 'b');
   const worst = [...rows].sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)[0];
-  const serious = rows.filter(row => ['mistake','blunder'].includes(row.cls)).length;
-  const clean = rows.filter(row => ['book','best','excellent','good'].includes(row.cls)).length;
   const start = rows[0], end = rows[rows.length - 1];
-  let lead = `${reviewPhaseLabel(phase)}: ${reviewMoveNotation(start).split(' ')[0]} through ${reviewMoveNotation(end).split(' ')[0]}`;
-  if (accuracy != null) lead += ` · ${accuracy}% accuracy.`;
-  if (!serious && clean === rows.length) return `${lead} This phase was handled cleanly with no major errors.`;
-  if (worst?.rawEngineLoss >= 100) return `${lead} The main issue was ${reviewMoveNotation(worst)}, a ${worst.label.toLowerCase()} with a sizeable evaluation cost.`;
-  if (worst?.rawEngineLoss > 0) return `${lead} The largest slip was ${reviewMoveNotation(worst)}, but the phase remained relatively stable.`;
-  return `${lead} The position stayed under control throughout this phase.`;
+  let lead = `${reviewPhaseLabel(phase)}: ${reviewMoveNotation(start).split(' ')[0]} through ${reviewMoveNotation(end).split(' ')[0]}.`;
+  if (whiteAccuracy != null || blackAccuracy != null) {
+    lead += ` White ${whiteAccuracy == null ? '—' : `${whiteAccuracy}%`}, Black ${blackAccuracy == null ? '—' : `${blackAccuracy}%`}.`;
+  }
+  const errors = reviewErrorText(rows);
+  if (errors === 'No major errors') return `${lead} Both sides avoided inaccuracies, mistakes, and blunders.`;
+  if (worst?.rawEngineLoss >= 100) return `${lead} ${errors}. The biggest issue was ${reviewMoveNotation(worst)}, a ${worst.label.toLowerCase()} with a sizeable evaluation cost.`;
+  return `${lead} ${errors}. The largest slip was ${reviewMoveNotation(worst)}.`;
 }
 
 function reviewBuildEvents(rows, openingMatch, phasePlan) {
@@ -4037,9 +4038,47 @@ function reviewAverage(values) {
     : null;
 }
 
-function reviewAccuracyFor(rows) {
-  const value = reviewAverage(rows.map(row => row.accuracy));
-  return value == null ? null : Math.round(value * 10) / 10;
+function reviewErrorCounts(rows = []) {
+  return rows.reduce((counts, row) => {
+    if (row?.cls === 'inaccuracy') counts.inaccuracy++;
+    if (row?.cls === 'mistake') counts.mistake++;
+    if (row?.cls === 'blunder') counts.blunder++;
+    return counts;
+  }, { inaccuracy:0, mistake:0, blunder:0 });
+}
+
+function reviewAccuracyFor(rows = []) {
+  if (!rows.length) return null;
+  const base = reviewAverage(rows.map(row => row.accuracy));
+  if (base == null) return null;
+
+  // A straight mean can hide one decisive error inside a long run of clean moves.
+  // Keep the move-by-move accuracy, but apply a severity ceiling so review scores
+  // visibly reflect inaccuracies, mistakes and especially blunders.
+  const errors = reviewErrorCounts(rows);
+  const severityCeiling = Math.max(
+    0,
+    100 - errors.inaccuracy * 2.5 - errors.mistake * 6 - errors.blunder * 12
+  );
+  const value = Math.min(base, severityCeiling);
+  return Math.round(value * 10) / 10;
+}
+
+function reviewRowsForSide(rows = [], side = 'w') {
+  return rows.filter(row => row.mover === side);
+}
+
+function reviewSideAccuracy(rows = [], side = 'w') {
+  return reviewAccuracyFor(reviewRowsForSide(rows, side));
+}
+
+function reviewErrorText(rows = []) {
+  const counts = reviewErrorCounts(rows);
+  const parts = [];
+  if (counts.inaccuracy) parts.push(`${counts.inaccuracy} inaccuracy${counts.inaccuracy === 1 ? '' : 'ies'}`.replace('inaccuracys','inaccuracies'));
+  if (counts.mistake) parts.push(`${counts.mistake} mistake${counts.mistake === 1 ? '' : 's'}`);
+  if (counts.blunder) parts.push(`${counts.blunder} blunder${counts.blunder === 1 ? '' : 's'}`);
+  return parts.join(' · ') || 'No major errors';
 }
 
 async function startGameReview() {
@@ -4138,17 +4177,18 @@ async function startGameReview() {
 function renderReviewSummary() {
   const rows = reviewData.rows;
   const openingRows = rows.filter(row => row.phase === 'opening');
-  const overall = reviewAccuracyFor(rows);
-  const openingAccuracy = reviewAccuracyFor(openingRows);
+  const whiteOverall = reviewSideAccuracy(rows, 'w');
+  const blackOverall = reviewSideAccuracy(rows, 'b');
+  const whiteOpening = reviewSideAccuracy(openingRows, 'w');
+  const blackOpening = reviewSideAccuracy(openingRows, 'b');
   const turning = [...rows].sort((a, b) => b.rawEngineLoss - a.rawEngineLoss)[0];
 
-  $('review-opening-accuracy').textContent =
-    openingAccuracy == null ? '—' : `${openingAccuracy}%`;
+  $('review-opening-accuracy').innerHTML = reviewSideScoreMarkup(whiteOpening, blackOpening);
   $('review-opening-detail').textContent = openingRows.length
-    ? `${openingRows.length} detected opening ${openingRows.length === 1 ? 'ply' : 'plies'}`
+    ? `${openingRows.length} detected opening ${openingRows.length === 1 ? 'ply' : 'plies'} · ${reviewErrorText(openingRows)}`
     : 'No opening phase detected';
-  $('review-overall-accuracy').textContent =
-    overall == null ? '—' : `${overall}%`;
+  $('review-overall-accuracy').innerHTML = reviewSideScoreMarkup(whiteOverall, blackOverall);
+  $('review-overall-detail').textContent = reviewErrorText(rows);
 
   const match = reviewData.openingMatch;
   $('review-opening-name').textContent = match.opening
@@ -4166,14 +4206,18 @@ function renderReviewSummary() {
 
   const phaseMarkup = ['opening','middlegame','endgame'].map(phase => {
     const phaseRows = rows.filter(row => row.phase === phase);
-    const accuracy = reviewAccuracyFor(phaseRows);
+    const whiteAccuracy = reviewSideAccuracy(phaseRows, 'w');
+    const blackAccuracy = reviewSideAccuracy(phaseRows, 'b');
+    const whiteErrors = reviewErrorText(reviewRowsForSide(phaseRows, 'w'));
+    const blackErrors = reviewErrorText(reviewRowsForSide(phaseRows, 'b'));
     const range = phaseRows.length
       ? `${reviewMoveNotation(phaseRows[0]).split(' ')[0]}–${reviewMoveNotation(phaseRows[phaseRows.length - 1]).split(' ')[0]}`
       : 'Not detected';
     return `<article class="review-phase-card ${phaseRows.length ? '' : 'muted'}">
       <span>${reviewPhaseLabel(phase)}</span>
-      <strong>${phaseRows.length && accuracy != null ? `${accuracy}%` : '—'}</strong>
+      ${phaseRows.length ? reviewSideScoreMarkup(whiteAccuracy, blackAccuracy, true) : '<strong>—</strong>'}
       <small>${escapeHtml(range)}</small>
+      ${phaseRows.length ? `<div class="review-phase-errors"><span>White: ${escapeHtml(whiteErrors)}</span><span>Black: ${escapeHtml(blackErrors)}</span></div>` : ''}
       <p>${escapeHtml(reviewPhaseSummary(phase, phaseRows))}</p>
     </article>`;
   }).join('');
@@ -4189,6 +4233,14 @@ function renderReviewSummary() {
     setReviewStep(Number(button.dataset.reviewEventPly));
     $('review-workspace-anchor')?.scrollIntoView({ behavior:'smooth', block:'start' });
   }));
+}
+
+function reviewSideScoreMarkup(white, black, compact = false) {
+  const score = value => value == null ? '—' : `${value}%`;
+  return `<span class="review-side-scores ${compact ? 'compact' : ''}">
+    <span><small>WHITE</small><b>${score(white)}</b></span>
+    <span><small>BLACK</small><b>${score(black)}</b></span>
+  </span>`;
 }
 
 function renderReviewMoveList() {
@@ -4507,7 +4559,21 @@ async function askReviewCoach() {
         phaseAccuracy: reviewAccuracyFor(
           reviewData.rows.filter(item => item.phase === gamePhase)
         ),
+        whitePhaseAccuracy: reviewSideAccuracy(
+          reviewData.rows.filter(item => item.phase === gamePhase), 'w'
+        ),
+        blackPhaseAccuracy: reviewSideAccuracy(
+          reviewData.rows.filter(item => item.phase === gamePhase), 'b'
+        ),
+        whitePhaseErrors: reviewErrorCounts(reviewRowsForSide(
+          reviewData.rows.filter(item => item.phase === gamePhase), 'w'
+        )),
+        blackPhaseErrors: reviewErrorCounts(reviewRowsForSide(
+          reviewData.rows.filter(item => item.phase === gamePhase), 'b'
+        )),
         overallAccuracy: reviewAccuracyFor(reviewData.rows),
+        whiteOverallAccuracy: reviewSideAccuracy(reviewData.rows, 'w'),
+        blackOverallAccuracy: reviewSideAccuracy(reviewData.rows, 'b'),
         verifiedBoardFacts: reviewCoachFacts,
         strictGrounding: true
       }

@@ -3386,3 +3386,16 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
 .single-line-actions.six-actions{display:grid;grid-template-columns:1fr 1fr 1fr 1.35fr 1fr 1fr}
 @media(max-width:980px){.single-line-actions.six-actions{grid-template-columns:1fr 1fr}}
 @media(max-width:650px){.single-line-actions.six-actions{grid-template-columns:1fr}}
+
+
+/* Review v3.4.2: side-by-side accuracy and visible error severity */
+.review-score-card > strong:has(.review-side-scores) { overflow:visible; font-size:inherit; }
+.review-side-scores { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; }
+.review-side-scores > span { display:grid; gap:2px; min-width:0; }
+.review-side-scores small { color:#62e5c5; font-size:9px; font-weight:900; letter-spacing:.08em; }
+.review-side-scores b { color:#fff6e8; font-size:22px; line-height:1.1; }
+.review-side-scores.compact b { font-size:20px; }
+.review-phase-card > .review-side-scores { margin-top:2px; }
+.review-phase-errors { display:grid; gap:3px; padding:7px 9px; border:1px solid rgba(255,255,255,.08); border-radius:10px; background:rgba(255,255,255,.025); }
+.review-phase-errors span { color:var(--muted); font-size:10px; line-height:1.35; }
+@media (max-width:700px) { .review-side-scores b { font-size:18px; } }

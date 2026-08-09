@@ -46,18 +46,18 @@ Deno.serve(async (request) => {
       return json({ error: "Your session is invalid or expired." }, 401);
     }
 
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(contentLength) && contentLength > 250_000) {
+      return json({ error: "The coaching request is too large." }, 413);
+    }
+
     const body = await request.json();
     const fen = cleanText(body.fen, 120);
     const previousFen = cleanText(body.previousFen, 120);
     const playedMove = cleanText(body.playedMove, 20);
     const opening = cleanText(body.opening, 120);
     const variation = cleanText(body.variation, 120);
-    const authorExplanation = cleanText(
-      body.authorExplanation ?? body.authoritativeOpeningNote,
-      5000,
-    );
-    const repertoireSide = normalizePerspectiveSide(body.repertoireSide);
-    const providedMoveSide = normalizePerspectiveSide(body.moveSide);
+    const authorExplanation = cleanText(body.authorExplanation, 5000);
     const question = cleanText(body.question, 300);
     const mode = cleanText(body.mode, 30);
     const gameStatus = cleanText(body.gameStatus, 30);
@@ -67,16 +67,40 @@ Deno.serve(async (request) => {
     const playedPositionDescription =
       cleanText(body.playedPositionDescription, 120);
     const gamePhase = cleanText(body.gamePhase, 40);
-    const phaseSummary = cleanText(body.phaseSummary, 900);
-    const gameStory = cleanText(body.gameStory, 1200);
+    const phaseSummary = cleanText(body.phaseSummary, 1200);
+    const gameStory = cleanText(body.gameStory, 1600);
+    const selectedMoveImportance = cleanText(body.selectedMoveImportance, 40);
+    const phaseAccuracy = finiteOrNull(body.phaseAccuracy);
+    const whitePhaseAccuracy = finiteOrNull(body.whitePhaseAccuracy);
+    const blackPhaseAccuracy = finiteOrNull(body.blackPhaseAccuracy);
+    const whitePhaseErrors = cleanErrorCounts(body.whitePhaseErrors);
+    const blackPhaseErrors = cleanErrorCounts(body.blackPhaseErrors);
+    const middlegameAccuracy = finiteOrNull(body.middlegameAccuracy);
+    const endgameAccuracy = finiteOrNull(body.endgameAccuracy);
     const importantEvents = Array.isArray(body.importantEvents)
-      ? body.importantEvents.slice(0, 10).map((event: any) => ({
+      ? body.importantEvents.slice(0, 12).map((event: any) => ({
           ply: Number(event?.ply || 0),
+          moveNumber: Number(event?.moveNumber || 0),
+          phase: cleanText(event?.phase, 30),
+          type: cleanText(event?.type, 40),
           title: cleanText(event?.title, 100),
-          detail: cleanText(event?.detail, 280),
+          detail: cleanText(event?.detail, 320),
         }))
       : [];
-    const selectedSide = cleanText(body.selectedSide, 20);
+    const selectedSideRaw = cleanText(body.selectedSide, 20).toLowerCase();
+    const selectedSide =
+      selectedSideRaw === "white"
+        ? "White"
+        : selectedSideRaw === "black"
+          ? "Black"
+          : "Unknown";
+    const repertoireSideRaw = cleanText(body.repertoireSide, 20).toLowerCase();
+    const repertoireSide =
+      repertoireSideRaw === "white"
+        ? "White"
+        : repertoireSideRaw === "black"
+          ? "Black"
+          : "Unknown";
     const selectedMoveNumber = Number(body.selectedMoveNumber || 0);
     const contextBeforeText = cleanText(body.contextBeforeText, 600);
     const planContinuityPrompt =
@@ -103,6 +127,8 @@ Deno.serve(async (request) => {
     const moveAccuracy = finiteOrNull(body.moveAccuracy);
     const openingAccuracy = finiteOrNull(body.openingAccuracy);
     const overallAccuracy = finiteOrNull(body.overallAccuracy);
+    const whiteOverallAccuracy = finiteOrNull(body.whiteOverallAccuracy);
+    const blackOverallAccuracy = finiteOrNull(body.blackOverallAccuracy);
 
     const moveHistory = Array.isArray(body.moveHistory)
       ? body.moveHistory.slice(0, 120).map((move: unknown) => cleanText(move, 20))
@@ -116,6 +142,13 @@ Deno.serve(async (request) => {
           .map((move: unknown) => cleanText(move, 20))
       : [];
 
+    if (!fen || !playedMove) {
+      return json(
+        { error: "The current position and played move are required." },
+        400,
+      );
+    }
+
     // Deterministic board grounding. The model should never have to reconstruct
     // piece locations from memory or infer that a piece is still on an old square.
     const currentBoard = parseFenBoard(fen);
@@ -128,21 +161,64 @@ Deno.serve(async (request) => {
       ? deriveMoveFacts(previousBoard, currentBoard, playedMove)
       : null;
     const moveFactsText = moveFactsToPromptText(moveFacts);
+    const moveSide = moveFacts?.mover ?? "Unknown";
+    const explanationPerspective =
+      repertoireSide !== "Unknown" && moveSide !== "Unknown"
+        ? moveSide === repertoireSide
+          ? "OUR"
+          : "OPPONENT"
+        : "UNKNOWN";
     const developmentStatusText = developmentStatusToPromptText(currentBoard);
-    const moveSide = providedMoveSide !== 'Neutral'
-      ? providedMoveSide
-      : moveFacts?.mover ?? 'Neutral';
-    const perspectiveContext = repertoirePerspectiveToPromptText(
-      repertoireSide,
-      moveSide,
-    );
+    const materialStatusText = materialStatusToPromptText(currentBoard);
+    const pawnStructureText = pawnStructureToPromptText(currentBoard);
+    const isGameReview = mode === "game_review";
 
-    if (!fen || !playedMove) {
-      return json(
-        { error: "The current position and played move are required." },
-        400,
-      );
-    }
+    const moverEvaluationSwing =
+      evaluationBefore !== null &&
+      evaluationAfter !== null &&
+      moveSide !== "Unknown"
+        ? moveSide === "White"
+          ? evaluationAfter - evaluationBefore
+          : evaluationBefore - evaluationAfter
+        : null;
+
+    const selectedSideEvaluationSwing =
+      evaluationBefore !== null &&
+      evaluationAfter !== null &&
+      selectedSide !== "Unknown"
+        ? selectedSide === "White"
+          ? evaluationAfter - evaluationBefore
+          : evaluationBefore - evaluationAfter
+        : null;
+
+    const moverEvalBefore =
+      evaluationBefore === null || moveSide === "Unknown"
+        ? null
+        : moveSide === "White"
+          ? evaluationBefore
+          : -evaluationBefore;
+
+    const moverEvalAfter =
+      evaluationAfter === null || moveSide === "Unknown"
+        ? null
+        : moveSide === "White"
+          ? evaluationAfter
+          : -evaluationAfter;
+
+    // Game Review must be grounded in the actual played game and engine evidence.
+    // Opening-author notes are intentionally disabled in this mode so an opening
+    // teaching note cannot override what really happened later in the game.
+    const effectiveAuthorExplanation = isGameReview ? "" : authorExplanation;
+
+    const reviewPerspective =
+      isGameReview && selectedSide !== "Unknown" && moveSide !== "Unknown"
+        ? moveSide === selectedSide
+          ? "OUR"
+          : "OPPONENT"
+        : "UNKNOWN";
+
+    const effectivePerspective =
+      isGameReview ? reviewPerspective : explanationPerspective;
 
     if (mode === "friend_duel" && gameStatus === "active") {
       return json(
@@ -154,55 +230,108 @@ Deno.serve(async (request) => {
       );
     }
 
-    const engineContext = mode === "game_review"
+    const engineContext = isGameReview
       ? `
-Stockfish review data:
+GAME REVIEW EVIDENCE — AUTHORITATIVE:
+
+Engine facts:
 - Classification: ${classification || "Not supplied"}
-- Evaluation before: ${evaluationBefore ?? "Not supplied"}
-- Evaluation after: ${evaluationAfter ?? "Not supplied"}
-- Evaluation unit: ${evaluationUnit || "centipawns from White perspective"}
+- Raw evaluation before: ${evaluationBefore ?? "Not supplied"}
+- Raw evaluation after: ${evaluationAfter ?? "Not supplied"}
+- Raw evaluation unit: ${evaluationUnit || "centipawns from White perspective"}
+- Evaluation before from mover's perspective: ${moverEvalBefore ?? "Not supplied"}
+- Evaluation after from mover's perspective: ${moverEvalAfter ?? "Not supplied"}
+- Evaluation swing for mover: ${moverEvaluationSwing ?? "Not supplied"}
+- Evaluation swing for selected player: ${selectedSideEvaluationSwing ?? "Not supplied"}
 - Centipawn loss: ${centipawnLoss ?? "Not supplied"}
 - Move accuracy: ${moveAccuracy ?? "Not supplied"}%
-- Best engine move: ${bestMove || "Not supplied"}
+- Best move: ${bestMove || "Not supplied"}
 - Engine continuation: ${principalVariation.join(" ") || "Not supplied"}
+- Readable continuation: ${principalVariationSan.join(" ") || "Not supplied"}
+
+Whole-game context:
+- Opening: ${opening || "Unknown"}
+- Variation: ${variation || "Main Line"}
 - Opening accuracy: ${openingAccuracy ?? "Not supplied"}%
+- Middlegame accuracy: ${middlegameAccuracy ?? "Not supplied"}%
+- Endgame accuracy: ${endgameAccuracy ?? "Not supplied"}%
+- Current phase combined accuracy: ${phaseAccuracy ?? "Not supplied"}%
+- White current-phase accuracy: ${whitePhaseAccuracy ?? "Not supplied"}%
+- Black current-phase accuracy: ${blackPhaseAccuracy ?? "Not supplied"}%
+- White current-phase errors: ${JSON.stringify(whitePhaseErrors)}
+- Black current-phase errors: ${JSON.stringify(blackPhaseErrors)}
 - Overall game accuracy: ${overallAccuracy ?? "Not supplied"}%
+- White overall accuracy: ${whiteOverallAccuracy ?? "Not supplied"}%
+- Black overall accuracy: ${blackOverallAccuracy ?? "Not supplied"}%
+- Verified game phase: ${gamePhase || "unknown"}
+- Phase summary: ${phaseSummary || "Not supplied"}
+- Game story: ${gameStory || "Not supplied"}
+- Selected-move importance: ${selectedMoveImportance || "normal"}
+- Important events: ${JSON.stringify(importantEvents)}
 
-Treat the supplied classification, evaluation, best move, and continuation as authoritative evidence.
-Do not mention Stockfish unless the user explicitly asks which engine produced the analysis.
-Do not use phrases such as "Stockfish says," "the engine says," or "according to the engine."
-Explain the chess reasons directly.
+Selected decision:
+- User side: ${selectedSide || "unknown"}
+- Side that moved: ${moveSide || "unknown"}
+- Selected move number: ${selectedMoveNumber || moveNumber || "unknown"}
+- Position after played move: ${playedPositionDescription || "Not supplied"}
+- Position after better move: ${bestMoveFen || "Not supplied"}
+- Recent moves leading to decision: ${contextBeforeText || "Not supplied"}
+- Actual continuation after selected move: ${actualContinuation.join(" ") || "Not supplied"}
+- Context window: ${JSON.stringify(contextWindow)}
+- Plan-continuity hint: ${planContinuityPrompt || "Not supplied"}
 
-Position after the played move: ${playedPositionDescription || "Not supplied"}
-Position after the better move: ${bestMoveFen || "Not supplied"}
-Readable better continuation: ${principalVariationSan.join(" ") || "Not supplied"}
+Deterministic position facts:
+${materialStatusText}
+${pawnStructureText}
+${developmentStatusText}
 
-Game phase: ${gamePhase || "unknown"}
-Phase summary: ${phaseSummary || "Not supplied"}
-Game story: ${gameStory || "Not supplied"}
-Important game events: ${JSON.stringify(importantEvents)}
-Selected side: ${selectedSide || "unknown"}
-Selected move number: ${selectedMoveNumber || "unknown"}
-Recent moves leading to the decision: ${contextBeforeText || "Not supplied"}
-Actual continuation after the selected move: ${actualContinuation.join(" ") || "Not supplied"}
-Context window: ${JSON.stringify(contextWindow)}
-Plan continuity question: ${planContinuityPrompt || "Not supplied"}
+EVIDENCE DISCIPLINE:
+- Treat the supplied classification, evaluations, best move, continuation, verified phase,
+  phase summary, game story, selected-move importance, and important events as authoritative.
+- Do not independently relabel the position as opening, middlegame, or endgame.
+- Do not invent a phase transition, turning point, tactical motif, strategic plan, or event.
+- A phase transition and a turning point are different concepts unless the supplied evidence
+  explicitly makes them the same move.
+- Use the game story only as context. For claims about this exact move, prefer the board,
+  move facts, evaluation change, and concrete continuation.
+- If the supplied game story conflicts with the verified board or engine facts for this move,
+  explain the move from the board and engine facts rather than repeating the conflicting claim.
+- Do not mention Stockfish unless the user explicitly asks which engine produced the analysis.
+- Do not use phrases such as "Stockfish says," "the engine says," or "according to the engine."
+- Explain the chess reason directly.
+- Raw evaluations are from White's perspective. Do not narrate them directly from memory.
+- For whether the move helped or hurt the mover, use "Evaluation swing for mover".
+- A positive mover swing means the move improved the mover's evaluation.
+- A negative mover swing means the move worsened the mover's evaluation.
+- For statements about the selected player's fortunes, use "Evaluation swing for selected player".
+- Do not convert centipawn values into material claims such as "lost a pawn" unless the board or continuation shows an actual material loss.
+- Small evaluation differences should be described proportionally. Do not call a tiny preference a tactical refutation.
+- Phase accuracy is severity-adjusted by the client so inaccuracies, mistakes, and especially blunders remain visible instead of being washed out by many clean moves.
+- When comparing phase performance, distinguish White and Black using the supplied side-specific phase accuracy and error counts.
 
-First reconstruct the story of the position:
-- What plan was each side pursuing before the selected move?
-- What pressure or imbalance had accumulated?
-- Did the selected move continue that plan, change it, or abandon it?
-- What did the actual continuation reveal?
+PHASE-SPECIFIC COACHING:
+- Opening: discuss development, center, king safety, and repertoire ideas only when supported.
+- Middlegame: prioritize concrete plans, activity, king safety, pawn breaks, files, weak squares,
+  tactical pressure, and exchanges only when supported.
+- Endgame: prioritize king activity, passed pawns, pawn structure, rook activity, opposition,
+  simplification, and conversion only when supported.
+- Never call a queenless position an endgame by itself. The supplied phase is authoritative.
 
-Compare the two moves in terms of:
-- immediate tactical consequences,
-- piece activity and king safety,
-- pawn structure or important squares,
-- how easy each resulting position is for a human to play,
-- and the next practical plan.
+IMPORTANCE-SPECIFIC COACHING:
+- "normal": keep perspective proportional; do not dramatize the move.
+- "critical" or "turning_point": clearly explain why the evaluation or practical course changed.
+- "phase_transition": explain what changed about the character of the position, not merely the score.
+- "forced" or "mate_sequence": emphasize calculation and necessity over broad strategic plans.
+- "book": connect to opening knowledge only when the move is actually part of the supplied book context.
+
+Before answering, reconstruct only what the evidence supports:
+1. What was the position asking for before the move?
+2. What did the played move actually change?
+3. If a better move exists, what concrete difference does it create?
+4. What practical lesson should the player remember from this decision?
 `
       : `
-No engine evaluation was supplied. Do not call the move best, inaccurate, or mistaken.
+No engine evaluation was supplied. Do not call the move best, inaccurate, mistaken, or inferior.
 `;
 
 const prompt = `
@@ -210,17 +339,85 @@ You are BOZO Coach, a friendly chess teacher.
 
 Your job is to help the user UNDERSTAND the supplied move.
 
-There are two possible situations:
+MODE SEPARATION — HIGHEST PRIORITY:
+
+Current mode: ${mode || "study"}
+
+If Current mode = game_review:
+- Analyze the actual played game using the verified board, move facts, engine evidence,
+  verified game phase, phase summary, game story, and important events.
+- Ignore opening-author teaching notes. They are not authoritative for the later game.
+- Address the player from the Selected side perspective when that side is known.
+- The goal is to explain this decision in the context of the whole game without inventing a story.
+
+If Current mode is NOT game_review:
+- Follow the repertoire/author rules below.
+- When an AUTHOR EXPLANATION exists, teach that explanation rather than replacing it.
+
+There are two non-review repertoire situations:
 
 1. An AUTHOR EXPLANATION is supplied.
 2. No AUTHOR EXPLANATION is supplied.
 
+PERSPECTIVE RULES — HIGHEST PRIORITY:
+
+Repertoire side: ${repertoireSide}
+Selected game-review side: ${selectedSide}
+Side that played the current move: ${moveSide}
+Explanation perspective: ${effectivePerspective}
+
+In game_review, "OUR" means the selected player's side, not necessarily the repertoire side.
+Outside game_review, "OUR" means the repertoire side.
+
+Interpret the explanation perspective exactly as follows:
+
+If Explanation perspective = OUR:
+- In game_review, the move was played by the selected player's side.
+- Outside game_review, the move was played by the repertoire side.
+- Use "we", "our", and "us" naturally for the mover and that side's plan.
+- Do not describe our move as the opponent's plan.
+
+If Explanation perspective = OPPONENT:
+- The move being explained was played by the opposing side relative to the active perspective.
+- Do NOT use "we", "our", or "us" to describe the mover's goal.
+- Explicitly refer to the mover as ${moveSide} or "the opponent".
+- In game_review, explain how the move affects the selected player's position.
+- Outside game_review, explain how it affects our repertoire plan.
+
+If Explanation perspective = UNKNOWN:
+- Avoid "we", "our", and "us".
+- Use White and Black explicitly instead of guessing.
+
+Outside game_review, the words "we", "us", and "our" inside AUTHOR EXPLANATION always refer to the REPERTOIRE SIDE.
+
+AUTHOR LOCK MODE — MANDATORY ONLY OUTSIDE GAME REVIEW WHEN AN AUTHOR EXPLANATION EXISTS:
+
+When Current mode is NOT game_review and AUTHOR EXPLANATION is supplied, you are NOT analyzing the move independently.
+You are teaching the author's explanation.
+
+The AUTHOR EXPLANATION is canon for the intended teaching point.
+
+- Do not improve it by adding new chess ideas.
+- Do not broaden it with extra plans, threats, attacks, targets, diagonals, files, development claims, king-safety claims, or coordination claims.
+- Do not replace it with a stronger or more generic chess explanation.
+- Do not infer an additional purpose merely because it is visible on the board.
+- Assume the author intentionally omitted ideas they did not mention.
+- The VERIFIED BOARD exists to check that the author's explanation is physically consistent, not to generate additional teaching points.
+- If the board contains other true ideas that are not in the AUTHOR EXPLANATION, ignore them.
+- If the AUTHOR EXPLANATION is already clear, keep the response very close to it.
+- A shorter exact answer is better than a broader answer.
+- For forced moves or simple recaptures, a very short explanation is correct.
+- Never create a warning, practical plan, or suggested question just because the output schema contains those fields.
+- Empty strings and empty arrays are preferred over speculative content.
+
 AUTHOR EXPLANATION RULES — HIGHEST PRIORITY:
 
-If an AUTHOR EXPLANATION is supplied, it is the authoritative explanation
+If Current mode is NOT game_review and an AUTHOR EXPLANATION is supplied, it is the authoritative explanation
 for WHY this move is played in this repertoire.
 
 The author is the source of truth for the intended opening idea.
+Interpret the author explanation from the REPERTOIRE SIDE perspective.
+Do not reinterpret "we", "us", or "our" as referring to the side that physically made the move.
 
 Your job is NOT to discover a different reason for the move.
 Your job is NOT to replace the author's explanation with a more generic chess explanation.
@@ -228,32 +425,35 @@ Your job is NOT to decide that another feature of the move is more important.
 
 When an AUTHOR EXPLANATION exists, you must:
 
-1. Make the author's stated idea the main point of the summary.
-2. Explain why that exact idea makes sense using the verified current board.
-3. Do NOT add a separate strategic purpose, threat, target, development claim, or plan unless it is directly necessary to explain the author's stated idea.
-4. Do NOT search the board for additional "interesting" features to mention.
-5. Prefer repeating the author's idea accurately over making the answer broader.
-6. Never contradict or replace the author's intended purpose unless it is physically impossible according to the verified board state.
-7. If the author's note is already clear and complete, a short paraphrase is better than an expanded explanation.
+1. Preserve the author's exact teaching point.
+2. Paraphrase it only enough to make it clearer for a learner.
+3. Use the verified board only to confirm the author's stated idea and the move's physical facts.
+4. Do NOT add a separate strategic purpose, threat, target, development claim, or plan.
+5. Do NOT search the board for additional "interesting" features to mention.
+6. Do NOT infer what the author "probably also meant."
+7. Prefer repeating the author's idea accurately over making the answer broader.
+8. Never contradict or replace the author's intended purpose unless it is physically impossible according to the verified board state.
+9. If the author's note is already clear and complete, keep the summary close to the author's wording.
 
 Example:
 
 If the AUTHOR EXPLANATION says:
 "Develops the bishop and prevents us from immediately playing c4 to challenge Black's center."
 
-Then the explanation MUST focus on:
-- developing the bishop,
-- controlling or reinforcing the position in a way that makes c4 less effective,
-- and why preventing or discouraging c4 matters.
+Then a good summary is simply:
+"Black develops the bishop and prevents us from immediately playing c4 to challenge Black's center."
 
-Do NOT replace that explanation with unrelated observations such as:
+Do NOT add an explanation of how the bishop supposedly prevents c4 unless the AUTHOR EXPLANATION itself states that mechanism.
+Do NOT add other observations such as:
 - attacking h3,
 - connecting rooks,
 - generic development,
 - king safety,
-- or some other feature of the position,
+- controlling unrelated squares,
+- piece coordination,
+- or other features of the position.
 
-unless those observations directly help explain the author's stated idea.
+The author's stated teaching point is enough.
 
 Another example:
 
@@ -266,23 +466,15 @@ Simply explain that the move recaptures and restores the material balance.
 If the AUTHOR EXPLANATION describes a tactical trick or planned sequence,
 preserve that idea and explain how it works on the verified board.
 
-If no AUTHOR EXPLANATION is supplied, explain the move normally using
+If Current mode = game_review OR no AUTHOR EXPLANATION is supplied, explain the move normally using
 the verified board state, move facts, opening context, and engine facts provided.
 
-REPERTOIRE-PERSPECTIVE RULES — MANDATORY:
+BOARD-GROUNDING RULES — MANDATORY IN EVERY MODE:
 
-${perspectiveContext}
-
-- The repertoire side is the side the student is learning to play.
-- The move side is the side that made the currently selected move.
-- In an AUTHOR EXPLANATION, the words "we", "us", and "our" always refer to the REPERTOIRE SIDE, not automatically to the side that made the current move.
-- If the current move was played by the opponent of the repertoire side, explain it as the opponent's response to our repertoire plan. Do not switch perspective and talk as though the student is now playing the opponent's side.
-- If the current move was played by the repertoire side, explain it as our move and our plan.
-- If the repertoire side is Neutral, avoid "we/us/our" and refer explicitly to White and Black.
-- Never infer repertoire perspective from whose move is currently selected.
-- Never infer repertoire perspective from board orientation; flipping the board is only a display choice.
-
-BOARD-GROUNDING RULES — MANDATORY:
+IMPORTANT ONLY IN AUTHOR LOCK MODE:
+- The board is a validator, not a second author.
+- Use it to verify piece locations, captures, legal geometry, and whether the author's stated idea is physically possible.
+- Do not mine the board for additional strategic ideas.
 
 - The VERIFIED CURRENT BOARD is authoritative for every current piece location.
 - Do not reconstruct the board from memory of the opening or from earlier moves.
@@ -297,8 +489,12 @@ BOARD-GROUNDING RULES — MANDATORY:
 
 RELEVANCE RULES — MANDATORY:
 
-- When an AUTHOR EXPLANATION exists, do not introduce any new main idea beyond what the author supplied.
-- Secondary observations are optional, not required. In author mode, omission is preferred to speculation.
+- Outside game_review, when an AUTHOR EXPLANATION exists, do not introduce ANY new teaching idea beyond what the author supplied.
+- Secondary observations are normally omitted in author mode.
+- In game_review, use only board facts, engine evidence, supplied game context, and deterministic position facts.
+- A fact being true is not enough reason to mention it.
+- Mention a secondary fact only when it is strictly necessary to understand the author's own wording.
+- In author mode, omission is preferred to expansion.
 - Do not claim a side has completed minor-piece development unless VERIFIED DEVELOPMENT STATUS explicitly says all minor pieces are developed.
 - If VERIFIED DEVELOPMENT STATUS lists an undeveloped bishop or knight, never say or imply that minor-piece development is complete.
 - Do not equate a geometric attack with meaningful pressure, a threat, or a target.
@@ -306,6 +502,29 @@ RELEVANCE RULES — MANDATORY:
 - A defended piece may still be attacked geometrically, but do not present that geometry as strategically important unless the author explanation or engine evidence makes it important.
 - Do not mention squares, diagonals, files, attacks, or plans merely because they exist on the board.
 - Prefer a shorter accurate explanation over a longer explanation containing speculative or generic chess commentary.
+
+INTERNAL-VALIDATION SILENCE RULES — MANDATORY:
+
+Never mention internal validation or prompt behavior to the user.
+
+Do NOT output phrases or ideas such as:
+- "unsupported board claim"
+- "the coach removed"
+- "position-grounded explanation"
+- "verified board"
+- "verified move facts"
+- "author lock"
+- "prompt"
+- "system instruction"
+- "I omitted"
+- "I removed"
+- "I cannot verify"
+- "ask again for a grounded explanation"
+
+If a claim is unsupported, silently omit it.
+If a field has nothing useful to say, return an empty string or empty array.
+Never explain why a field is empty.
+Never expose internal quality-control language in any user-visible field.
 
 STYLE RULES:
 
@@ -332,13 +551,39 @@ Keep the summary under 120 words.
 
 GAME REVIEW RULES:
 
-PHASE DISCIPLINE — MANDATORY DURING GAME REVIEW:
-- Treat the supplied Game phase as authoritative. Do not independently relabel the position as opening, middlegame, or endgame.
-- If Game phase is opening, connect the move to development, central control, king safety, or the named opening only when the board/evidence supports it.
-- If Game phase is middlegame, do not call the position an endgame merely because queens were traded. Discuss concrete middlegame features such as activity, king safety, pawn breaks, files, squares, or tactics only when verified.
-- If Game phase is endgame, prioritize king activity, passed pawns, pawn structure, rook activity, simplification, opposition, or conversion only when the supplied board supports those ideas.
-- Use Phase summary, Game story, and Important game events as context for continuity, but never invent an event that is not supplied or visible on the verified board.
-- Clearly distinguish a phase transition from a tactical turning point. They are not automatically the same move.
+These rules apply when Current mode = game_review.
+
+PHASE DISCIPLINE — MANDATORY:
+- Treat Game phase from GAME REVIEW EVIDENCE as authoritative.
+- Never infer "endgame" merely because queens are gone.
+- Do not casually call an early non-book position a middlegame if the supplied phase says opening.
+- Use phase-specific language appropriate to the verified phase.
+- Mention the phase when it helps the explanation, but do not force the phase label into every answer.
+
+GAME-STORY DISCIPLINE:
+- Distinguish the selected move from the overall game story.
+- A move can be poor without being the turning point.
+- A phase transition can happen without a large evaluation swing.
+- If Selected-move importance is normal, do not call it decisive, critical, or game-changing.
+- If it is a turning point, explain the concrete reason the game changed.
+- Important events are factual anchors, not invitations to invent connections between them.
+
+QUALITY OF EXPLANATION:
+- Prefer concrete cause-and-effect over generic chess advice.
+- Never claim a tactic is forced unless the supplied continuation or mate information demonstrates it.
+- Never claim a piece is trapped, pinned, skewered, overloaded, or hanging merely from pattern recognition; the board and continuation must support it.
+- Never call an exchange favorable merely because pieces were traded; explain the resulting material, structure, activity, king safety, or engine consequence.
+- In endgames, do not invoke opposition, zugzwang, triangulation, Lucena, Philidor, or a theoretical draw/win unless the position facts or continuation actually support that concept.
+- If the evidence is insufficient to name a motif, describe the concrete move consequence without assigning a motif label.
+- If the difference is tactical, show the tactical consequence or continuation.
+- If the difference is positional, name the concrete piece, pawn, square, file, structure,
+  exchange, or king-safety consequence that changes.
+- If the difference is mostly practical, explain why one position is easier to handle for a human.
+- Do not claim a strategic theme unless the board or supplied continuation supports it.
+- Do not describe a move as "creating pressure" unless there is a concrete target, threat,
+  restriction, or forcing continuation.
+- If the played move and best move are both reasonable and the evaluation difference is small,
+  say so rather than manufacturing a dramatic mistake.
 
 When a better move is supplied during game review:
 - explain what the played move was trying to accomplish,
@@ -358,12 +603,13 @@ Mode: ${mode || "study"}
 Opening: ${opening || "Unknown"}
 Variation: ${variation || "Main Line"}
 Repertoire side: ${repertoireSide}
-Side that played the selected move: ${moveSide}
+Side that played this move: ${moveSide}
+Explanation perspective: ${effectivePerspective}
 Move number: ${moveNumber ?? "Unknown"}
 Move played: ${playedMove}
 
 AUTHOR EXPLANATION:
-${authorExplanation || "Not supplied"}
+${effectiveAuthorExplanation || "Not supplied"}
 
 Position before the move (FEN):
 ${previousFen || "Not supplied"}
@@ -383,6 +629,12 @@ ${currentBoardText}
 VERIFIED DEVELOPMENT STATUS:
 ${developmentStatusText}
 
+VERIFIED MATERIAL STATUS:
+${materialStatusText}
+
+VERIFIED PAWN STRUCTURE:
+${pawnStructureText}
+
 Move history:
 ${moveHistory.join(" ")}
 
@@ -394,49 +646,76 @@ ${engineContext}
 OUTPUT GUIDANCE:
 
 For "summary":
-- If an author explanation exists, paraphrase that explanation and nothing else unless one extra sentence is strictly needed to make the author's idea understandable.
-- Do not add unrelated development, attack, pressure, target, king-safety, rook-activity, or future-plan commentary.
-- If the author's explanation is already sufficient, keep the summary close to it.
+- In game_review:
+  - Lead with the practical meaning of the selected move in the verified phase.
+  - If the move is critical or a turning point, explain the concrete consequence clearly.
+  - If the move is normal, keep the tone proportional and avoid drama.
+  - Prefer one memorable lesson over a catalogue of every feature in the position.
+  - Do not apply AUTHOR EXPLANATION restrictions because author notes are disabled in game_review.
+- Outside game_review in author mode:
+  - Preserve EVERY instructional idea in the AUTHOR EXPLANATION.
+  - Stay as close as possible to the AUTHOR EXPLANATION.
+  - Paraphrase only when needed for grammar, perspective, or clarity.
+  - Do not shorten away any teaching point from the author.
+  - Do not explain the mechanism behind the author's claim unless the AUTHOR EXPLANATION explicitly explains that mechanism.
+  - Do not add development, attack, pressure, target, king-safety, rook-activity, coordination, diagonal, file, or future-plan commentary unless the AUTHOR EXPLANATION itself contains that idea.
+  - If the AUTHOR EXPLANATION is already sufficient, reuse its teaching point almost verbatim.
+- In every mode:
+  - If Explanation perspective = OUR, the summary may naturally use "we/our/us" for the mover when appropriate.
+  - If Explanation perspective = OPPONENT, identify the mover as ${moveSide} or "the opponent" and never begin the summary with "We".
 
 For "howWeGotHere":
-- In author mode, use an empty string unless prior moves are necessary to understand the author's explanation.
+- In game_review, summarize only the preceding sequence needed to understand this decision.
+- Outside game_review in author mode, use an empty string unless prior moves are necessary to understand the author's explanation.
 
 For "whatChanged":
-- In author mode, describe only the board change directly relevant to the author's explanation. Otherwise use an empty string.
+- In game_review, describe the concrete consequence of the move using board and engine evidence.
+- Outside game_review in author mode, describe only the board change directly relevant to the author's explanation. Otherwise use an empty string.
 
 For "planContinuity":
-- In author mode, only connect the move to a plan explicitly present in the author explanation. Otherwise use an empty string.
+- In game_review, connect the move to a plan only when the preceding position and evidence support that plan.
+- Outside game_review in author mode, only connect the move to a plan explicitly present in the author explanation. Otherwise use an empty string.
 
 For "comparison":
 - Use an empty string unless a real comparison is supplied by game-review evidence.
 
 For "playedMoveIdea":
-- In author mode, restate the author's explanation faithfully.
+- In game_review, explain the played move's concrete intention or consequence without inventing motive.
+- Outside game_review in author mode, restate the author's explanation faithfully.
+- Respect Explanation perspective exactly.
+- If Explanation perspective = OPPONENT, identify the mover as ${moveSide} or "the opponent" and do not describe the move as our goal.
 
 For "betterMoveIdea":
 - Use an empty string unless a better move is actually supplied.
 
 For "practicalPlan":
-- In author mode, return an empty array unless the author explanation itself contains a clear next-step plan.
+- In game_review, return at most two concrete next-step actions that follow from the verified position or continuation.
+- Outside game_review in author mode, return an empty array unless the author explanation itself contains a clear next-step plan.
 - Never invent two or three plans just because the field exists.
 
 For "purpose":
-- In author mode, every purpose item must be directly supported by the AUTHOR EXPLANATION.
-- Do not add secondary purposes simply because they are true.
+- In game_review, include only short, position-specific ideas supported by the board or engine evidence.
+- Outside game_review in author mode, every purpose item must be a direct restatement of something explicitly present in the AUTHOR EXPLANATION.
+- Do not add secondary purposes merely because they are true.
 - One purpose item is perfectly acceptable.
 - Never say development is complete unless VERIFIED DEVELOPMENT STATUS explicitly confirms it.
 
 For "watchFor":
-- In author mode, use an empty string unless the author explanation itself contains a warning or a directly related practical consequence.
-- Do not invent a threat just to fill this field.
+- In game_review, use a warning only when the continuation or board shows a concrete danger.
+- Outside game_review in author mode, default to an empty string.
+- Only populate it if the AUTHOR EXPLANATION itself explicitly contains a warning, trap, tactical danger, or practical consequence.
+- Do not derive a warning from the board on your own.
 
 For "suggestedQuestion":
-- Prefer a question that asks about the author's stated idea.
-- It may be an empty string if no useful question is needed.
+- In game_review, ask a follow-up only if it helps the player understand this exact decision.
+- Outside game_review in author mode, default to an empty string.
+- Only ask a question if it directly helps explain the AUTHOR EXPLANATION without introducing a new chess idea.
 
 For arrows and highlights:
-- In author mode, only annotate the played move and squares explicitly relevant to the AUTHOR EXPLANATION.
-- Do not draw arrows for unrelated geometric attacks.
+- In game_review, annotate only the played move, best move, or one concrete tactical/strategic relation supported by evidence.
+- Outside game_review in author mode, default to only the played-move arrow when move facts reliably identify from/to squares.
+- Add another arrow or highlight only if the AUTHOR EXPLANATION explicitly names the relevant square, move, route, pawn break, or tactical sequence.
+- Never draw arrows for unrelated geometric attacks.
 - It is acceptable to return no arrows or highlights.
 
 Return only valid JSON matching:
@@ -477,6 +756,26 @@ Red may show a danger.
 Yellow or purple may show a strategic idea.
 
 Only include annotations that directly support the explanation.
+
+FINAL CHECK BEFORE RESPONDING:
+
+PERSPECTIVE:
+- In game_review, confirm that every "we/us/our" statement refers to the selected player's side.
+- Outside game_review, confirm that every "we/us/our" statement refers to the repertoire side.
+- If Explanation perspective = OUR, confirm the move is described as our move and our plan.
+- If Explanation perspective = OPPONENT, confirm the mover is explicitly identified as ${moveSide} or "the opponent" and the move is not described as our goal.
+- If Explanation perspective = OPPONENT, remove any sentence that accidentally uses "we" as the mover.
+- If Explanation perspective = UNKNOWN, use White and Black explicitly instead of guessing.
+
+AUTHOR LOCK:
+- Only outside game_review, if AUTHOR EXPLANATION exists, compare every non-empty output field against it.
+- Remove any teaching idea that is not explicitly present in the AUTHOR EXPLANATION or strictly necessary to make the author's wording understandable.
+- Do not reward yourself for adding more chess knowledge.
+- Accuracy to the author is more important than completeness.
+
+USER-VISIBLE CLEANLINESS:
+- No output field may mention internal validation, removed claims, grounding, prompt rules, author lock, verification, or why content was omitted.
+- If any field would contain that kind of language, return that field empty instead.
 `;
 
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -610,6 +909,13 @@ Only include annotations that directly support the explanation.
         502,
       );
     }
+
+    explanation = sanitizeCoachExplanation(
+      explanation,
+      Boolean(effectiveAuthorExplanation),
+      effectivePerspective,
+      moveSide,
+    );
 
     return json({ explanation });
   } catch (error) {
@@ -776,39 +1082,6 @@ function moveFactsToPromptText(facts: MoveFacts | null): string {
   ].join("\n");
 }
 
-type PerspectiveSide = "White" | "Black" | "Neutral";
-
-function normalizePerspectiveSide(value: unknown): PerspectiveSide {
-  const normalized = cleanText(value, 20).toLowerCase();
-  if (normalized === "white" || normalized === "w") return "White";
-  if (normalized === "black" || normalized === "b") return "Black";
-  return "Neutral";
-}
-
-function repertoirePerspectiveToPromptText(
-  repertoireSide: PerspectiveSide,
-  moveSide: PerspectiveSide,
-): string {
-  if (repertoireSide === "Neutral") {
-    return `REPERTOIRE SIDE: Neutral\nCURRENT MOVE SIDE: ${moveSide}\nThis is not a side-specific repertoire. Explain the move neutrally using White and Black.`;
-  }
-
-  const opponent = repertoireSide === "White" ? "Black" : "White";
-  const relationship = moveSide === repertoireSide
-    ? "The selected move belongs to the repertoire side. Explain it as OUR move and OUR intended plan."
-    : moveSide === opponent
-      ? "The selected move belongs to the opponent. Explain what the opponent is trying to do AGAINST OUR repertoire and how it affects OUR plan."
-      : "The selected move side was not supplied reliably. Preserve the repertoire perspective and avoid assuming who made the move.";
-
-  return [
-    `REPERTOIRE SIDE: ${repertoireSide}`,
-    `OPPONENT SIDE: ${opponent}`,
-    `CURRENT MOVE SIDE: ${moveSide}`,
-    `In author notes, we/us/our = ${repertoireSide}.`,
-    relationship,
-  ].join("\n");
-}
-
 function developmentStatusToPromptText(board: ParsedBoard): string {
   const startingMinorSquares: Array<{
     color: "White" | "Black";
@@ -842,10 +1115,247 @@ function developmentStatusToPromptText(board: ParsedBoard): string {
   return `${lines("White")}\n${lines("Black")}`;
 }
 
+
+function materialStatusToPromptText(board: ParsedBoard): string {
+  const values: Record<BoardPiece["type"], number> = {
+    King: 0,
+    Queen: 9,
+    Rook: 5,
+    Bishop: 3,
+    Knight: 3,
+    Pawn: 1,
+  };
+
+  const summarize = (color: "White" | "Black") => {
+    const counts: Record<BoardPiece["type"], number> = {
+      King: 0,
+      Queen: 0,
+      Rook: 0,
+      Bishop: 0,
+      Knight: 0,
+      Pawn: 0,
+    };
+
+    for (const piece of board.pieces.values()) {
+      if (piece.color === color) counts[piece.type] += 1;
+    }
+
+    const material =
+      counts.Queen * values.Queen +
+      counts.Rook * values.Rook +
+      counts.Bishop * values.Bishop +
+      counts.Knight * values.Knight +
+      counts.Pawn * values.Pawn;
+
+    return {
+      counts,
+      material,
+      text:
+        `${color}: Q${counts.Queen} R${counts.Rook} B${counts.Bishop} ` +
+        `N${counts.Knight} P${counts.Pawn}; non-king material ${material}`,
+    };
+  };
+
+  const white = summarize("White");
+  const black = summarize("Black");
+  const delta = white.material - black.material;
+  const balance =
+    delta === 0
+      ? "Material count is equal by standard piece values."
+      : delta > 0
+        ? `White is ahead by approximately ${delta} material point${delta === 1 ? "" : "s"}.`
+        : `Black is ahead by approximately ${Math.abs(delta)} material point${delta === -1 ? "" : "s"}.`;
+
+  return `${white.text}\n${black.text}\n${balance}`;
+}
+
+function pawnStructureToPromptText(board: ParsedBoard): string {
+  const files = "abcdefgh";
+
+  const pawnSquares = (color: "White" | "Black") =>
+    [...board.pieces.entries()]
+      .filter(([, piece]) => piece.color === color && piece.type === "Pawn")
+      .map(([square]) => square);
+
+  const analyze = (color: "White" | "Black") => {
+    const squares = pawnSquares(color);
+    const byFile = new Map<string, string[]>();
+
+    for (const square of squares) {
+      const file = square[0];
+      const list = byFile.get(file) ?? [];
+      list.push(square);
+      byFile.set(file, list);
+    }
+
+    const doubled = [...byFile.entries()]
+      .filter(([, list]) => list.length > 1)
+      .map(([file, list]) => `${file}-file (${list.join(", ")})`);
+
+    const isolated = squares.filter((square) => {
+      const fileIndex = files.indexOf(square[0]);
+      const left = fileIndex > 0 ? files[fileIndex - 1] : "";
+      const right = fileIndex < 7 ? files[fileIndex + 1] : "";
+      return (!left || !byFile.has(left)) && (!right || !byFile.has(right));
+    });
+
+    return {
+      squares,
+      doubled,
+      isolated,
+      occupiedFiles: new Set([...byFile.keys()]),
+    };
+  };
+
+  const white = analyze("White");
+  const black = analyze("Black");
+
+  const openFiles = [...files].filter(
+    (file) => !white.occupiedFiles.has(file) && !black.occupiedFiles.has(file),
+  );
+
+  const whiteSemiOpen = [...files].filter(
+    (file) => !white.occupiedFiles.has(file) && black.occupiedFiles.has(file),
+  );
+
+  const blackSemiOpen = [...files].filter(
+    (file) => !black.occupiedFiles.has(file) && white.occupiedFiles.has(file),
+  );
+
+  const line = (color: "White" | "Black", info: ReturnType<typeof analyze>) =>
+    `${color} pawns: ${info.squares.join(", ") || "none"}; ` +
+    `doubled: ${info.doubled.join(", ") || "none"}; ` +
+    `isolated: ${info.isolated.join(", ") || "none"}`;
+
+  return [
+    line("White", white),
+    line("Black", black),
+    `Open files: ${openFiles.join(", ") || "none"}`,
+    `White semi-open files: ${whiteSemiOpen.join(", ") || "none"}`,
+    `Black semi-open files: ${blackSemiOpen.join(", ") || "none"}`,
+  ].join("\n");
+}
+
+function sanitizeCoachExplanation(
+  explanation: any,
+  authorMode: boolean,
+  explanationPerspective: "OUR" | "OPPONENT" | "UNKNOWN",
+  moveSide: string,
+) {
+  if (!explanation || typeof explanation !== "object") return explanation;
+
+  const forbiddenMeta = [
+    "unsupported board claim",
+    "coach removed",
+    "position-grounded",
+    "verified board",
+    "verified move facts",
+    "author lock",
+    "system instruction",
+    "prompt rule",
+    "prompt",
+    "i omitted",
+    "i removed",
+    "cannot verify",
+    "can't verify",
+    "ask again for",
+    "grounded explanation",
+  ];
+
+  const containsForbiddenMeta = (value: unknown) => {
+    if (typeof value !== "string") return false;
+    const lower = value.toLowerCase();
+    return forbiddenMeta.some((phrase) => lower.includes(phrase));
+  };
+
+  const cleanStringField = (key: string) => {
+    if (containsForbiddenMeta(explanation[key])) {
+      explanation[key] = "";
+    }
+  };
+
+  [
+    "summary",
+    "howWeGotHere",
+    "whatChanged",
+    "planContinuity",
+    "comparison",
+    "playedMoveIdea",
+    "betterMoveIdea",
+    "watchFor",
+    "suggestedQuestion",
+  ].forEach(cleanStringField);
+
+  if (Array.isArray(explanation.practicalPlan)) {
+    explanation.practicalPlan = explanation.practicalPlan.filter(
+      (item: unknown) => typeof item === "string" && !containsForbiddenMeta(item),
+    );
+  }
+
+  if (Array.isArray(explanation.purpose)) {
+    explanation.purpose = explanation.purpose.filter(
+      (item: unknown) => typeof item === "string" && !containsForbiddenMeta(item),
+    );
+  }
+
+  if (Array.isArray(explanation.arrows)) {
+    explanation.arrows = explanation.arrows.filter(
+      (item: any) => !containsForbiddenMeta(item?.label),
+    );
+  }
+
+  if (Array.isArray(explanation.highlights)) {
+    explanation.highlights = explanation.highlights.filter(
+      (item: any) => !containsForbiddenMeta(item?.label),
+    );
+  }
+
+  // In author mode, silence is better than leaking internal correction language.
+  if (authorMode) {
+    if (!Array.isArray(explanation.practicalPlan)) explanation.practicalPlan = [];
+    if (!Array.isArray(explanation.purpose)) explanation.purpose = [];
+    if (!Array.isArray(explanation.arrows)) explanation.arrows = [];
+    if (!Array.isArray(explanation.highlights)) explanation.highlights = [];
+  }
+
+  // Deterministic perspective cleanup for the most visible fields.
+  if (explanationPerspective === "OPPONENT") {
+    const prefixOpponentSide = (value: unknown) => {
+      if (typeof value !== "string") return value;
+      const trimmed = value.trim();
+      if (!trimmed) return trimmed;
+
+      return trimmed.replace(/^We\b/i, moveSide || "The opponent");
+    };
+
+    explanation.summary = prefixOpponentSide(explanation.summary);
+    explanation.playedMoveIdea = prefixOpponentSide(explanation.playedMoveIdea);
+
+    if (Array.isArray(explanation.purpose)) {
+      explanation.purpose = explanation.purpose.map((item: unknown) =>
+        prefixOpponentSide(item),
+      );
+    }
+  }
+
+  return explanation;
+}
+
 function cleanText(value: unknown, maximumLength: number): string {
   return typeof value === "string"
     ? value.trim().slice(0, maximumLength)
     : "";
+}
+
+
+function cleanErrorCounts(value: unknown) {
+  const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const count = (key: string) => Math.max(0, Math.floor(Number(source[key]) || 0));
+  return {
+    inaccuracy: count("inaccuracy"),
+    mistake: count("mistake"),
+    blunder: count("blunder"),
+  };
 }
 
 function finiteOrNull(value: unknown): number | null {
@@ -859,6 +1369,7 @@ function json(data: unknown, status = 200) {
     headers: {
       ...corsHeaders,
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
     },
   });
 }

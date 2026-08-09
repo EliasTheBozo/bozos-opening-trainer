@@ -127,6 +127,8 @@ Deno.serve(async (request) => {
     const moveAccuracy = finiteOrNull(body.moveAccuracy);
     const openingAccuracy = finiteOrNull(body.openingAccuracy);
     const overallAccuracy = finiteOrNull(body.overallAccuracy);
+    const whiteOverallAccuracy = finiteOrNull(body.whiteOverallAccuracy);
+    const blackOverallAccuracy = finiteOrNull(body.blackOverallAccuracy);
 
     const moveHistory = Array.isArray(body.moveHistory)
       ? body.moveHistory.slice(0, 120).map((move: unknown) => cleanText(move, 20))
@@ -259,6 +261,8 @@ Whole-game context:
 - White current-phase errors: ${JSON.stringify(whitePhaseErrors)}
 - Black current-phase errors: ${JSON.stringify(blackPhaseErrors)}
 - Overall game accuracy: ${overallAccuracy ?? "Not supplied"}%
+- White overall accuracy: ${whiteOverallAccuracy ?? "Not supplied"}%
+- Black overall accuracy: ${blackOverallAccuracy ?? "Not supplied"}%
 - Verified game phase: ${gamePhase || "unknown"}
 - Phase summary: ${phaseSummary || "Not supplied"}
 - Game story: ${gameStory || "Not supplied"}
