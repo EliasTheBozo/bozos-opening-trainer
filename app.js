@@ -49,6 +49,7 @@ function route(name) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   if (name === 'library') searchOpenings('');
+  if (name === 'train') prepareTrainPage();
   if (name === 'dashboard') renderDashboard();
   if (name === 'challenges') renderChallenges();
   if (name === 'friends') renderFriends();
@@ -1067,6 +1068,7 @@ function renderOpeningFamily(family) {
       ${single ? `
         <div class="single-line-actions four-actions">
           <button class="study-button" onclick="openStudyById('${preview.id}')">Study</button>
+          <button class="train-opening-button" onclick="startTrainingOpening('${preview.id}')">Train</button>
           <button class="response-repertoire-button" onclick="openResponseRepertoire('${preview.id}')">${responseButtonLabel(preview)}</button>
           <button class="family-bot-button"
                   onclick="openBotForOpening('${escapeHtml(challengeName).replace(/'/g, "\\'")}')">
@@ -1120,6 +1122,7 @@ function renderOpeningFamily(family) {
                   ${line.notes ? `<p>${escapeHtml(line.notes)}</p>` : ''}
                   <div class="line-action-row four-line-actions">
                     <button class="line-study-button" onclick="openStudyById('${line.id}')">Study</button>
+                    <button class="line-train-button" onclick="startTrainingOpening('${line.id}')">Train</button>
                     <button class="line-response-button" onclick="openResponseRepertoire('${line.id}')">Responses</button>
                     <button class="line-bot-button"
                             onclick="openBotForOpening('${escapeHtml(lineChallengeName).replace(/'/g, "\\'")}')">
@@ -6856,7 +6859,7 @@ sb.auth.onAuthStateChange(async (_event, session) => {
   const { data } = await sb.auth.getSession();
   state.session = data.session;
   await loadIdentity();
-  route((location.hash || '#home').slice(1));
+  queueMicrotask(() => route((location.hash || '#home').slice(1)));
 })();
 
 
@@ -6875,3 +6878,200 @@ function openBetaIssueReport() {
 }
 $('public-beta-report').addEventListener('click', openBetaIssueReport);
 $('public-beta-modal-report').addEventListener('click', openBetaIssueReport);
+
+
+// WEB v2.8.0 — Recall Training Engine
+let trainOpening = null;
+let trainGame = null;
+let trainMoves = [];
+let trainUserSide = 'white';
+let trainPly = 0;
+let trainSelectedSquare = null;
+let trainAttemptsForPly = 0;
+let trainStats = { userMoves: 0, firstTry: 0, mistakes: 0 };
+let trainSearchTimer = null;
+
+function trainingStorageKey(id) { return `bozo_training_v1_${id}`; }
+
+function prepareTrainPage() {
+  if (!$('train-session') || !$('train-picker')) return;
+  if (!trainOpening) {
+    $('train-picker').hidden = false;
+    $('train-session').hidden = true;
+    $('train-results').hidden = true;
+  }
+}
+
+$('train-search-button')?.addEventListener('click', () => searchTrainOpenings($('train-opening-search').value));
+$('train-opening-search')?.addEventListener('keydown', e => { if (e.key === 'Enter') searchTrainOpenings(e.currentTarget.value); });
+$('train-opening-search')?.addEventListener('input', e => {
+  clearTimeout(trainSearchTimer);
+  trainSearchTimer = setTimeout(() => { if (e.currentTarget.value.trim().length >= 2) searchTrainOpenings(e.currentTarget.value); }, 280);
+});
+$('train-new-line')?.addEventListener('click', () => { trainOpening = null; prepareTrainPage(); $('train-opening-search')?.focus(); });
+$('train-restart')?.addEventListener('click', () => beginTrainSession());
+$('train-again')?.addEventListener('click', () => beginTrainSession());
+$('train-study-line')?.addEventListener('click', () => { if (trainOpening) openStudyOpening(trainOpening.id, { repertoireSide: trainUserSide }); });
+$('train-hint')?.addEventListener('click', showTrainHint);
+$('train-show-answer')?.addEventListener('click', showTrainAnswer);
+
+async function searchTrainOpenings(query = '') {
+  const root = $('train-opening-results');
+  if (!root) return;
+  const text = query.trim();
+  root.innerHTML = '<div class="empty-state"><div>⌛</div><b>Searching theory…</b></div>';
+  let req = sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('status','published').limit(60);
+  if (text) req = req.or(`name.ilike.%${text}%,variation.ilike.%${text}%,eco.ilike.%${text}%`);
+  const { data, error } = await req.order('name');
+  if (error) { root.innerHTML = `<div class="empty-state"><div>⚠</div><b>Could not load openings</b><span>${escapeHtml(readableError(error))}</span></div>`; return; }
+  const rows = (data || []).filter(row => row.pgn);
+  if (!rows.length) { root.innerHTML = '<div class="empty-state"><div>♟</div><b>No matching lines</b><span>Try a broader opening name.</span></div>'; return; }
+  root.innerHTML = rows.slice(0, 40).map(row => {
+    const side = inferOpeningSide(row);
+    return `<button class="train-opening-result" type="button" data-train-opening="${row.id}"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.variation || 'Main Line')} · ${escapeHtml(row.eco || 'ECO —')}</small></span><em>${side === 'neutral' ? 'Choose side' : `Train ${side}`}</em></button>`;
+  }).join('');
+  root.querySelectorAll('[data-train-opening]').forEach(button => button.addEventListener('click', () => startTrainingOpening(button.dataset.trainOpening)));
+}
+
+async function startTrainingOpening(openingId) {
+  route('train');
+  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('id', openingId).maybeSingle();
+  if (error || !data) return toast(readableError(error || new Error('Opening not found')));
+  const parser = new Chess();
+  if (!parser.load_pgn(data.pgn, { sloppy: true })) return toast('This opening line could not be loaded.');
+  trainOpening = data;
+  trainMoves = parser.history();
+  const inferred = inferOpeningSide(data);
+  trainUserSide = inferred === 'black' ? 'black' : 'white';
+  beginTrainSession();
+}
+window.startTrainingOpening = startTrainingOpening;
+
+function beginTrainSession() {
+  if (!trainOpening || !trainMoves.length) return;
+  trainGame = new Chess();
+  trainPly = 0;
+  trainSelectedSquare = null;
+  trainAttemptsForPly = 0;
+  trainStats = { userMoves: 0, firstTry: 0, mistakes: 0 };
+  $('train-picker').hidden = true;
+  $('train-results').hidden = true;
+  $('train-session').hidden = false;
+  $('train-title').textContent = trainOpening.name;
+  $('train-subtitle').textContent = `${trainOpening.variation || 'Main Line'} · ${trainOpening.eco || 'ECO —'} · training as ${trainUserSide}`;
+  setTrainFeedback('neutral', 'Your move.', 'Find the repertoire move from memory.');
+  advanceTrainOpponentMoves();
+  paintTrainBoard();
+  updateTrainUI();
+}
+
+function trainSideToMove() { return trainGame?.turn() === 'b' ? 'black' : 'white'; }
+function isTrainUserTurn() { return trainSideToMove() === trainUserSide; }
+
+function advanceTrainOpponentMoves() {
+  while (trainPly < trainMoves.length && !isTrainUserTurn()) {
+    const san = trainMoves[trainPly];
+    const move = trainGame.move(san, { sloppy: true });
+    if (!move) break;
+    trainPly++;
+  }
+  if (trainPly >= trainMoves.length) finishTrainSession();
+}
+
+function paintTrainBoard() {
+  const boardEl = $('train-board');
+  if (!boardEl || !trainGame) return;
+  const orientation = trainUserSide;
+  const ranks = orientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = orientation === 'white' ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
+  const html = [];
+  for (const rank of ranks) for (const file of files) {
+    const square = `${file}${rank}`;
+    const piece = trainGame.get(square);
+    const symbol = piece ? `${piece.color}${piece.type.toUpperCase()}` : '';
+    html.push(`<button type="button" data-square="${square}" data-piece-color="${piece?.color === 'w' ? 'white' : piece?.color === 'b' ? 'black' : ''}" class="${trainSelectedSquare === square ? 'selected' : ''}">${webPiece(symbol)}</button>`);
+  }
+  boardEl.innerHTML = html.join('');
+  boardEl.querySelectorAll('button').forEach(button => button.addEventListener('click', () => clickTrainSquare(button.dataset.square)));
+}
+
+function clickTrainSquare(square) {
+  if (!trainGame || trainPly >= trainMoves.length || !isTrainUserTurn()) return;
+  const myColor = trainUserSide === 'white' ? 'w' : 'b';
+  if (!trainSelectedSquare) {
+    const piece = trainGame.get(square);
+    if (!piece || piece.color !== myColor) return;
+    trainSelectedSquare = square; paintTrainBoard(); return;
+  }
+  const from = trainSelectedSquare;
+  trainSelectedSquare = null;
+  const move = trainGame.move({ from, to: square, promotion: 'q' });
+  if (!move) { paintTrainBoard(); return; }
+  const expectedSan = trainMoves[trainPly];
+  trainGame.undo();
+  trainAttemptsForPly++;
+  if (move.san !== expectedSan) {
+    trainStats.mistakes++;
+    setTrainFeedback('wrong', 'Not quite.', trainAttemptsForPly === 1 ? 'Try that position again.' : 'Use Hint if you want a nudge.');
+    paintTrainBoard(); updateTrainUI(); return;
+  }
+  trainGame.move(expectedSan, { sloppy: true });
+  trainStats.userMoves++;
+  if (trainAttemptsForPly === 1) trainStats.firstTry++;
+  trainPly++;
+  setTrainFeedback('correct', 'Correct!', expectedSan);
+  trainAttemptsForPly = 0;
+  advanceTrainOpponentMoves();
+  paintTrainBoard(); updateTrainUI();
+}
+
+function expectedTrainMove() {
+  if (!trainGame || trainPly >= trainMoves.length || !isTrainUserTurn()) return null;
+  const clone = new Chess(trainGame.fen());
+  return clone.move(trainMoves[trainPly], { sloppy: true });
+}
+
+function showTrainHint() {
+  const move = expectedTrainMove();
+  if (!move) return;
+  const piece = trainGame.get(move.from);
+  const names = { p:'pawn', n:'knight', b:'bishop', r:'rook', q:'queen', k:'king' };
+  setTrainFeedback('hint', 'Hint', `Look for a ${names[piece?.type] || 'piece'} move from the ${move.from[0]}-file.`);
+}
+function showTrainAnswer() {
+  const move = expectedTrainMove();
+  if (!move) return;
+  setTrainFeedback('answer', 'Answer', `${move.san} · ${move.from} → ${move.to}`);
+}
+function setTrainFeedback(stateName, title, copy) {
+  const el = $('train-feedback'); if (!el) return;
+  el.dataset.state = stateName; el.innerHTML = `<b>${escapeHtml(title)}</b><span>${escapeHtml(copy)}</span>`;
+}
+function updateTrainUI() {
+  if (!trainGame) return;
+  const totalUserMoves = trainMoves.reduce((count, _, i) => count + (((i % 2 === 0) ? 'white' : 'black') === trainUserSide ? 1 : 0), 0);
+  const accuracy = trainStats.userMoves ? Math.round(trainStats.firstTry / trainStats.userMoves * 100) : 0;
+  $('train-first-try').textContent = `${accuracy}%`;
+  $('train-mistakes').textContent = trainStats.mistakes;
+  $('train-progress').textContent = `${trainStats.userMoves}/${totalUserMoves}`;
+  $('train-track-fill').style.width = `${totalUserMoves ? trainStats.userMoves / totalUserMoves * 100 : 0}%`;
+  $('train-turn-label').textContent = trainPly >= trainMoves.length ? 'Line complete' : `${trainSideToMove()[0].toUpperCase()+trainSideToMove().slice(1)} to move`;
+  $('train-instruction').textContent = isTrainUserTurn() ? 'Find your repertoire move.' : 'BOZO is playing the book reply.';
+  const history = trainGame.history();
+  $('train-move-history').innerHTML = history.length ? history.map((m,i)=>`<span>${i%2===0 ? `${Math.floor(i/2)+1}.` : ''} ${escapeHtml(m)}</span>`).join('') : '<small>No moves yet.</small>';
+}
+function finishTrainSession() {
+  if (!$('train-results') || !trainOpening) return;
+  $('train-session').hidden = true;
+  $('train-results').hidden = false;
+  const accuracy = trainStats.userMoves ? Math.round(trainStats.firstTry / trainStats.userMoves * 100) : 0;
+  $('train-result-accuracy').textContent = `${accuracy}%`;
+  $('train-result-mistakes').textContent = trainStats.mistakes;
+  $('train-result-moves').textContent = trainStats.userMoves;
+  $('train-results-title').textContent = accuracy === 100 ? 'Perfect recall.' : accuracy >= 80 ? 'Strong line.' : accuracy >= 60 ? 'Getting there.' : 'This one needs another pass.';
+  try {
+    const previous = JSON.parse(localStorage.getItem(trainingStorageKey(trainOpening.id)) || '{}');
+    localStorage.setItem(trainingStorageKey(trainOpening.id), JSON.stringify({ attempts:(previous.attempts||0)+1, bestAccuracy:Math.max(previous.bestAccuracy||0, accuracy), lastAccuracy:accuracy, mistakes:trainStats.mistakes, trainedAt:new Date().toISOString() }));
+  } catch {}
+  logActivity?.('opening_trained', { opening_id: trainOpening.id, opening: trainOpening.name, variation: trainOpening.variation || 'Main Line', accuracy }).catch?.(()=>{});
+}

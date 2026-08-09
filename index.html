@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles.css?v=2.7.6">
+  <link rel="stylesheet" href="./styles.css?v=2.8.0">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 </head>
@@ -27,6 +27,7 @@
     <nav class="desktop-nav" aria-label="Main navigation">
       <button data-route="home">Home</button>
       <button data-route="library">Opening Library</button>
+      <button data-route="train">Train</button>
       <button data-route="dashboard">Dashboard</button>
       <button data-route="challenges">Challenges</button>
       <button data-route="friends">Friends</button>
@@ -50,6 +51,7 @@
   <div id="mobile-nav" class="mobile-nav" hidden>
     <button data-route="home">Home</button>
     <button data-route="library">Opening Library</button>
+    <button data-route="train">Train</button>
     <button data-route="dashboard">Dashboard</button>
     <button data-route="challenges">Challenges</button>
     <button data-route="friends">Friends</button>
@@ -215,6 +217,58 @@
           <span>The website reads published openings from the same Supabase project.</span>
         </div>
       </div>
+    </section>
+
+    <section id="view-train" class="view">
+      <div class="page-heading train-heading">
+        <div>
+          <div class="eyebrow">RECALL TRAINING</div>
+          <h1>Train the moves, not the Next button.</h1>
+          <p>Choose a published opening, then play your repertoire moves from memory. BOZO handles the opponent replies automatically.</p>
+        </div>
+        <button id="train-new-line" class="button secondary" type="button">Choose another line</button>
+      </div>
+
+      <section id="train-picker" class="panel train-picker">
+        <div class="panel-heading"><div><span>CHOOSE A LINE</span><h2>What do you want to train?</h2></div></div>
+        <div class="train-picker-controls">
+          <label>Search openings<input id="train-opening-search" placeholder="Polish, Sicilian, Caro-Kann…"></label>
+          <button id="train-search-button" class="button secondary" type="button">Search</button>
+        </div>
+        <div id="train-opening-results" class="train-opening-results"><div class="empty-state"><div>♟</div><b>Search for an opening</b><span>Pick one published line to begin recall training.</span></div></div>
+      </section>
+
+      <section id="train-session" class="train-session" hidden>
+        <div class="train-session-topbar">
+          <div><span class="eyebrow">NOW TRAINING</span><h2 id="train-title">Opening</h2><p id="train-subtitle"></p></div>
+          <div class="train-live-stats"><span>First try <b id="train-first-try">0%</b></span><span>Mistakes <b id="train-mistakes">0</b></span><span>Progress <b id="train-progress">0/0</b></span></div>
+        </div>
+        <div class="train-layout">
+          <div>
+            <div class="study-board-shell train-board-shell"><div id="train-board" class="web-duel-board train-board"></div></div>
+            <div id="train-feedback" class="train-feedback" data-state="neutral"><b>Your move.</b><span>Play the highlighted side's repertoire move from memory.</span></div>
+            <div class="train-actions">
+              <button id="train-hint" class="button secondary" type="button">Hint</button>
+              <button id="train-show-answer" class="button secondary" type="button">Show answer</button>
+              <button id="train-restart" class="button secondary" type="button">Restart line</button>
+            </div>
+          </div>
+          <aside class="panel train-sidebar">
+            <span class="eyebrow">SESSION</span>
+            <h3 id="train-turn-label">White to move</h3>
+            <p id="train-instruction">Find the repertoire move.</p>
+            <div class="train-mini-track"><span id="train-track-fill"></span></div>
+            <div id="train-move-history" class="train-move-history"></div>
+            <div class="study-tip">Correct moves advance automatically. Opponent book replies are played for you.</div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="train-results" class="panel train-results" hidden>
+        <div class="eyebrow">LINE COMPLETE</div><h2 id="train-results-title">Nice work.</h2>
+        <div class="stats-grid train-result-grid"><article><span>First-try accuracy</span><b id="train-result-accuracy">0%</b><small>Moves solved immediately</small></article><article><span>Mistakes</span><b id="train-result-mistakes">0</b><small>Incorrect attempts</small></article><article><span>Moves trained</span><b id="train-result-moves">0</b><small>Your repertoire moves</small></article></div>
+        <div class="train-result-actions"><button id="train-again" class="button primary" type="button">Train again</button><button id="train-study-line" class="button secondary" type="button">Study this line</button></div>
+      </section>
     </section>
 
     <section id="view-dashboard" class="view">
@@ -1466,7 +1520,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app.js?v=2.7.13"></script>
+  <script src="./app.js?v=2.8.0"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
