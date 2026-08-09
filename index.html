@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v3.6.3.css">
+  <link rel="stylesheet" href="./styles-v3.6.4.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -334,7 +334,10 @@
           </div>
           <div class="train-layout">
             <div>
-              <div class="study-board-shell train-board-shell puzzle-board-shell"><div id="puzzle-board" class="web-duel-board train-board"></div></div>
+              <div class="study-board-shell train-board-shell puzzle-board-shell">
+                <div id="puzzle-board" class="web-duel-board train-board"></div>
+                <svg id="puzzle-user-arrow-layer" class="board-arrow-layer board-user-arrow-layer" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
+              </div>
               <div id="puzzle-feedback" class="train-feedback" data-state="neutral"><b>Your move.</b><span>Find the continuation from this opening position.</span></div>
               <div class="train-actions"><button id="puzzle-hint" class="button secondary" type="button">Hint</button><button id="puzzle-answer" class="button secondary" type="button">Show answer</button><button id="puzzle-skip" class="button secondary" type="button">Skip puzzle</button></div>
             </div>
@@ -1689,7 +1692,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v3.6.3.js"></script>
+  <script src="./app-v3.6.4.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
