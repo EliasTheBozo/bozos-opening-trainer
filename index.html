@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v3.3.0.css">
+  <link rel="stylesheet" href="./styles-v3.4.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -636,41 +636,49 @@
               </div>
               <span id="review-classification" class="review-classification">—</span>
               <p id="review-selected-summary">Choose a move to inspect its evaluation and alternatives.</p>
+              <div id="review-recommended-line" class="review-recommended-line" hidden></div>
               <div class="review-move-facts">
                 <div><span>Position</span><b id="review-move-eval">Equal</b></div>
                 <div><span>Accuracy</span><b id="review-move-accuracy">—</b></div>
-                <div><span>Loss</span><b id="review-move-loss">—</b></div>
-                <div><span>Engine choice</span><b id="review-engine-best">—</b></div>
+                <div><span>Eval cost</span><b id="review-move-loss">—</b></div>
+                <div><span>Better move</span><b id="review-engine-best">—</b></div>
               </div>
-            </div>
-
-            <div>
-              <span class="eyebrow">MOVE LIST</span>
-              <div id="game-review-moves" class="game-review-moves"></div>
             </div>
 
             <section class="bozo-coach-panel review-coach-panel">
               <div class="coach-heading">
                 <div>
                   <span class="eyebrow">BOZO COACH</span>
-                  <h3>Ask about this move</h3>
+                  <h3>Why did this move matter?</h3>
                 </div>
                 <span id="review-coach-move-label" class="coach-move-label">Choose a move</span>
               </div>
               <div id="review-coach-answer" class="coach-answer">
-                Select an analyzed move, then ask why it worked or failed.
+                Select an analyzed move, then let BOZO explain the decision in plain chess language.
+              </div>
+              <div class="review-coach-shortcuts" aria-label="Suggested coach questions">
+                <button type="button" data-review-question="Why is the better move stronger here?">Why is the better move stronger?</button>
+                <button type="button" data-review-question="What is the one lesson I should remember from this position?">What should I remember?</button>
               </div>
               <label class="coach-question-label">
-                Ask a question
+                Ask your own question
                 <input id="review-coach-question"
                        maxlength="300"
-                       placeholder="Compare my move with the better move. What should I do next?">
+                       placeholder="What should I understand about this position?">
               </label>
               <div class="coach-actions">
-                <button id="ask-review-coach" class="button primary">Compare and explain</button>
+                <button id="ask-review-coach" class="button primary">Ask BOZO</button>
                 <button id="clear-review-coach" class="button secondary">Clear</button>
               </div>
             </section>
+
+            <div class="review-move-list-section">
+              <div class="review-move-list-heading">
+                <span class="eyebrow">MOVE LIST</span>
+                <small>Jump to any decision</small>
+              </div>
+              <div id="game-review-moves" class="game-review-moves"></div>
+            </div>
           </aside>
         </div>
       </div>
@@ -1609,7 +1617,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v3.3.0.js"></script>
+  <script src="./app-v3.4.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
