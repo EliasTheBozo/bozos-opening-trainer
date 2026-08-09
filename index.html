@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v3.4.0.css">
+  <link rel="stylesheet" href="./styles-v3.5.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -494,7 +494,7 @@
         <div>
           <div class="eyebrow">STOCKFISH + BOZO COACH</div>
           <h1>Review your game.</h1>
-          <p>Import a PGN, measure opening and overall accuracy, then ask BOZO Coach about any move.</p>
+          <p>Import a PGN, compare each phase, then ask BOZO Coach about any move.</p>
         </div>
         <span id="review-engine-state" class="cloud-pill">Engine loads when needed</span>
       </div>
@@ -521,24 +521,19 @@
           </label>
         </div>
 
-        <div class="review-settings">
+        <div class="review-settings review-settings-simple">
           <label>
-            Engine depth
-            <select id="review-depth">
-              <option value="8">Fast · depth 8</option>
-              <option value="10" selected>Balanced · depth 10</option>
-              <option value="12">Deep · depth 12</option>
+            Analysis quality
+            <select id="review-depth" aria-describedby="review-quality-help">
+              <option value="10">Fast</option>
+              <option value="14" selected>Balanced · recommended</option>
+              <option value="18">Deep</option>
             </select>
+            <small id="review-quality-help" class="review-setting-help">
+              BOZO automatically analyzes the full imported game.
+            </small>
           </label>
-          <label>
-            Maximum plies
-            <select id="review-max-plies">
-              <option value="40">40 plies</option>
-              <option value="60" selected>60 plies</option>
-              <option value="80">80 plies</option>
-            </select>
-          </label>
-          <button id="start-game-review" class="button primary">Analyze game</button>
+          <button id="start-game-review" class="button primary">Analyze full game</button>
         </div>
 
         <div id="review-progress-wrap" class="review-progress-wrap" hidden>
@@ -555,17 +550,7 @@
       </div>
 
       <div id="review-results" hidden>
-        <div class="review-score-grid">
-          <article class="review-score-card">
-            <span>Opening accuracy · both players</span>
-            <strong id="review-opening-accuracy">—</strong>
-            <small id="review-opening-detail">First 16 plies</small>
-          </article>
-          <article class="review-score-card">
-            <span>Overall accuracy · both players</span>
-            <strong id="review-overall-accuracy">—</strong>
-            <small id="review-overall-detail">White vs Black</small>
-          </article>
+        <div class="review-score-grid review-score-grid-summary">
           <article class="review-score-card">
             <span>Opening detected</span>
             <strong id="review-opening-name">Unknown</strong>
@@ -574,7 +559,7 @@
           <article class="review-score-card">
             <span>Turning point</span>
             <strong id="review-turning-point">—</strong>
-            <small id="review-turning-detail">Largest evaluation swing</small>
+            <small id="review-turning-detail">Largest meaningful evaluation swing</small>
           </article>
         </div>
 
@@ -1617,7 +1602,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v3.4.0.js"></script>
+  <script src="./app-v3.5.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
