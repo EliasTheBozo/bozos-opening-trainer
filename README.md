@@ -1,3 +1,5 @@
+> **v3.0.0:** Phase-aware Game Review + BOZO Coach. See `GAME_REVIEW_V3_UPDATE.md`.
+
 ## v2.7.10 — Board-grounded BOZO Coach
 
 - BOZO Coach now receives an explicit current-board piece map in addition to FEN.

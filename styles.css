@@ -3079,3 +3079,74 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
 .puzzle-results .train-result-grid article:first-child b{color:#ffd34d}.puzzle-pop{animation:puzzlePop .22s ease}@keyframes puzzlePop{50%{transform:scale(1.03)}}
 @media(max-width:700px){.train-mode-switch{display:grid;grid-template-columns:1fr 1fr;width:100%}.puzzle-picker-buttons{display:grid;grid-template-columns:1fr 1fr}.puzzle-picker-buttons .button{width:100%}}
 .opening-puzzle-button,.line-puzzle-button{border-color:rgba(255,211,77,.45)!important;color:#ffd34d!important}
+
+
+/* ============================================================
+   GAME REVIEW v3 — PHASE-AWARE COACHING
+   ============================================================ */
+.review-intelligence-panel {
+  display:grid;
+  gap:16px;
+  padding:18px;
+  border:1px solid rgba(98,229,197,.24);
+  border-radius:20px;
+  background:linear-gradient(135deg,rgba(14,20,30,.86),rgba(38,16,51,.7));
+}
+.review-intelligence-heading {
+  display:grid;
+  grid-template-columns:minmax(220px,.75fr) minmax(300px,1.25fr);
+  gap:24px;
+  align-items:end;
+}
+.review-intelligence-heading h2,
+.review-events-wrap h3 { margin:4px 0 0; }
+.review-intelligence-heading p { margin:0; color:var(--muted); line-height:1.6; }
+.review-phase-grid {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.review-phase-card {
+  display:grid;
+  gap:6px;
+  padding:15px;
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:rgba(19,8,26,.76);
+}
+.review-phase-card.muted { opacity:.55; }
+.review-phase-card > span { color:#62e5c5; font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.review-phase-card strong { color:#fff6e8; font-size:25px; }
+.review-phase-card small { color:#ffb36b; font-weight:800; }
+.review-phase-card p { margin:3px 0 0; color:var(--muted); font-size:12px; line-height:1.5; }
+.review-events-wrap { display:grid; gap:10px; }
+.review-event-timeline { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.review-event {
+  display:grid;
+  grid-template-columns:12px 1fr;
+  gap:10px;
+  align-items:start;
+  width:100%;
+  padding:11px 12px;
+  border:1px solid var(--border);
+  border-radius:13px;
+  background:rgba(14,7,20,.64);
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.review-event:hover { border-color:rgba(255,131,43,.52); transform:translateY(-1px); }
+.review-event span:last-child { display:grid; gap:3px; }
+.review-event b { color:#fff6e8; font-size:12px; }
+.review-event small { color:var(--muted); line-height:1.4; }
+.review-event-dot { width:9px; height:9px; margin-top:3px; border-radius:999px; background:#a855f7; box-shadow:0 0 0 3px rgba(168,85,247,.12); }
+.review-event-turning,.review-event-critical { background:#ff832b; box-shadow:0 0 0 3px rgba(255,131,43,.12); }
+.review-event-phase { background:#62e5c5; box-shadow:0 0 0 3px rgba(98,229,197,.12); }
+.review-event-trade { background:#f6c945; box-shadow:0 0 0 3px rgba(246,201,69,.12); }
+.review-event-mate { background:#ef5350; box-shadow:0 0 0 3px rgba(239,83,80,.12); }
+.review-event-empty { color:var(--muted); font-size:12px; }
+@media (max-width:900px) {
+  .review-intelligence-heading { grid-template-columns:1fr; gap:8px; }
+  .review-phase-grid { grid-template-columns:1fr; }
+  .review-event-timeline { grid-template-columns:1fr; }
+}

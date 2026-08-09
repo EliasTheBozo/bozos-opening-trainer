@@ -3508,17 +3508,169 @@ function reviewBestMovePosition(fen, bestMoveSan) {
   return move ? game.fen() : '';
 }
 
-function reviewGamePhase(ply, totalPlies, fen = '') {
-  if (ply <= 20) return 'opening';
+function reviewMaterialProfile(fen = '') {
+  const board = String(fen || '').split(' ')[0];
+  const counts = { Q:0, q:0, R:0, r:0, B:0, b:0, N:0, n:0, P:0, p:0 };
+  for (const piece of board) if (piece in counts) counts[piece]++;
+  const value = piece => ({ Q:9, R:5, B:3, N:3 }[piece] || 0);
+  const whiteNonPawn = counts.Q * value('Q') + counts.R * value('R') + counts.B * value('B') + counts.N * value('N');
+  const blackNonPawn = counts.q * value('Q') + counts.r * value('R') + counts.b * value('B') + counts.n * value('N');
+  return {
+    counts,
+    queens: counts.Q + counts.q,
+    rooks: counts.R + counts.r,
+    minors: counts.B + counts.b + counts.N + counts.n,
+    pawns: counts.P + counts.p,
+    whiteNonPawn,
+    blackNonPawn,
+    totalNonPawn: whiteNonPawn + blackNonPawn
+  };
+}
 
-  const boardPart = String(fen || '').split(' ')[0];
-  const queens = (boardPart.match(/[qQ]/g) || []).length;
-  const rooks = (boardPart.match(/[rR]/g) || []).length;
-  const minors = (boardPart.match(/[nNbB]/g) || []).length;
+function reviewLooksLikeEndgame(fen = '') {
+  const material = reviewMaterialProfile(fen);
+  // Conservative on purpose: BOZO should not call a queen-heavy position an
+  // endgame just because the game is late. Queenless reduced-material positions
+  // and genuinely sparse queen endings qualify.
+  if (material.queens === 0 && material.totalNonPawn <= 26) return true;
+  if (material.queens === 0 && material.rooks <= 2 && material.minors <= 4) return true;
+  if (material.totalNonPawn <= 16) return true;
+  if (material.queens <= 1 && material.totalNonPawn <= 20 && material.pawns <= 10) return true;
+  return false;
+}
 
-  if (queens === 0 && (rooks <= 2 || minors <= 2)) return 'endgame';
-  if (ply >= Math.max(40, totalPlies * 0.72)) return 'late middlegame';
+function reviewPhasePlan(rows = [], bookDepth = 0) {
+  if (!rows.length) return { openingEnd: 0, endgameStart: null };
+
+  // The opening database is the strongest evidence we have. Give a short
+  // transition cushion after book rather than using a hard-coded move number.
+  let openingEnd = Math.max(0, Math.min(rows.length, Number(bookDepth) || 0));
+  const minimumOpening = Math.min(rows.length, 10);
+  openingEnd = Math.max(openingEnd, minimumOpening);
+
+  // If still very early after book, wait until development has progressed or
+  // enough plies have elapsed. This avoids calling move 6 a middlegame simply
+  // because the exact line was not in BOZO's database.
+  const developmentSquares = new Set(['b1','g1','b8','g8','c1','f1','c8','f8']);
+  for (let i = openingEnd; i < Math.min(rows.length, 24); i++) {
+    const game = new Chess(rows[i].fen);
+    let undeveloped = 0;
+    for (const square of developmentSquares) {
+      const piece = game.get(square);
+      if (piece && (piece.type === 'n' || piece.type === 'b')) undeveloped++;
+    }
+    if (i + 1 >= 16 || undeveloped <= 3) {
+      openingEnd = i + 1;
+      break;
+    }
+  }
+
+  let endgameStart = null;
+  for (let i = Math.max(openingEnd + 4, 16); i < rows.length; i++) {
+    if (!reviewLooksLikeEndgame(rows[i].fen)) continue;
+    // Require the reduced-material state to persist for a few plies so a
+    // temporary tactical sequence is not mislabeled as a phase transition.
+    const persistent = rows.slice(i, Math.min(rows.length, i + 4))
+      .every(row => reviewLooksLikeEndgame(row.fen));
+    if (persistent) {
+      endgameStart = i + 1;
+      break;
+    }
+  }
+
+  return { openingEnd, endgameStart };
+}
+
+function reviewGamePhase(ply, totalPlies, fen = '', phasePlan = null) {
+  if (phasePlan) {
+    if (ply <= phasePlan.openingEnd) return 'opening';
+    if (phasePlan.endgameStart && ply >= phasePlan.endgameStart) return 'endgame';
+    return 'middlegame';
+  }
+  if (ply <= 16) return 'opening';
+  if (reviewLooksLikeEndgame(fen)) return 'endgame';
   return 'middlegame';
+}
+
+function reviewPhaseLabel(phase = '') {
+  return ({ opening:'Opening', middlegame:'Middlegame', endgame:'Endgame' })[phase] || 'Game';
+}
+
+function reviewMoveNotation(row) {
+  if (!row) return '—';
+  return `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
+}
+
+function reviewPhaseRows(phase) {
+  return (reviewData?.rows || []).filter(row => row.phase === phase);
+}
+
+function reviewPhaseSummary(phase, rows) {
+  if (!rows.length) return 'This game did not contain a clearly detected phase here.';
+  const accuracy = reviewAccuracyFor(rows);
+  const worst = [...rows].sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)[0];
+  const serious = rows.filter(row => ['mistake','blunder'].includes(row.cls)).length;
+  const clean = rows.filter(row => ['book','best','excellent','good'].includes(row.cls)).length;
+  const start = rows[0], end = rows[rows.length - 1];
+  let lead = `${reviewPhaseLabel(phase)}: ${reviewMoveNotation(start).split(' ')[0]} through ${reviewMoveNotation(end).split(' ')[0]}`;
+  if (accuracy != null) lead += ` · ${accuracy}% accuracy.`;
+  if (!serious && clean === rows.length) return `${lead} No major engine errors were detected in this phase.`;
+  if (worst?.rawEngineLoss >= 100) return `${lead} The main issue was ${reviewMoveNotation(worst)}, a ${worst.label.toLowerCase()} costing about ${worst.rawEngineLoss}cp.`;
+  if (worst?.rawEngineLoss > 0) return `${lead} The largest slip was ${reviewMoveNotation(worst)} at about ${worst.rawEngineLoss}cp.`;
+  return `${lead} The phase was handled cleanly by the engine metric.`;
+}
+
+function reviewBuildEvents(rows, openingMatch, phasePlan) {
+  const events = [];
+  if (openingMatch?.opening && openingMatch.depth) {
+    events.push({ ply:1, type:'opening', title:'Opening identified', detail:`${openingMatch.opening.name}${openingMatch.opening.variation ? `: ${openingMatch.opening.variation}` : ''} · ${openingMatch.depth} matched book plies` });
+  }
+  if (phasePlan.openingEnd && phasePlan.openingEnd < rows.length) {
+    const row = rows[phasePlan.openingEnd - 1];
+    events.push({ ply:phasePlan.openingEnd, type:'phase', title:'Opening transition', detail:`BOZO marks the opening phase ending around ${reviewMoveNotation(row)}.` });
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const before = reviewMaterialProfile(rows[i].previousFen);
+    const after = reviewMaterialProfile(rows[i].fen);
+    if (before.queens === 2 && after.queens < 2) {
+      events.push({ ply:rows[i].ply, type:'trade', title:'Queens begin coming off', detail:`${reviewMoveNotation(rows[i])} changes the character of the position.` });
+      break;
+    }
+  }
+
+  if (phasePlan.endgameStart) {
+    const row = rows[phasePlan.endgameStart - 1];
+    events.push({ ply:phasePlan.endgameStart, type:'phase', title:'Endgame begins', detail:`Reduced material makes ${reviewMoveNotation(row)} the approximate endgame transition.` });
+  }
+
+  const critical = rows.filter(row => row.rawEngineLoss >= 100)
+    .sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)
+    .slice(0, 3);
+  critical.forEach((row, index) => events.push({
+    ply:row.ply,
+    type:index === 0 ? 'turning' : 'critical',
+    title:index === 0 ? 'Largest turning point' : `${row.label}`,
+    detail:`${reviewMoveNotation(row)} · about ${row.rawEngineLoss}cp lost${row.engineBest && row.engineBest !== '—' ? ` · Stockfish preferred ${row.engineBest}` : ''}`
+  }));
+
+  const mateRow = rows.find(row => row.mate != null);
+  if (mateRow) events.push({ ply:mateRow.ply, type:'mate', title:'Forced mate appears', detail:`After ${reviewMoveNotation(mateRow)}, Stockfish sees a forced mating sequence.` });
+
+  return events.sort((a,b) => a.ply - b.ply).slice(0, 8);
+}
+
+function reviewGameStory(rows, phasePlan) {
+  if (!rows.length) return 'BOZO could not build a game story from this PGN.';
+  const turning = [...rows].sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)[0];
+  const early = rows[Math.min(rows.length - 1, Math.max(0, phasePlan.openingEnd - 1))];
+  const end = rows[rows.length - 1];
+  const earlyDesc = reviewPositionDescription(early?.whiteCp || 0, early?.mate);
+  const endDesc = reviewPositionDescription(end?.whiteCp || 0, end?.mate);
+  if (turning && turning.rawEngineLoss >= 100) {
+    return `The opening transitioned into a ${phasePlan.endgameStart ? 'middlegame and later an endgame' : 'middlegame'} with ${earlyDesc.toLowerCase()}. The biggest change came at ${reviewMoveNotation(turning)}, where the mover gave up about ${turning.rawEngineLoss}cp. By the final analyzed position, ${endDesc.toLowerCase()}.`;
+  }
+  return `The game moved from the opening into a ${phasePlan.endgameStart ? 'middlegame and endgame' : 'middlegame'} without a single large engine swing. The final analyzed position is described as: ${endDesc}.`;
 }
 
 function reviewMoveWindow(rows, selectedIndex, beforeCount = 6, afterCount = 6) {
@@ -3619,10 +3771,16 @@ async function computeWebsiteReview(sans, depth, maxPlies, bookDepth, onProgress
     onProgress?.(index + 1, plies.length);
   }
 
+  const phasePlan = reviewPhasePlan(rows, bookDepth);
+  rows.forEach(row => {
+    row.phase = reviewGamePhase(row.ply, rows.length, row.fen, phasePlan);
+  });
+
   return {
     initialFen,
     initialEval: whiteReviewEval(await engine.analyze(initialFen, depth), 'w'),
-    rows
+    rows,
+    phasePlan
   };
 }
 
@@ -3694,6 +3852,8 @@ async function startGameReview() {
 
     reviewData.headers = parsed.headers;
     reviewData.openingMatch = openingMatch;
+    reviewData.events = reviewBuildEvents(reviewData.rows, openingMatch, reviewData.phasePlan);
+    reviewData.story = reviewGameStory(reviewData.rows, reviewData.phasePlan);
     reviewStepIndex = 0;
     reviewOrientation = 'white';
 
@@ -3707,7 +3867,7 @@ async function startGameReview() {
     if (recommendation && matchedOpening?.id) {
       recommendation.hidden = false;
       $('review-recommendation-title').textContent = matchedOpening.name || 'Study the detected opening';
-      $('review-recommendation-copy').textContent = `BOZO recognized ${matchedOpening.name || 'this opening'} in your game. Review the line while the positions are still fresh.`;
+      $('review-recommendation-copy').textContent = `BOZO recognized ${matchedOpening.name || 'this opening'} in your game. The review now separates the opening, middlegame, and any detected endgame so you can see what happened after book.`;
       $('review-recommendation-button').dataset.openingId = matchedOpening.id;
     } else if (recommendation) recommendation.hidden = true;
     await logActivity('game_reviewed', { opening_id: matchedOpening?.id || null, opening: matchedOpening?.name || 'Unknown opening', accuracy: reviewAccuracyFor(reviewData.rows) });
@@ -3730,13 +3890,16 @@ async function startGameReview() {
 
 function renderReviewSummary() {
   const rows = reviewData.rows;
-  const openingRows = rows.filter(row => row.ply <= 16);
+  const openingRows = rows.filter(row => row.phase === 'opening');
   const overall = reviewAccuracyFor(rows);
   const openingAccuracy = reviewAccuracyFor(openingRows);
   const turning = [...rows].sort((a, b) => b.rawEngineLoss - a.rawEngineLoss)[0];
 
   $('review-opening-accuracy').textContent =
     openingAccuracy == null ? '—' : `${openingAccuracy}%`;
+  $('review-opening-detail').textContent = openingRows.length
+    ? `${openingRows.length} detected opening ${openingRows.length === 1 ? 'ply' : 'plies'}`
+    : 'No opening phase detected';
   $('review-overall-accuracy').textContent =
     overall == null ? '—' : `${overall}%`;
 
@@ -3748,11 +3911,37 @@ function renderReviewSummary() {
     `${match.depth} matched book ${match.depth === 1 ? 'ply' : 'plies'}`;
 
   if (turning) {
-    $('review-turning-point').textContent =
-      `${Math.ceil(turning.ply / 2)}${turning.mover === 'w' ? '.' : '...'} ${turning.san}`;
-    $('review-turning-detail').textContent =
-      `${turning.label} · ${turning.rawEngineLoss}cp swing`;
+    $('review-turning-point').textContent = reviewMoveNotation(turning);
+    $('review-turning-detail').textContent = turning.rawEngineLoss > 0
+      ? `${turning.label} · ${turning.rawEngineLoss}cp swing`
+      : 'No meaningful evaluation swing';
   }
+
+  const phaseMarkup = ['opening','middlegame','endgame'].map(phase => {
+    const phaseRows = rows.filter(row => row.phase === phase);
+    const accuracy = reviewAccuracyFor(phaseRows);
+    const range = phaseRows.length
+      ? `${reviewMoveNotation(phaseRows[0]).split(' ')[0]}–${reviewMoveNotation(phaseRows[phaseRows.length - 1]).split(' ')[0]}`
+      : 'Not detected';
+    return `<article class="review-phase-card ${phaseRows.length ? '' : 'muted'}">
+      <span>${reviewPhaseLabel(phase)}</span>
+      <strong>${phaseRows.length && accuracy != null ? `${accuracy}%` : '—'}</strong>
+      <small>${escapeHtml(range)}</small>
+      <p>${escapeHtml(reviewPhaseSummary(phase, phaseRows))}</p>
+    </article>`;
+  }).join('');
+  $('review-phase-grid').innerHTML = phaseMarkup;
+  $('review-game-story').textContent = reviewData.story || '';
+  $('review-event-timeline').innerHTML = (reviewData.events || []).map(event => `
+    <button class="review-event" data-review-event-ply="${event.ply}">
+      <span class="review-event-dot review-event-${event.type}"></span>
+      <span><b>${escapeHtml(event.title)}</b><small>${escapeHtml(event.detail)}</small></span>
+    </button>
+  `).join('') || '<div class="review-event-empty">No major review events detected.</div>';
+  $$('[data-review-event-ply]').forEach(button => button.addEventListener('click', () => {
+    setReviewStep(Number(button.dataset.reviewEventPly));
+    $('review-workspace-anchor')?.scrollIntoView({ behavior:'smooth', block:'start' });
+  }));
 }
 
 function renderReviewMoveList() {
@@ -3786,7 +3975,7 @@ function reviewMoveButton(row) {
     <button data-review-step="${row.ply}"
             class="review-move-button review-${row.cls}">
       <b>${escapeHtml(row.san)}</b>
-      <small>${escapeHtml(row.label)}</small>
+      <small>${escapeHtml(row.label)} · ${escapeHtml(reviewPhaseLabel(row.phase))}</small>
     </button>
   `;
 }
@@ -3904,11 +4093,13 @@ function updateReviewSelectedMove() {
   $('review-selected-move').textContent = moveLabel;
   $('review-classification').textContent = row.label;
   $('review-classification').className = `review-classification review-${row.cls}`;
+  const phaseLabel = reviewPhaseLabel(row.phase);
+  const pvText = (row.principalVariationSan || []).slice(0, 4).join(' ');
   $('review-selected-summary').textContent = row.isBook
-    ? 'This move matched the published opening database.'
+    ? `${phaseLabel}: this move matched the published opening database.`
     : row.wasTop
-      ? 'The played move matched Stockfish’s first choice.'
-      : `Stockfish preferred ${row.engineBest}.`;
+      ? `${phaseLabel}: the played move matched Stockfish’s first choice.${pvText ? ` The engine continuation begins ${pvText}.` : ''}`
+      : `${phaseLabel}: Stockfish preferred ${row.engineBest}.${pvText ? ` Its main continuation begins ${pvText}.` : ''}`;
   $('review-move-eval').textContent = reviewPositionDescription(row.whiteCp, row.mate);
   $('review-move-accuracy').textContent = `${Math.round(row.accuracy * 10) / 10}%`;
   $('review-move-loss').textContent = `${row.rawEngineLoss}cp`;
@@ -3963,10 +4154,11 @@ async function askReviewCoach() {
       6,
       6
     );
-    const gamePhase = reviewGamePhase(
+    const gamePhase = row.phase || reviewGamePhase(
       row.ply,
       reviewData.rows.length,
-      row.fen
+      row.fen,
+      reviewData.phasePlan
     );
     const reviewCoachFacts = verifiedCoachFacts(row.fen, row.previousFen, row.san);
 
@@ -3981,6 +4173,9 @@ async function askReviewCoach() {
         opening: opening?.name || 'Unknown opening',
         variation: opening?.variation || 'Imported game',
         gamePhase,
+        phaseSummary: reviewPhaseSummary(gamePhase, reviewData.rows.filter(item => item.phase === gamePhase)),
+        gameStory: reviewData.story || '',
+        importantEvents: (reviewData.events || []).map(event => ({ ply:event.ply, title:event.title, detail:event.detail })),
         selectedSide: row.ply % 2 === 1 ? 'White' : 'Black',
         selectedMoveNumber: Math.ceil(row.ply / 2),
         contextWindow,
@@ -4009,7 +4204,7 @@ async function askReviewCoach() {
         centipawnLoss: row.rawEngineLoss,
         moveAccuracy: Math.round(row.accuracy * 10) / 10,
         openingAccuracy: reviewAccuracyFor(
-          reviewData.rows.filter(item => item.ply <= 16)
+          reviewData.rows.filter(item => item.phase === 'opening')
         ),
         overallAccuracy: reviewAccuracyFor(reviewData.rows),
         verifiedBoardFacts: reviewCoachFacts,
@@ -6882,7 +7077,7 @@ $('public-beta-report').addEventListener('click', openBetaIssueReport);
 $('public-beta-modal-report').addEventListener('click', openBetaIssueReport);
 
 
-// WEB v2.9.0 — Recall Training Engine + Opening Puzzles
+// WEB v3.0.0 — Recall Training + Opening Puzzles + Phase-Aware Review
 let trainOpening = null;
 let trainGame = null;
 let trainMoves = [];

@@ -67,6 +67,15 @@ Deno.serve(async (request) => {
     const playedPositionDescription =
       cleanText(body.playedPositionDescription, 120);
     const gamePhase = cleanText(body.gamePhase, 40);
+    const phaseSummary = cleanText(body.phaseSummary, 900);
+    const gameStory = cleanText(body.gameStory, 1200);
+    const importantEvents = Array.isArray(body.importantEvents)
+      ? body.importantEvents.slice(0, 10).map((event: any) => ({
+          ply: Number(event?.ply || 0),
+          title: cleanText(event?.title, 100),
+          detail: cleanText(event?.detail, 280),
+        }))
+      : [];
     const selectedSide = cleanText(body.selectedSide, 20);
     const selectedMoveNumber = Number(body.selectedMoveNumber || 0);
     const contextBeforeText = cleanText(body.contextBeforeText, 600);
@@ -169,6 +178,9 @@ Position after the better move: ${bestMoveFen || "Not supplied"}
 Readable better continuation: ${principalVariationSan.join(" ") || "Not supplied"}
 
 Game phase: ${gamePhase || "unknown"}
+Phase summary: ${phaseSummary || "Not supplied"}
+Game story: ${gameStory || "Not supplied"}
+Important game events: ${JSON.stringify(importantEvents)}
 Selected side: ${selectedSide || "unknown"}
 Selected move number: ${selectedMoveNumber || "unknown"}
 Recent moves leading to the decision: ${contextBeforeText || "Not supplied"}
@@ -319,6 +331,14 @@ of the author's note rather than an independent analysis of the move.
 Keep the summary under 120 words.
 
 GAME REVIEW RULES:
+
+PHASE DISCIPLINE — MANDATORY DURING GAME REVIEW:
+- Treat the supplied Game phase as authoritative. Do not independently relabel the position as opening, middlegame, or endgame.
+- If Game phase is opening, connect the move to development, central control, king safety, or the named opening only when the board/evidence supports it.
+- If Game phase is middlegame, do not call the position an endgame merely because queens were traded. Discuss concrete middlegame features such as activity, king safety, pawn breaks, files, squares, or tactics only when verified.
+- If Game phase is endgame, prioritize king activity, passed pawns, pawn structure, rook activity, simplification, opposition, or conversion only when the supplied board supports those ideas.
+- Use Phase summary, Game story, and Important game events as context for continuity, but never invent an event that is not supplied or visible on the verified board.
+- Clearly distinguish a phase transition from a tactical turning point. They are not automatically the same move.
 
 When a better move is supplied during game review:
 - explain what the played move was trying to accomplish,
