@@ -3574,6 +3574,81 @@ class ReviewStockfish {
     return { cp, mate, bestMove, pv, depthSeen };
   }
 
+  analyzeMultiPv(fen, depth = 10, count = 4) {
+    const run = () => this._analyzeMultiPv(fen, depth, count);
+    const request = this.analysisQueue.then(run, run);
+    this.analysisQueue = request.catch(() => undefined);
+    return request;
+  }
+
+  async _analyzeMultiPv(fen, depth = 10, count = 4) {
+    await this.initialize();
+    if (this.failure) throw this.failure;
+
+    const multiPv = Math.max(1, Math.min(8, Number(count) || 4));
+    this.send(`setoption name MultiPV value ${multiPv}`);
+    this.send(`position fen ${fen}`);
+    this.searching = true;
+
+    const lines = new Map();
+    const unsubscribeInfo = this.onMessage(message => {
+      if (!message.startsWith('info ') || /\b(lowerbound|upperbound)\b/.test(message)) return;
+      const depthMatch = message.match(/\bdepth (\d+)/);
+      const pvIndexMatch = message.match(/\bmultipv (\d+)/);
+      const pvMatch = message.match(/\bpv (.+)$/);
+      if (!pvMatch) return;
+      const pvIndex = pvIndexMatch ? Number(pvIndexMatch[1]) : 1;
+      const currentDepth = depthMatch ? Number(depthMatch[1]) : 0;
+      const previous = lines.get(pvIndex);
+      if (previous && previous.depth > currentDepth) return;
+      const cpMatch = message.match(/\bscore cp (-?\d+)/);
+      const mateMatch = message.match(/\bscore mate (-?\d+)/);
+      lines.set(pvIndex, {
+        rank: pvIndex,
+        depth: currentDepth,
+        cp: cpMatch ? Number(cpMatch[1]) : null,
+        mate: mateMatch ? Number(mateMatch[1]) : null,
+        pv: pvMatch[1].trim().split(/\s+/)
+      });
+    });
+
+    const searchTimeout = Math.max(20000, Number(depth || 10) * 2500);
+    try {
+      await new Promise((resolve, reject) => {
+        let settled = false;
+        const timeout = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          try { this.send('stop'); } catch (_) {}
+          const pendingIndex = this.bestResolvers.findIndex(item => item.resolve === wrappedResolve);
+          if (pendingIndex >= 0) this.bestResolvers.splice(pendingIndex, 1);
+          this.searching = false;
+          reject(new Error(`Stockfish MultiPV analysis timed out at depth ${depth}.`));
+        }, searchTimeout);
+        const wrappedResolve = move => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve(move);
+        };
+        const wrappedReject = error => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          reject(error);
+        };
+        this.bestResolvers.push({ resolve: wrappedResolve, reject: wrappedReject, unsubscribe: () => {} });
+        this.send(`go depth ${depth}`);
+      });
+    } finally {
+      unsubscribeInfo();
+      this.searching = false;
+      this.send('setoption name MultiPV value 1');
+    }
+
+    return [...lines.values()].sort((a,b) => a.rank - b.rank);
+  }
+
   async newGame() {
     await this.initialize();
 
@@ -7717,6 +7792,11 @@ let puzzleAnswerUsed = false;
 let puzzleSearchTimer = null;
 let puzzleUsedStarts = new Set();
 let puzzleCompleting = false;
+let puzzleCandidateMoves = [];
+let puzzleCandidateFen = '';
+let puzzleBranchMode = true;
+const PUZZLE_BRANCH_DEPTH = 10;
+const PUZZLE_PLAYABLE_CP_WINDOW = 90;
 let puzzleStats = { index:0, total:5, score:0, streak:0, bestStreak:0, userMoves:0, firstTry:0, mistakes:0, skipped:0 };
 
 function puzzleStorageKey() { return 'bozo_opening_puzzles_v1'; }
@@ -7890,30 +7970,86 @@ function startNextPuzzle() {
   puzzleAttemptsForPly = 0;
   puzzleHintUsed = false;
   puzzleAnswerUsed = false;
+  puzzleCandidateMoves = [];
+  puzzleCandidateFen = '';
   puzzleGame = new Chess();
   for (let i=0;i<puzzleStartPly;i++) puzzleGame.move(puzzleMoves[i], { sloppy:true });
   puzzleCurrentOpening = spec.opening;
-  $('puzzle-title').textContent = 'Find the continuation.';
+  $('puzzle-title').textContent = 'Choose your path.';
   $('puzzle-subtitle').textContent = `${spec.opening.name}${spec.opening.variation ? ' · '+spec.opening.variation : ''} · ${spec.opening.eco || 'ECO —'}`;
   $('puzzle-number').textContent = `${puzzleStats.index+1}/${puzzleStats.total}`;
   $('puzzle-start-label').textContent = puzzleStartPly ? `move ${Math.floor(puzzleStartPly/2)+1}` : 'the opening position';
-  setPuzzleFeedback('neutral','Your move.', puzzleTargetUserMoves === 1 ? 'Find the next repertoire move.' : `Find the next ${puzzleTargetUserMoves} repertoire moves.`);
-  advancePuzzleOpponentMoves();
-  paintPuzzleBoard();
-  updatePuzzleUI();
+  setPuzzleFeedback('neutral','Your move.', puzzleTargetUserMoves === 1 ? 'Find a strong continuation. More than one move may be right.' : `Find ${puzzleTargetUserMoves} strong continuation moves. Your choices can branch.`);
+  Promise.resolve(advancePuzzleOpponentMoves()).then(() => {
+    paintPuzzleBoard();
+    updatePuzzleUI();
+    if (puzzleGame && isPuzzleUserTurn()) loadPuzzleCandidates();
+  });
 }
 let puzzleCurrentOpening = null;
 
 function puzzleSideToMove() { return puzzleGame?.turn() === 'b' ? 'black' : 'white'; }
 function isPuzzleUserTurn() { return puzzleSideToMove() === puzzleUserSide; }
 
-function advancePuzzleOpponentMoves() {
-  while (puzzlePly < puzzleMoves.length && !isPuzzleUserTurn()) {
-    const move = puzzleGame.move(puzzleMoves[puzzlePly], { sloppy:true });
-    if (!move) break;
-    puzzlePly++;
+async function loadPuzzleCandidates() {
+  if (!puzzleGame || !isPuzzleUserTurn()) return [];
+  const fen = puzzleGame.fen();
+  if (puzzleCandidateFen === fen && puzzleCandidateMoves.length) return puzzleCandidateMoves;
+  puzzleCandidateFen = fen;
+  puzzleCandidateMoves = [];
+  try {
+    const engine = await getReviewEngine();
+    const lines = await engine.analyzeMultiPv(fen, PUZZLE_BRANCH_DEPTH, 5);
+    if (!lines.length) return [];
+    const score = line => line.mate !== null
+      ? (line.mate > 0 ? 100000 - Math.abs(line.mate) * 100 : -100000 + Math.abs(line.mate) * 100)
+      : Number(line.cp ?? -100000);
+    const bestScore = score(lines[0]);
+    puzzleCandidateMoves = lines
+      .filter(line => line.pv?.[0])
+      .map(line => ({ ...line, uci: line.pv[0], loss: Math.max(0, bestScore - score(line)) }))
+      .filter((line, index) => index === 0 || line.loss <= PUZZLE_PLAYABLE_CP_WINDOW);
+    return puzzleCandidateMoves;
+  } catch (error) {
+    console.warn('Branching puzzle analysis unavailable; using repertoire move.', error);
+    return [];
   }
-  if (puzzlePly >= puzzleMoves.length && puzzleSolvedInCurrent < puzzleTargetUserMoves) completeCurrentPuzzle();
+}
+
+function puzzleUci(move) {
+  return `${move.from}${move.to}${move.promotion || ''}`;
+}
+
+function puzzleBranchLabel(candidate) {
+  if (!candidate) return { title:'Playable!', copy:'You found a sound continuation.', points:75, state:'correct' };
+  if (candidate.rank === 1 || candidate.loss <= 15) return { title:'Best path! +100', copy:'You chose the strongest continuation.', points:100, state:'correct' };
+  if (candidate.loss <= 45) return { title:'Strong path! +90', copy:'Not the top engine choice, but this continuation is fully playable.', points:90, state:'correct' };
+  return { title:'Playable path! +75', copy:'This is a sound alternative. BOZO will follow your branch.', points:75, state:'correct' };
+}
+
+async function advancePuzzleOpponentMoves() {
+  if (!puzzleGame) return;
+  // If the user stayed on the authored repertoire line, preserve its reply.
+  if (puzzlePly < puzzleMoves.length && !isPuzzleUserTurn()) {
+    const authored = puzzleGame.move(puzzleMoves[puzzlePly], { sloppy:true });
+    if (authored) {
+      puzzlePly++;
+      puzzleCandidateFen = ''; puzzleCandidateMoves = [];
+      return;
+    }
+  }
+  // A user-selected alternative can leave the authored line. Continue with the
+  // strongest reply from the actual resulting position instead of forcing the PGN.
+  if (!isPuzzleUserTurn()) {
+    try {
+      const engine = await getReviewEngine();
+      const analysis = await engine.analyze(puzzleGame.fen(), PUZZLE_BRANCH_DEPTH);
+      if (analysis?.bestMove) puzzleGame.move({
+        from:analysis.bestMove.slice(0,2), to:analysis.bestMove.slice(2,4), promotion:analysis.bestMove[4] || 'q'
+      });
+    } catch (error) { console.warn('Could not continue puzzle branch.', error); }
+  }
+  puzzleCandidateFen = ''; puzzleCandidateMoves = [];
 }
 
 function paintPuzzleBoard() {
@@ -7931,8 +8067,8 @@ function paintPuzzleBoard() {
   boardEl.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>clickPuzzleSquare(button.dataset.square)));
 }
 
-function clickPuzzleSquare(square) {
-  if (!puzzleGame || puzzlePly >= puzzleMoves.length || !isPuzzleUserTurn()) return;
+async function clickPuzzleSquare(square) {
+  if (!puzzleGame || !isPuzzleUserTurn() || puzzleCompleting) return;
   const myColor = puzzleUserSide === 'white' ? 'w' : 'b';
   if (!puzzleSelectedSquare) {
     const piece=puzzleGame.get(square); if (!piece || piece.color!==myColor) return;
@@ -7941,49 +8077,81 @@ function clickPuzzleSquare(square) {
   const from=puzzleSelectedSquare; puzzleSelectedSquare=null;
   const move=puzzleGame.move({from,to:square,promotion:'q'});
   if (!move) { paintPuzzleBoard(); return; }
-  const expectedSan=puzzleMoves[puzzlePly];
+  const playedUci = puzzleUci(move);
   puzzleGame.undo();
   puzzleAttemptsForPly++;
-  if (move.san !== expectedSan) {
+
+  setPuzzleFeedback('neutral','Checking your path…','BOZO is comparing the playable continuations.');
+  const candidates = await loadPuzzleCandidates();
+  const expected = expectedPuzzleMove();
+  const candidate = candidates.find(item => item.uci === playedUci);
+  const authoredMatch = expected && puzzleUci(expected) === playedUci;
+
+  if (!candidate && !authoredMatch) {
     puzzleStats.mistakes++; puzzleStats.streak=0;
-    setPuzzleFeedback('wrong','Not quite.', puzzleAttemptsForPly===1 ? 'Try the position again.' : 'Use a hint if you need one.');
+    setPuzzleFeedback('wrong','That path gives up too much.', candidates.length > 1 ? `There are ${candidates.length} playable continuations here. Try another idea.` : 'Try the position again.');
     paintPuzzleBoard(); updatePuzzleUI(); return;
   }
-  puzzleGame.move(expectedSan,{sloppy:true});
+
+  puzzleGame.move({from,to:square,promotion:move.promotion || 'q'});
+  const stayedOnBook = authoredMatch;
+  if (stayedOnBook) puzzlePly++;
+  else puzzlePly = puzzleMoves.length; // branch has intentionally left the authored PGN
+
   puzzleStats.userMoves++;
   const cleanFirstTry = puzzleAttemptsForPly===1 && !puzzleHintUsed && !puzzleAnswerUsed;
-  if (cleanFirstTry) { puzzleStats.firstTry++; puzzleStats.streak++; puzzleStats.score+=100; }
-  else if (!puzzleAnswerUsed) { puzzleStats.score += puzzleHintUsed ? 60 : 50; puzzleStats.streak=0; }
-  else { puzzleStats.streak=0; }
+  const quality = puzzleBranchLabel(candidate);
+  if (cleanFirstTry) { puzzleStats.firstTry++; puzzleStats.streak++; puzzleStats.score += quality.points; }
+  else if (!puzzleAnswerUsed) { puzzleStats.score += Math.round(quality.points * (puzzleHintUsed ? .6 : .5)); puzzleStats.streak=0; }
+  else puzzleStats.streak=0;
   puzzleStats.bestStreak=Math.max(puzzleStats.bestStreak,puzzleStats.streak);
-  puzzleSolvedInCurrent++; puzzlePly++;
-  setPuzzleFeedback('correct', cleanFirstTry ? 'Correct! +100' : 'Correct!', expectedSan);
+  puzzleSolvedInCurrent++;
+  setPuzzleFeedback(quality.state, cleanFirstTry ? quality.title : quality.title.replace(/ \+\d+$/,''), `${move.san}. ${quality.copy}`);
   puzzleAttemptsForPly=0; puzzleHintUsed=false; puzzleAnswerUsed=false;
-  if (puzzleSolvedInCurrent >= puzzleTargetUserMoves || puzzlePly >= puzzleMoves.length) {
-    paintPuzzleBoard(); updatePuzzleUI();
-    puzzleCompleting = true;
-    setTimeout(() => completeCurrentPuzzle(false, true), 480);
-    return;
+
+  if (puzzleSolvedInCurrent >= puzzleTargetUserMoves) {
+    paintPuzzleBoard(); updatePuzzleUI(); puzzleCompleting=true;
+    setTimeout(() => completeCurrentPuzzle(false,true), 650); return;
   }
-  advancePuzzleOpponentMoves(); paintPuzzleBoard(); updatePuzzleUI();
+  await advancePuzzleOpponentMoves();
+  paintPuzzleBoard(); updatePuzzleUI();
+  if (puzzleGame && isPuzzleUserTurn()) loadPuzzleCandidates();
 }
 
 function expectedPuzzleMove() {
-  if (!puzzleGame || puzzlePly >= puzzleMoves.length || !isPuzzleUserTurn()) return null;
+  if (!puzzleGame || !isPuzzleUserTurn()) return null;
+  if (puzzlePly < puzzleMoves.length) {
+    const clone=new Chess(puzzleGame.fen());
+    const move=clone.move(puzzleMoves[puzzlePly],{sloppy:true});
+    if (move) return move;
+  }
+  const best = puzzleCandidateMoves[0]?.uci;
+  if (!best) return null;
   const clone=new Chess(puzzleGame.fen());
-  return clone.move(puzzleMoves[puzzlePly],{sloppy:true});
+  return clone.move({from:best.slice(0,2),to:best.slice(2,4),promotion:best[4]||'q'});
 }
 
-function showPuzzleHint() {
-  const move=expectedPuzzleMove(); if (!move) return;
+async function showPuzzleHint() {
   puzzleHintUsed=true; puzzleStats.streak=0;
-  const piece=puzzleGame.get(move.from); const names={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
-  setPuzzleFeedback('hint','Hint',`Look for a ${names[piece?.type]||'piece'} move from the ${move.from[0]}-file.`); updatePuzzleUI();
-}
-function showPuzzleAnswer() {
+  const candidates=await loadPuzzleCandidates();
   const move=expectedPuzzleMove(); if (!move) return;
+  const piece=puzzleGame.get(move.from); const names={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
+  const extra=candidates.length>1 ? ` There are ${candidates.length} playable paths.` : '';
+  setPuzzleFeedback('hint','Hint',`Look for a ${names[piece?.type]||'piece'} move from the ${move.from[0]}-file.${extra}`); updatePuzzleUI();
+}
+async function showPuzzleAnswer() {
   puzzleAnswerUsed=true; puzzleStats.streak=0;
-  setPuzzleFeedback('answer','Answer',`${move.san} · ${move.from} → ${move.to}`); updatePuzzleUI();
+  const candidates=await loadPuzzleCandidates();
+  if (!candidates.length) {
+    const move=expectedPuzzleMove(); if (!move) return;
+    setPuzzleFeedback('answer','Best path',`${move.san} · ${move.from} → ${move.to}`); updatePuzzleUI(); return;
+  }
+  const readable=candidates.slice(0,3).map((item,index)=>{
+    const clone=new Chess(puzzleGame.fen());
+    const m=clone.move({from:item.uci.slice(0,2),to:item.uci.slice(2,4),promotion:item.uci[4]||'q'});
+    return `${index===0?'Best':'Playable'}: ${m?.san || item.uci}`;
+  });
+  setPuzzleFeedback('answer','Choose your path',readable.join(' · ')); updatePuzzleUI();
 }
 function skipPuzzle() {
   if (!puzzleGame || puzzleCompleting) return;

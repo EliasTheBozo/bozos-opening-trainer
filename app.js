@@ -3574,6 +3574,81 @@ class ReviewStockfish {
     return { cp, mate, bestMove, pv, depthSeen };
   }
 
+  analyzeMultiPv(fen, depth = 10, count = 4) {
+    const run = () => this._analyzeMultiPv(fen, depth, count);
+    const request = this.analysisQueue.then(run, run);
+    this.analysisQueue = request.catch(() => undefined);
+    return request;
+  }
+
+  async _analyzeMultiPv(fen, depth = 10, count = 4) {
+    await this.initialize();
+    if (this.failure) throw this.failure;
+
+    const multiPv = Math.max(1, Math.min(8, Number(count) || 4));
+    this.send(`setoption name MultiPV value ${multiPv}`);
+    this.send(`position fen ${fen}`);
+    this.searching = true;
+
+    const lines = new Map();
+    const unsubscribeInfo = this.onMessage(message => {
+      if (!message.startsWith('info ') || /\b(lowerbound|upperbound)\b/.test(message)) return;
+      const depthMatch = message.match(/\bdepth (\d+)/);
+      const pvIndexMatch = message.match(/\bmultipv (\d+)/);
+      const pvMatch = message.match(/\bpv (.+)$/);
+      if (!pvMatch) return;
+      const pvIndex = pvIndexMatch ? Number(pvIndexMatch[1]) : 1;
+      const currentDepth = depthMatch ? Number(depthMatch[1]) : 0;
+      const previous = lines.get(pvIndex);
+      if (previous && previous.depth > currentDepth) return;
+      const cpMatch = message.match(/\bscore cp (-?\d+)/);
+      const mateMatch = message.match(/\bscore mate (-?\d+)/);
+      lines.set(pvIndex, {
+        rank: pvIndex,
+        depth: currentDepth,
+        cp: cpMatch ? Number(cpMatch[1]) : null,
+        mate: mateMatch ? Number(mateMatch[1]) : null,
+        pv: pvMatch[1].trim().split(/\s+/)
+      });
+    });
+
+    const searchTimeout = Math.max(20000, Number(depth || 10) * 2500);
+    try {
+      await new Promise((resolve, reject) => {
+        let settled = false;
+        const timeout = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          try { this.send('stop'); } catch (_) {}
+          const pendingIndex = this.bestResolvers.findIndex(item => item.resolve === wrappedResolve);
+          if (pendingIndex >= 0) this.bestResolvers.splice(pendingIndex, 1);
+          this.searching = false;
+          reject(new Error(`Stockfish MultiPV analysis timed out at depth ${depth}.`));
+        }, searchTimeout);
+        const wrappedResolve = move => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          resolve(move);
+        };
+        const wrappedReject = error => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          reject(error);
+        };
+        this.bestResolvers.push({ resolve: wrappedResolve, reject: wrappedReject, unsubscribe: () => {} });
+        this.send(`go depth ${depth}`);
+      });
+    } finally {
+      unsubscribeInfo();
+      this.searching = false;
+      this.send('setoption name MultiPV value 1');
+    }
+
+    return [...lines.values()].sort((a,b) => a.rank - b.rank);
+  }
+
   async newGame() {
     await this.initialize();
 
@@ -3809,24 +3884,52 @@ function reviewMoveNotation(row) {
   return `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
 }
 
+function reviewPlayerSideCode() {
+  return reviewData?.playerSide === 'black' ? 'b' : 'w';
+}
+
+function reviewSideDisplayLabel(sideCode) {
+  const isYou = sideCode === reviewPlayerSideCode();
+  const color = sideCode === 'w' ? 'White' : 'Black';
+  return `${color} · ${isYou ? 'You' : 'Opponent'}`;
+}
+
+function reviewPlayerPerspectiveDescription(cp = 0, mate = null) {
+  const objective = reviewPositionDescription(cp, mate);
+  const side = reviewData?.playerSide;
+  if (!side) return objective;
+  if (mate != null) {
+    const youWinning = (side === 'white' && mate > 0) || (side === 'black' && mate < 0);
+    return youWinning ? `You have a forced mate in ${Math.abs(mate)}` : `Your opponent has a forced mate in ${Math.abs(mate)}`;
+  }
+  if (Math.abs(cp) < 25) return 'The position is equal';
+  const youAhead = (side === 'white' && cp > 0) || (side === 'black' && cp < 0);
+  const magnitude = Math.abs(cp);
+  const degree = magnitude < 75 ? 'slightly better' : magnitude < 160 ? 'clearly better' : magnitude < 300 ? 'much better' : 'winning';
+  return youAhead ? `You are ${degree}` : `Your opponent is ${degree}`;
+}
+
 function reviewPhaseRows(phase) {
   return (reviewData?.rows || []).filter(row => row.phase === phase);
 }
 
 function reviewPhaseSummary(phase, rows) {
   if (!rows.length) return 'This game did not contain a clearly detected phase here.';
-  const whiteAccuracy = reviewSideAccuracy(rows, 'w');
-  const blackAccuracy = reviewSideAccuracy(rows, 'b');
-  const worst = [...rows].sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)[0];
+  const yourSide = reviewPlayerSideCode();
+  const oppSide = yourSide === 'w' ? 'b' : 'w';
+  const yourRows = rows.filter(row => row.mover === yourSide);
+  const oppRows = rows.filter(row => row.mover === oppSide);
+  const yourAccuracy = reviewPhaseAccuracyFor(yourRows);
+  const oppAccuracy = reviewPhaseAccuracyFor(oppRows);
+  const yourWorst = [...yourRows].sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)[0];
+  const oppWorst = [...oppRows].sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)[0];
   const start = rows[0], end = rows[rows.length - 1];
   let lead = `${reviewPhaseLabel(phase)}: ${reviewMoveNotation(start).split(' ')[0]} through ${reviewMoveNotation(end).split(' ')[0]}.`;
-  if (whiteAccuracy != null || blackAccuracy != null) {
-    lead += ` White ${whiteAccuracy == null ? '—' : `${whiteAccuracy}%`}, Black ${blackAccuracy == null ? '—' : `${blackAccuracy}%`}.`;
-  }
-  const errors = reviewErrorText(rows);
-  if (errors === 'No major errors') return `${lead} Both sides avoided inaccuracies, mistakes, and blunders.`;
-  if (worst?.rawEngineLoss >= 100) return `${lead} ${errors}. The biggest issue was ${reviewMoveNotation(worst)}, a ${worst.label.toLowerCase()} with a sizeable evaluation cost.`;
-  return `${lead} ${errors}. The largest slip was ${reviewMoveNotation(worst)}.`;
+  if (yourAccuracy != null && oppAccuracy != null) lead += ` You scored ${yourAccuracy}% versus your opponent's ${oppAccuracy}%.`;
+  if (yourWorst?.rawEngineLoss >= 100) return `${lead} Your main issue was ${reviewMoveNotation(yourWorst)}, a ${yourWorst.label.toLowerCase()} with a sizeable evaluation cost.`;
+  if (oppWorst?.rawEngineLoss >= 100) return `${lead} Your opponent's biggest error was ${reviewMoveNotation(oppWorst)}, which gave you the clearest opportunity in this phase.`;
+  if (yourWorst?.rawEngineLoss > 0) return `${lead} Your largest slip was ${reviewMoveNotation(yourWorst)}, but the phase stayed relatively stable.`;
+  return `${lead} You handled this phase cleanly with no major errors.`;
 }
 
 function reviewBuildEvents(rows, openingMatch, phasePlan) {
@@ -3904,21 +4007,24 @@ function reviewBuildEvents(rows, openingMatch, phasePlan) {
   return events.sort((a,b) => a.ply - b.ply).slice(0, 8);
 }
 
-function reviewGameStory(rows, phasePlan) {
+function reviewGameStory(rows, phasePlan, playerSide = reviewData?.playerSide) {
   if (!rows.length) return 'BOZO could not build a game story from this PGN.';
   const turning = [...rows].sort((a,b) => b.rawEngineLoss - a.rawEngineLoss)[0];
   const early = rows[Math.min(rows.length - 1, Math.max(0, phasePlan.openingEnd - 1))];
   const end = rows[rows.length - 1];
-  const earlyDesc = reviewPositionDescription(early?.whiteCp || 0, early?.mate);
-  const endDesc = reviewPositionDescription(end?.whiteCp || 0, end?.mate);
   const phases = phasePlan.endgameStart ? 'a middlegame and later an endgame' : 'a middlegame';
+  const oldSide = reviewData?.playerSide;
+  if (reviewData) reviewData.playerSide = playerSide || oldSide;
+  const earlyDesc = reviewPlayerPerspectiveDescription(early?.whiteCp || 0, early?.mate);
+  const endDesc = reviewPlayerPerspectiveDescription(end?.whiteCp || 0, end?.mate);
+  if (reviewData) reviewData.playerSide = oldSide || playerSide;
 
   if (turning && turning.rawEngineLoss >= 100) {
-    const severity = turning.rawEngineLoss >= 180 ? 'turning point' : 'largest evaluation swing';
-    return `The opening transitioned into ${phases} with ${earlyDesc.toLowerCase()}. The ${severity} came at ${reviewMoveNotation(turning)}. By the final analyzed position, ${endDesc.toLowerCase()}.`;
+    const turningWasYours = turning.mover === (playerSide === 'black' ? 'b' : 'w');
+    const owner = turningWasYours ? 'Your biggest turning point' : `Your opponent's biggest turning point`;
+    return `The opening transitioned into ${phases}. ${earlyDesc}. ${owner} came at ${reviewMoveNotation(turning)}. By the final analyzed position, ${endDesc.toLowerCase()}.`;
   }
-
-  return `The game moved from the opening into ${phases} without a single major evaluation swing. The final analyzed position is ${endDesc.toLowerCase()}.`;
+  return `The game moved from the opening into ${phases} without a single major evaluation swing. By the final analyzed position, ${endDesc.toLowerCase()}.`;
 }
 
 function reviewMoveWindow(rows, selectedIndex, beforeCount = 6, afterCount = 6) {
@@ -3955,10 +4061,10 @@ function reviewPlanContinuityPrompt(row, priorMoves, laterMoves) {
   ].join(' ');
 }
 
-async function computeWebsiteReview(sans, depth, maxPlies, bookDepth, onProgress) {
+async function computeWebsiteReview(sans, depth, bookDepth, onProgress) {
   const engine = await getReviewEngine();
   const game = new Chess();
-  const plies = sans.slice(0, maxPlies);
+  const plies = [...sans];
   const initialFen = game.fen();
 
   let analysis = await engine.analyze(initialFen, depth);
@@ -4038,6 +4144,15 @@ function reviewAverage(values) {
     : null;
 }
 
+function reviewAccuracyFor(rows) {
+  const value = reviewAverage(rows.map(row => row.accuracy));
+  return value == null ? null : Math.round(value * 10) / 10;
+}
+
+function reviewRowsForSide(rows = [], side = 'w') {
+  return rows.filter(row => row.mover === side);
+}
+
 function reviewErrorCounts(rows = []) {
   return rows.reduce((counts, row) => {
     if (row?.cls === 'inaccuracy') counts.inaccuracy++;
@@ -4047,38 +4162,25 @@ function reviewErrorCounts(rows = []) {
   }, { inaccuracy:0, mistake:0, blunder:0 });
 }
 
-function reviewAccuracyFor(rows = []) {
+// A phase score should communicate how well the phase was actually played, not
+// let a run of book/best moves visually erase a costly error. Start from the
+// engine-derived move accuracy, then apply a transparent severity penalty.
+function reviewPhaseAccuracyFor(rows = []) {
   if (!rows.length) return null;
-  const base = reviewAverage(rows.map(row => row.accuracy));
+  const base = reviewAccuracyFor(rows);
   if (base == null) return null;
-
-  // A straight mean can hide one decisive error inside a long run of clean moves.
-  // Keep the move-by-move accuracy, but apply a severity ceiling so review scores
-  // visibly reflect inaccuracies, mistakes and especially blunders.
   const errors = reviewErrorCounts(rows);
-  const severityCeiling = Math.max(
-    0,
-    100 - errors.inaccuracy * 2.5 - errors.mistake * 6 - errors.blunder * 12
-  );
-  const value = Math.min(base, severityCeiling);
-  return Math.round(value * 10) / 10;
+  const penalty = errors.inaccuracy * 1.5 + errors.mistake * 4 + errors.blunder * 9;
+  return Math.max(0, Math.round((base - penalty) * 10) / 10);
 }
 
-function reviewRowsForSide(rows = [], side = 'w') {
-  return rows.filter(row => row.mover === side);
-}
-
-function reviewSideAccuracy(rows = [], side = 'w') {
-  return reviewAccuracyFor(reviewRowsForSide(rows, side));
-}
-
-function reviewErrorText(rows = []) {
-  const counts = reviewErrorCounts(rows);
+function reviewErrorSummary(rows = []) {
+  const errors = reviewErrorCounts(rows);
   const parts = [];
-  if (counts.inaccuracy) parts.push(`${counts.inaccuracy} inaccuracy${counts.inaccuracy === 1 ? '' : 'ies'}`.replace('inaccuracys','inaccuracies'));
-  if (counts.mistake) parts.push(`${counts.mistake} mistake${counts.mistake === 1 ? '' : 's'}`);
-  if (counts.blunder) parts.push(`${counts.blunder} blunder${counts.blunder === 1 ? '' : 's'}`);
-  return parts.join(' · ') || 'No major errors';
+  if (errors.inaccuracy) parts.push(`${errors.inaccuracy} inaccuracy${errors.inaccuracy === 1 ? '' : 'ies'}`.replace('inaccuracys','inaccuracies'));
+  if (errors.mistake) parts.push(`${errors.mistake} mistake${errors.mistake === 1 ? '' : 's'}`);
+  if (errors.blunder) parts.push(`${errors.blunder} blunder${errors.blunder === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' · ') : 'No inaccuracies, mistakes, or blunders';
 }
 
 async function startGameReview() {
@@ -4087,8 +4189,14 @@ async function startGameReview() {
   const pgn = $('review-pgn-input').value.trim();
 
   message.textContent = '';
+  const playerSide = $('review-player-side').value;
   if (!pgn) {
     message.textContent = 'Paste or upload a PGN first.';
+    return;
+  }
+  if (!['white','black'].includes(playerSide)) {
+    message.textContent = 'Choose whether you played White or Black before analyzing the game.';
+    $('review-player-side').focus();
     return;
   }
 
@@ -4120,17 +4228,15 @@ async function startGameReview() {
 
     const openingMatch = await detectReviewOpening(parsed.sans);
     const depth = Number($('review-depth').value);
-    const maxPlies = Number($('review-max-plies').value);
 
     reviewData = await computeWebsiteReview(
       parsed.sans,
       depth,
-      maxPlies,
       openingMatch.depth,
       (done, total) => {
         const percentage = Math.round(done / total * 100);
         $('review-progress-label').textContent =
-          `Analysis depth ${depth} · reviewing move ${done} of ${total}`;
+          `Analyzing full game · move ${done} of ${total}`;
         $('review-progress-percent').textContent = `${percentage}%`;
         $('review-progress-bar').style.width = `${percentage}%`;
       }
@@ -4138,10 +4244,11 @@ async function startGameReview() {
 
     reviewData.headers = parsed.headers;
     reviewData.openingMatch = openingMatch;
+    reviewData.playerSide = playerSide;
     reviewData.events = reviewBuildEvents(reviewData.rows, openingMatch, reviewData.phasePlan);
-    reviewData.story = reviewGameStory(reviewData.rows, reviewData.phasePlan);
+    reviewData.story = reviewGameStory(reviewData.rows, reviewData.phasePlan, playerSide);
     reviewStepIndex = 0;
-    reviewOrientation = 'white';
+    reviewOrientation = playerSide;
 
     renderReviewSummary();
     renderReviewMoveList();
@@ -4176,19 +4283,7 @@ async function startGameReview() {
 
 function renderReviewSummary() {
   const rows = reviewData.rows;
-  const openingRows = rows.filter(row => row.phase === 'opening');
-  const whiteOverall = reviewSideAccuracy(rows, 'w');
-  const blackOverall = reviewSideAccuracy(rows, 'b');
-  const whiteOpening = reviewSideAccuracy(openingRows, 'w');
-  const blackOpening = reviewSideAccuracy(openingRows, 'b');
   const turning = [...rows].sort((a, b) => b.rawEngineLoss - a.rawEngineLoss)[0];
-
-  $('review-opening-accuracy').innerHTML = reviewSideScoreMarkup(whiteOpening, blackOpening);
-  $('review-opening-detail').textContent = openingRows.length
-    ? `${openingRows.length} detected opening ${openingRows.length === 1 ? 'ply' : 'plies'} · ${reviewErrorText(openingRows)}`
-    : 'No opening phase detected';
-  $('review-overall-accuracy').innerHTML = reviewSideScoreMarkup(whiteOverall, blackOverall);
-  $('review-overall-detail').textContent = reviewErrorText(rows);
 
   const match = reviewData.openingMatch;
   $('review-opening-name').textContent = match.opening
@@ -4206,18 +4301,24 @@ function renderReviewSummary() {
 
   const phaseMarkup = ['opening','middlegame','endgame'].map(phase => {
     const phaseRows = rows.filter(row => row.phase === phase);
-    const whiteAccuracy = reviewSideAccuracy(phaseRows, 'w');
-    const blackAccuracy = reviewSideAccuracy(phaseRows, 'b');
-    const whiteErrors = reviewErrorText(reviewRowsForSide(phaseRows, 'w'));
-    const blackErrors = reviewErrorText(reviewRowsForSide(phaseRows, 'b'));
+    const whiteRows = reviewRowsForSide(phaseRows, 'w');
+    const blackRows = reviewRowsForSide(phaseRows, 'b');
+    const whiteAccuracy = reviewPhaseAccuracyFor(whiteRows);
+    const blackAccuracy = reviewPhaseAccuracyFor(blackRows);
     const range = phaseRows.length
       ? `${reviewMoveNotation(phaseRows[0]).split(' ')[0]}–${reviewMoveNotation(phaseRows[phaseRows.length - 1]).split(' ')[0]}`
       : 'Not detected';
     return `<article class="review-phase-card ${phaseRows.length ? '' : 'muted'}">
       <span>${reviewPhaseLabel(phase)}</span>
-      ${phaseRows.length ? reviewSideScoreMarkup(whiteAccuracy, blackAccuracy, true) : '<strong>—</strong>'}
-      <small>${escapeHtml(range)}</small>
-      ${phaseRows.length ? `<div class="review-phase-errors"><span>White: ${escapeHtml(whiteErrors)}</span><span>Black: ${escapeHtml(blackErrors)}</span></div>` : ''}
+      <div class="review-phase-accuracy-pair">
+        <div><small>${escapeHtml(reviewSideDisplayLabel('w'))}</small><strong>${whiteRows.length && whiteAccuracy != null ? `${whiteAccuracy}%` : '—'}</strong></div>
+        <div><small>${escapeHtml(reviewSideDisplayLabel('b'))}</small><strong>${blackRows.length && blackAccuracy != null ? `${blackAccuracy}%` : '—'}</strong></div>
+      </div>
+      <small class="review-phase-range">${escapeHtml(range)}</small>
+      <div class="review-phase-errors">
+        <span><b>${escapeHtml(reviewSideDisplayLabel('w'))}:</b> ${escapeHtml(reviewErrorSummary(whiteRows))}</span>
+        <span><b>${escapeHtml(reviewSideDisplayLabel('b'))}:</b> ${escapeHtml(reviewErrorSummary(blackRows))}</span>
+      </div>
       <p>${escapeHtml(reviewPhaseSummary(phase, phaseRows))}</p>
     </article>`;
   }).join('');
@@ -4233,14 +4334,6 @@ function renderReviewSummary() {
     setReviewStep(Number(button.dataset.reviewEventPly));
     $('review-workspace-anchor')?.scrollIntoView({ behavior:'smooth', block:'start' });
   }));
-}
-
-function reviewSideScoreMarkup(white, black, compact = false) {
-  const score = value => value == null ? '—' : `${value}%`;
-  return `<span class="review-side-scores ${compact ? 'compact' : ''}">
-    <span><small>WHITE</small><b>${score(white)}</b></span>
-    <span><small>BLACK</small><b>${score(black)}</b></span>
-  </span>`;
 }
 
 function renderReviewMoveList() {
@@ -4407,6 +4500,34 @@ function reviewRecommendedLine(row) {
     : `Recommended line: ${line}`;
 }
 
+function updateReviewCoachIdleState(row) {
+  const answer = $('review-coach-answer');
+  const primary = $('review-coach-primary-question');
+  const better = $('review-coach-better-question');
+  const lesson = $('review-coach-lesson-question');
+  if (!row) {
+    answer.textContent = 'Select an analyzed move to ask BOZO about it.';
+    primary.textContent = 'Why did this move matter?'; primary.dataset.reviewQuestion = 'Why did this move matter?';
+    better.textContent = 'Why is the better move stronger?'; better.dataset.reviewQuestion = 'Why is the better move stronger here?';
+    return;
+  }
+  const move = `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
+  const cls = String(row.cls || row.label || '').toLowerCase();
+  let label = 'Why did this move matter?', question = `Why did ${move} matter?`;
+  if (row.isBook || cls.includes('book')) { label='Why is this a book move?'; question=`Why is ${move} a book move, and what idea does it serve?`; }
+  else if (cls.includes('blunder')) { label='Why was this a blunder?'; question=`Why was ${move} a blunder?`; }
+  else if (cls.includes('mistake')) { label='Why was this a mistake?'; question=`Why was ${move} a mistake?`; }
+  else if (cls.includes('inaccuracy')) { label='Why was this inaccurate?'; question=`Why was ${move} inaccurate?`; }
+  else if (row.wasTop || cls.includes('best')) { label='Why was this the best move?'; question=`Why was ${move} the best move?`; }
+  else if (cls.includes('good') || cls.includes('excellent')) { label='Why was this move good?'; question=`Why was ${move} a good move?`; }
+  answer.textContent = `Ask BOZO about ${move}. Choose a question below or ask your own.`;
+  primary.textContent=label; primary.dataset.reviewQuestion=question;
+  const hasBetter=!row.isBook && !row.wasTop && row.engineBest && row.engineBest !== row.san;
+  better.textContent=hasBetter ? `Why is ${row.engineBest} stronger?` : 'What was the main alternative?';
+  better.dataset.reviewQuestion=hasBetter ? `Why is ${row.engineBest} stronger than ${row.san} here?` : `What was the strongest practical alternative to ${move}, and why?`;
+  lesson.dataset.reviewQuestion=`What is the one lesson I should remember from the position after ${move}?`;
+}
+
 function updateReviewSelectedMove() {
   const row = reviewStepIndex === 0 ? null : reviewData?.rows[reviewStepIndex - 1];
 
@@ -4423,6 +4544,7 @@ function updateReviewSelectedMove() {
     $('review-recommended-line').hidden = true;
     $('review-recommended-line').textContent = '';
     $('review-coach-move-label').textContent = 'Choose a move';
+    updateReviewCoachIdleState(null);
     return;
   }
 
@@ -4439,6 +4561,7 @@ function updateReviewSelectedMove() {
   $('review-move-loss').textContent = row.isBook ? 'Book' : reviewEvaluationCostLabel(row.rawEngineLoss);
   $('review-engine-best').textContent = row.wasTop ? row.san : (row.engineBest || '—');
   $('review-coach-move-label').textContent = moveLabel;
+  updateReviewCoachIdleState(row);
 }
 
 function clearReviewCoachAnnotations() {
@@ -4448,8 +4571,8 @@ function clearReviewCoachAnnotations() {
 
 function clearReviewCoach() {
   clearReviewCoachAnnotations();
-  $('review-coach-answer').textContent =
-    'Select an analyzed move, then ask why it worked or failed.';
+  const row = reviewStepIndex === 0 ? null : reviewData?.rows[reviewStepIndex - 1];
+  updateReviewCoachIdleState(row);
   $('review-coach-question').value = '';
 }
 
@@ -4518,7 +4641,7 @@ async function askReviewCoach() {
           detail:event.detail
         })),
         selectedMoveImportance: row.rawEngineLoss >= 180 ? 'turning_point' : row.rawEngineLoss >= 100 ? 'critical' : row.isBook ? 'book' : row.wasTop ? 'normal' : 'normal',
-        selectedSide: row.ply % 2 === 1 ? 'White' : 'Black',
+        selectedSide: reviewData.playerSide === 'black' ? 'Black' : 'White',
         selectedMoveNumber: Math.ceil(row.ply / 2),
         contextWindow,
         contextBeforeMoves,
@@ -4547,33 +4670,33 @@ async function askReviewCoach() {
         classification: row.label,
         centipawnLoss: row.rawEngineLoss,
         moveAccuracy: Math.round(row.accuracy * 10) / 10,
-        openingAccuracy: reviewAccuracyFor(
+        openingAccuracy: reviewPhaseAccuracyFor(
           reviewData.rows.filter(item => item.phase === 'opening')
         ),
-        middlegameAccuracy: reviewAccuracyFor(
+        middlegameAccuracy: reviewPhaseAccuracyFor(
           reviewData.rows.filter(item => item.phase === 'middlegame')
         ),
-        endgameAccuracy: reviewAccuracyFor(
+        endgameAccuracy: reviewPhaseAccuracyFor(
           reviewData.rows.filter(item => item.phase === 'endgame')
         ),
-        phaseAccuracy: reviewAccuracyFor(
+        phaseAccuracy: reviewPhaseAccuracyFor(
           reviewData.rows.filter(item => item.phase === gamePhase)
         ),
-        whitePhaseAccuracy: reviewSideAccuracy(
-          reviewData.rows.filter(item => item.phase === gamePhase), 'w'
+        whitePhaseAccuracy: reviewPhaseAccuracyFor(
+          reviewData.rows.filter(item => item.phase === gamePhase && item.mover === 'w')
         ),
-        blackPhaseAccuracy: reviewSideAccuracy(
-          reviewData.rows.filter(item => item.phase === gamePhase), 'b'
+        blackPhaseAccuracy: reviewPhaseAccuracyFor(
+          reviewData.rows.filter(item => item.phase === gamePhase && item.mover === 'b')
         ),
-        whitePhaseErrors: reviewErrorCounts(reviewRowsForSide(
-          reviewData.rows.filter(item => item.phase === gamePhase), 'w'
-        )),
-        blackPhaseErrors: reviewErrorCounts(reviewRowsForSide(
-          reviewData.rows.filter(item => item.phase === gamePhase), 'b'
-        )),
+        whitePhaseErrors: reviewErrorCounts(
+          reviewData.rows.filter(item => item.phase === gamePhase && item.mover === 'w')
+        ),
+        blackPhaseErrors: reviewErrorCounts(
+          reviewData.rows.filter(item => item.phase === gamePhase && item.mover === 'b')
+        ),
         overallAccuracy: reviewAccuracyFor(reviewData.rows),
-        whiteOverallAccuracy: reviewSideAccuracy(reviewData.rows, 'w'),
-        blackOverallAccuracy: reviewSideAccuracy(reviewData.rows, 'b'),
+        whiteOverallAccuracy: reviewPhaseAccuracyFor(reviewData.rows.filter(item => item.mover === 'w')),
+        blackOverallAccuracy: reviewPhaseAccuracyFor(reviewData.rows.filter(item => item.mover === 'b')),
         verifiedBoardFacts: reviewCoachFacts,
         strictGrounding: true
       }
@@ -7669,6 +7792,11 @@ let puzzleAnswerUsed = false;
 let puzzleSearchTimer = null;
 let puzzleUsedStarts = new Set();
 let puzzleCompleting = false;
+let puzzleCandidateMoves = [];
+let puzzleCandidateFen = '';
+let puzzleBranchMode = true;
+const PUZZLE_BRANCH_DEPTH = 10;
+const PUZZLE_PLAYABLE_CP_WINDOW = 90;
 let puzzleStats = { index:0, total:5, score:0, streak:0, bestStreak:0, userMoves:0, firstTry:0, mistakes:0, skipped:0 };
 
 function puzzleStorageKey() { return 'bozo_opening_puzzles_v1'; }
@@ -7842,30 +7970,86 @@ function startNextPuzzle() {
   puzzleAttemptsForPly = 0;
   puzzleHintUsed = false;
   puzzleAnswerUsed = false;
+  puzzleCandidateMoves = [];
+  puzzleCandidateFen = '';
   puzzleGame = new Chess();
   for (let i=0;i<puzzleStartPly;i++) puzzleGame.move(puzzleMoves[i], { sloppy:true });
   puzzleCurrentOpening = spec.opening;
-  $('puzzle-title').textContent = 'Find the continuation.';
+  $('puzzle-title').textContent = 'Choose your path.';
   $('puzzle-subtitle').textContent = `${spec.opening.name}${spec.opening.variation ? ' · '+spec.opening.variation : ''} · ${spec.opening.eco || 'ECO —'}`;
   $('puzzle-number').textContent = `${puzzleStats.index+1}/${puzzleStats.total}`;
   $('puzzle-start-label').textContent = puzzleStartPly ? `move ${Math.floor(puzzleStartPly/2)+1}` : 'the opening position';
-  setPuzzleFeedback('neutral','Your move.', puzzleTargetUserMoves === 1 ? 'Find the next repertoire move.' : `Find the next ${puzzleTargetUserMoves} repertoire moves.`);
-  advancePuzzleOpponentMoves();
-  paintPuzzleBoard();
-  updatePuzzleUI();
+  setPuzzleFeedback('neutral','Your move.', puzzleTargetUserMoves === 1 ? 'Find a strong continuation. More than one move may be right.' : `Find ${puzzleTargetUserMoves} strong continuation moves. Your choices can branch.`);
+  Promise.resolve(advancePuzzleOpponentMoves()).then(() => {
+    paintPuzzleBoard();
+    updatePuzzleUI();
+    if (puzzleGame && isPuzzleUserTurn()) loadPuzzleCandidates();
+  });
 }
 let puzzleCurrentOpening = null;
 
 function puzzleSideToMove() { return puzzleGame?.turn() === 'b' ? 'black' : 'white'; }
 function isPuzzleUserTurn() { return puzzleSideToMove() === puzzleUserSide; }
 
-function advancePuzzleOpponentMoves() {
-  while (puzzlePly < puzzleMoves.length && !isPuzzleUserTurn()) {
-    const move = puzzleGame.move(puzzleMoves[puzzlePly], { sloppy:true });
-    if (!move) break;
-    puzzlePly++;
+async function loadPuzzleCandidates() {
+  if (!puzzleGame || !isPuzzleUserTurn()) return [];
+  const fen = puzzleGame.fen();
+  if (puzzleCandidateFen === fen && puzzleCandidateMoves.length) return puzzleCandidateMoves;
+  puzzleCandidateFen = fen;
+  puzzleCandidateMoves = [];
+  try {
+    const engine = await getReviewEngine();
+    const lines = await engine.analyzeMultiPv(fen, PUZZLE_BRANCH_DEPTH, 5);
+    if (!lines.length) return [];
+    const score = line => line.mate !== null
+      ? (line.mate > 0 ? 100000 - Math.abs(line.mate) * 100 : -100000 + Math.abs(line.mate) * 100)
+      : Number(line.cp ?? -100000);
+    const bestScore = score(lines[0]);
+    puzzleCandidateMoves = lines
+      .filter(line => line.pv?.[0])
+      .map(line => ({ ...line, uci: line.pv[0], loss: Math.max(0, bestScore - score(line)) }))
+      .filter((line, index) => index === 0 || line.loss <= PUZZLE_PLAYABLE_CP_WINDOW);
+    return puzzleCandidateMoves;
+  } catch (error) {
+    console.warn('Branching puzzle analysis unavailable; using repertoire move.', error);
+    return [];
   }
-  if (puzzlePly >= puzzleMoves.length && puzzleSolvedInCurrent < puzzleTargetUserMoves) completeCurrentPuzzle();
+}
+
+function puzzleUci(move) {
+  return `${move.from}${move.to}${move.promotion || ''}`;
+}
+
+function puzzleBranchLabel(candidate) {
+  if (!candidate) return { title:'Playable!', copy:'You found a sound continuation.', points:75, state:'correct' };
+  if (candidate.rank === 1 || candidate.loss <= 15) return { title:'Best path! +100', copy:'You chose the strongest continuation.', points:100, state:'correct' };
+  if (candidate.loss <= 45) return { title:'Strong path! +90', copy:'Not the top engine choice, but this continuation is fully playable.', points:90, state:'correct' };
+  return { title:'Playable path! +75', copy:'This is a sound alternative. BOZO will follow your branch.', points:75, state:'correct' };
+}
+
+async function advancePuzzleOpponentMoves() {
+  if (!puzzleGame) return;
+  // If the user stayed on the authored repertoire line, preserve its reply.
+  if (puzzlePly < puzzleMoves.length && !isPuzzleUserTurn()) {
+    const authored = puzzleGame.move(puzzleMoves[puzzlePly], { sloppy:true });
+    if (authored) {
+      puzzlePly++;
+      puzzleCandidateFen = ''; puzzleCandidateMoves = [];
+      return;
+    }
+  }
+  // A user-selected alternative can leave the authored line. Continue with the
+  // strongest reply from the actual resulting position instead of forcing the PGN.
+  if (!isPuzzleUserTurn()) {
+    try {
+      const engine = await getReviewEngine();
+      const analysis = await engine.analyze(puzzleGame.fen(), PUZZLE_BRANCH_DEPTH);
+      if (analysis?.bestMove) puzzleGame.move({
+        from:analysis.bestMove.slice(0,2), to:analysis.bestMove.slice(2,4), promotion:analysis.bestMove[4] || 'q'
+      });
+    } catch (error) { console.warn('Could not continue puzzle branch.', error); }
+  }
+  puzzleCandidateFen = ''; puzzleCandidateMoves = [];
 }
 
 function paintPuzzleBoard() {
@@ -7883,8 +8067,8 @@ function paintPuzzleBoard() {
   boardEl.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>clickPuzzleSquare(button.dataset.square)));
 }
 
-function clickPuzzleSquare(square) {
-  if (!puzzleGame || puzzlePly >= puzzleMoves.length || !isPuzzleUserTurn()) return;
+async function clickPuzzleSquare(square) {
+  if (!puzzleGame || !isPuzzleUserTurn() || puzzleCompleting) return;
   const myColor = puzzleUserSide === 'white' ? 'w' : 'b';
   if (!puzzleSelectedSquare) {
     const piece=puzzleGame.get(square); if (!piece || piece.color!==myColor) return;
@@ -7893,49 +8077,81 @@ function clickPuzzleSquare(square) {
   const from=puzzleSelectedSquare; puzzleSelectedSquare=null;
   const move=puzzleGame.move({from,to:square,promotion:'q'});
   if (!move) { paintPuzzleBoard(); return; }
-  const expectedSan=puzzleMoves[puzzlePly];
+  const playedUci = puzzleUci(move);
   puzzleGame.undo();
   puzzleAttemptsForPly++;
-  if (move.san !== expectedSan) {
+
+  setPuzzleFeedback('neutral','Checking your path…','BOZO is comparing the playable continuations.');
+  const candidates = await loadPuzzleCandidates();
+  const expected = expectedPuzzleMove();
+  const candidate = candidates.find(item => item.uci === playedUci);
+  const authoredMatch = expected && puzzleUci(expected) === playedUci;
+
+  if (!candidate && !authoredMatch) {
     puzzleStats.mistakes++; puzzleStats.streak=0;
-    setPuzzleFeedback('wrong','Not quite.', puzzleAttemptsForPly===1 ? 'Try the position again.' : 'Use a hint if you need one.');
+    setPuzzleFeedback('wrong','That path gives up too much.', candidates.length > 1 ? `There are ${candidates.length} playable continuations here. Try another idea.` : 'Try the position again.');
     paintPuzzleBoard(); updatePuzzleUI(); return;
   }
-  puzzleGame.move(expectedSan,{sloppy:true});
+
+  puzzleGame.move({from,to:square,promotion:move.promotion || 'q'});
+  const stayedOnBook = authoredMatch;
+  if (stayedOnBook) puzzlePly++;
+  else puzzlePly = puzzleMoves.length; // branch has intentionally left the authored PGN
+
   puzzleStats.userMoves++;
   const cleanFirstTry = puzzleAttemptsForPly===1 && !puzzleHintUsed && !puzzleAnswerUsed;
-  if (cleanFirstTry) { puzzleStats.firstTry++; puzzleStats.streak++; puzzleStats.score+=100; }
-  else if (!puzzleAnswerUsed) { puzzleStats.score += puzzleHintUsed ? 60 : 50; puzzleStats.streak=0; }
-  else { puzzleStats.streak=0; }
+  const quality = puzzleBranchLabel(candidate);
+  if (cleanFirstTry) { puzzleStats.firstTry++; puzzleStats.streak++; puzzleStats.score += quality.points; }
+  else if (!puzzleAnswerUsed) { puzzleStats.score += Math.round(quality.points * (puzzleHintUsed ? .6 : .5)); puzzleStats.streak=0; }
+  else puzzleStats.streak=0;
   puzzleStats.bestStreak=Math.max(puzzleStats.bestStreak,puzzleStats.streak);
-  puzzleSolvedInCurrent++; puzzlePly++;
-  setPuzzleFeedback('correct', cleanFirstTry ? 'Correct! +100' : 'Correct!', expectedSan);
+  puzzleSolvedInCurrent++;
+  setPuzzleFeedback(quality.state, cleanFirstTry ? quality.title : quality.title.replace(/ \+\d+$/,''), `${move.san}. ${quality.copy}`);
   puzzleAttemptsForPly=0; puzzleHintUsed=false; puzzleAnswerUsed=false;
-  if (puzzleSolvedInCurrent >= puzzleTargetUserMoves || puzzlePly >= puzzleMoves.length) {
-    paintPuzzleBoard(); updatePuzzleUI();
-    puzzleCompleting = true;
-    setTimeout(() => completeCurrentPuzzle(false, true), 480);
-    return;
+
+  if (puzzleSolvedInCurrent >= puzzleTargetUserMoves) {
+    paintPuzzleBoard(); updatePuzzleUI(); puzzleCompleting=true;
+    setTimeout(() => completeCurrentPuzzle(false,true), 650); return;
   }
-  advancePuzzleOpponentMoves(); paintPuzzleBoard(); updatePuzzleUI();
+  await advancePuzzleOpponentMoves();
+  paintPuzzleBoard(); updatePuzzleUI();
+  if (puzzleGame && isPuzzleUserTurn()) loadPuzzleCandidates();
 }
 
 function expectedPuzzleMove() {
-  if (!puzzleGame || puzzlePly >= puzzleMoves.length || !isPuzzleUserTurn()) return null;
+  if (!puzzleGame || !isPuzzleUserTurn()) return null;
+  if (puzzlePly < puzzleMoves.length) {
+    const clone=new Chess(puzzleGame.fen());
+    const move=clone.move(puzzleMoves[puzzlePly],{sloppy:true});
+    if (move) return move;
+  }
+  const best = puzzleCandidateMoves[0]?.uci;
+  if (!best) return null;
   const clone=new Chess(puzzleGame.fen());
-  return clone.move(puzzleMoves[puzzlePly],{sloppy:true});
+  return clone.move({from:best.slice(0,2),to:best.slice(2,4),promotion:best[4]||'q'});
 }
 
-function showPuzzleHint() {
-  const move=expectedPuzzleMove(); if (!move) return;
+async function showPuzzleHint() {
   puzzleHintUsed=true; puzzleStats.streak=0;
-  const piece=puzzleGame.get(move.from); const names={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
-  setPuzzleFeedback('hint','Hint',`Look for a ${names[piece?.type]||'piece'} move from the ${move.from[0]}-file.`); updatePuzzleUI();
-}
-function showPuzzleAnswer() {
+  const candidates=await loadPuzzleCandidates();
   const move=expectedPuzzleMove(); if (!move) return;
+  const piece=puzzleGame.get(move.from); const names={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
+  const extra=candidates.length>1 ? ` There are ${candidates.length} playable paths.` : '';
+  setPuzzleFeedback('hint','Hint',`Look for a ${names[piece?.type]||'piece'} move from the ${move.from[0]}-file.${extra}`); updatePuzzleUI();
+}
+async function showPuzzleAnswer() {
   puzzleAnswerUsed=true; puzzleStats.streak=0;
-  setPuzzleFeedback('answer','Answer',`${move.san} · ${move.from} → ${move.to}`); updatePuzzleUI();
+  const candidates=await loadPuzzleCandidates();
+  if (!candidates.length) {
+    const move=expectedPuzzleMove(); if (!move) return;
+    setPuzzleFeedback('answer','Best path',`${move.san} · ${move.from} → ${move.to}`); updatePuzzleUI(); return;
+  }
+  const readable=candidates.slice(0,3).map((item,index)=>{
+    const clone=new Chess(puzzleGame.fen());
+    const m=clone.move({from:item.uci.slice(0,2),to:item.uci.slice(2,4),promotion:item.uci[4]||'q'});
+    return `${index===0?'Best':'Playable'}: ${m?.san || item.uci}`;
+  });
+  setPuzzleFeedback('answer','Choose your path',readable.join(' · ')); updatePuzzleUI();
 }
 function skipPuzzle() {
   if (!puzzleGame || puzzleCompleting) return;
@@ -7984,3 +8200,197 @@ function finishPuzzleSession() {
 // BOZO universal board annotations
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeUniversalBoardAnnotations);
 else initializeUniversalBoardAnnotations();
+
+// ---- Position Analysis (Review tab) ----
+let positionEditor = {};
+let positionOrientation = 'white';
+let positionAnalysis = null;
+let positionSelectedPiece = 'K';
+
+function positionFenPlacement(board) {
+  const ranks = [];
+  for (let rank = 8; rank >= 1; rank--) {
+    let row = '', empty = 0;
+    for (const file of 'abcdefgh') {
+      const piece = board[`${file}${rank}`];
+      if (!piece) { empty++; continue; }
+      if (empty) { row += empty; empty = 0; }
+      row += piece;
+    }
+    if (empty) row += empty;
+    ranks.push(row);
+  }
+  return ranks.join('/');
+}
+
+function positionEditorFen() {
+  const side = $('position-side-to-move')?.value || 'w';
+  return `${positionFenPlacement(positionEditor)} ${side} - - 0 1`;
+}
+
+function positionLoadFen(fen, quiet = false) {
+  try {
+    const game = new Chess(fen.trim());
+    const placement = game.fen().split(' ')[0];
+    positionEditor = {};
+    placement.split('/').forEach((row, ri) => {
+      let fi = 0;
+      for (const ch of row) {
+        if (/\d/.test(ch)) fi += Number(ch);
+        else { positionEditor[`${'abcdefgh'[fi]}${8-ri}`] = ch; fi++; }
+      }
+    });
+    const parts = game.fen().split(' ');
+    if ($('position-side-to-move')) $('position-side-to-move').value = parts[1] || 'w';
+    renderPositionEditor();
+    if (!quiet) $('position-message').textContent = '';
+    return true;
+  } catch (error) {
+    if (!quiet) $('position-message').textContent = 'That FEN is not a legal chess position.';
+    return false;
+  }
+}
+
+function positionSyncFen() {
+  if ($('position-fen')) $('position-fen').value = positionEditorFen();
+}
+
+function renderPositionPalette() {
+  const palette = $('position-piece-palette');
+  if (!palette) return;
+  const pieces = ['K','Q','R','B','N','P','k','q','r','b','n','p'];
+  palette.innerHTML = pieces.map(piece => `<button type="button" data-position-piece="${piece}" class="${positionSelectedPiece===piece?'active':''}" title="Place ${piece === piece.toUpperCase() ? 'White' : 'Black'} piece">${webPiece(piece)}</button>`).join('') + `<button type="button" data-position-piece="erase" class="${positionSelectedPiece==='erase'?'active':''}" title="Erase">⌫</button>`;
+  $$('[data-position-piece]').forEach(button => button.addEventListener('click', () => {
+    positionSelectedPiece = button.dataset.positionPiece;
+    renderPositionPalette();
+  }));
+}
+
+function renderPositionEditor() {
+  const board = $('position-editor-board');
+  if (!board) return;
+  const ranks = positionOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = positionOrientation === 'white' ? [...'abcdefgh'] : [...'hgfedcba'];
+  board.innerHTML = ranks.flatMap(rank => files.map(file => {
+    const sq = `${file}${rank}`;
+    return `<button type="button" class="position-editor-square" data-position-square="${sq}" aria-label="${sq}">${webPiece(positionEditor[sq] || '')}</button>`;
+  })).join('');
+  $$('[data-position-square]').forEach(square => square.addEventListener('click', () => {
+    const sq = square.dataset.positionSquare;
+    if (positionSelectedPiece === 'erase') delete positionEditor[sq];
+    else positionEditor[sq] = positionSelectedPiece;
+    positionSyncFen();
+    renderPositionEditor();
+  }));
+  renderPositionPalette();
+}
+
+function paintPositionBoard(fen) {
+  const target = $('position-analysis-board');
+  if (!target) return;
+  const board = fenBoard(fen);
+  const ranks = positionOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = positionOrientation === 'white' ? [...'abcdefgh'] : [...'hgfedcba'];
+  target.innerHTML = ranks.flatMap(rank => files.map(file => {
+    const row = 8-rank, col = file.charCodeAt(0)-97;
+    return `<div data-square="${file}${rank}">${webPiece(board[row][col])}</div>`;
+  })).join('');
+}
+
+function paintPositionEval(cp = 0, mate = null) {
+  let whitePct = mate != null ? (mate > 0 ? 97 : 3) : 50 + 47 * Math.tanh(cp / 500);
+  whitePct = Math.max(3, Math.min(97, whitePct));
+  if ($('position-eval-white-zone')) $('position-eval-white-zone').style.height = `${whitePct}%`;
+  if ($('position-eval-black-zone')) $('position-eval-black-zone').style.height = `${100-whitePct}%`;
+}
+
+async function analyzePosition() {
+  const message = $('position-message');
+  const button = $('analyze-position');
+  message.textContent = '';
+  const rawFen = $('position-fen').value.trim();
+  if (!positionLoadFen(rawFen)) return;
+  const fen = positionEditorFen();
+  let game;
+  try { game = new Chess(fen); } catch (_) { message.textContent = 'That position cannot be analyzed. Check both kings and the side to move.'; return; }
+  button.disabled = true; button.textContent = 'Analyzing…';
+  try {
+    const engine = await getReviewEngine();
+    await engine.newGame();
+    const depth = Number($('position-depth').value || 14);
+    const result = await engine.analyze(fen, depth);
+    const cp = whiteReviewEval(result, game.turn());
+    const bestSan = reviewUciToSan(fen, result.bestMove) || result.bestMove || '—';
+    const pvSan = reviewPvToSan(fen, result.pv || [], 8);
+    positionAnalysis = { fen, cp, mate: result.mate, bestMove: bestSan, bestMoveUci: result.bestMove, pv: result.pv || [], pvSan };
+    $('position-results').hidden = false;
+    paintPositionBoard(fen); paintPositionEval(cp, result.mate);
+    $('position-description').textContent = reviewPositionDescription(cp, result.mate);
+    $('position-evaluation').textContent = formatReviewEval(cp, result.mate);
+    $('position-best-move').textContent = bestSan;
+    $('position-turn-label').textContent = game.turn() === 'w' ? 'White' : 'Black';
+    $('position-eval-summary').textContent = `${reviewPositionDescription(cp, result.mate)}. ${game.turn()==='w'?'White':'Black'} to move${bestSan !== '—' ? `, with ${bestSan} as the strongest continuation.` : '.'}`;
+    $('position-best-line').textContent = pvSan.length ? `Recommended line: ${pvSan.join(' ')}` : 'No principal variation available.';
+    $('position-coach-answer').textContent = 'Position analyzed. Choose a question below or ask your own.';
+    $('position-results').scrollIntoView({behavior:'smooth', block:'start'});
+  } catch (error) {
+    console.error(error); message.textContent = error?.message || 'Position analysis failed.';
+  } finally { button.disabled = false; button.textContent = 'Analyze position'; }
+}
+
+async function askPositionCoach() {
+  const answer = $('position-coach-answer'), button = $('ask-position-coach');
+  if (!state.session?.user) { answer.textContent = 'Sign in before using BOZO Coach.'; return; }
+  if (!positionAnalysis) { answer.textContent = 'Analyze the position first.'; return; }
+  const perspective = $('position-perspective').value;
+  const question = $('position-coach-question').value.trim() || 'What is the main plan in this position, why is the best move strong, and what should I watch for?';
+  button.disabled = true; button.textContent = 'BOZO Coach is thinking…';
+  answer.innerHTML = '<div class="coach-thinking">Turning the position into a practical explanation…</div>';
+  try {
+    const { data, error } = await sb.functions.invoke('explain-move', { body: {
+      mode: 'position_analysis', fen: positionAnalysis.fen, playedMove: '',
+      selectedSide: perspective === 'neutral' ? '' : perspective,
+      bestMove: positionAnalysis.bestMove,
+      principalVariation: positionAnalysis.pv,
+      principalVariationSan: positionAnalysis.pvSan,
+      evaluationAfter: positionAnalysis.cp,
+      evaluationUnit: 'centipawns from White perspective', question
+    }});
+    if (error) throw error;
+    const ex = data?.explanation;
+    if (!ex) throw new Error(data?.error || 'BOZO Coach returned no explanation.');
+    const parts = [ex.summary, ex.playedMoveIdea, ex.practicalPlan?.length ? `<b>Plan:</b><ul>${ex.practicalPlan.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>` : '', ex.watchFor ? `<b>Watch for:</b> ${escapeHtml(ex.watchFor)}` : ''].filter(Boolean);
+    answer.innerHTML = parts.map((x,i) => i < 2 && typeof x === 'string' && !x.startsWith('<') ? `<p>${escapeHtml(x)}</p>` : x).join('');
+  } catch (error) { console.error(error); answer.textContent = error?.message || 'BOZO Coach could not explain this position.'; }
+  finally { button.disabled = false; button.textContent = 'Ask BOZO'; }
+}
+
+function initPositionAnalysis() {
+  if (!$('review-position-mode')) return;
+  const startFen = new Chess().fen();
+  positionLoadFen(startFen, true); positionSyncFen();
+  $$('[data-review-mode]').forEach(button => button.addEventListener('click', () => {
+    const position = button.dataset.reviewMode === 'position';
+    $$('[data-review-mode]').forEach(b => b.classList.toggle('active', b === button));
+    $('review-game-mode').hidden = position;
+    $('review-position-mode').hidden = !position;
+    $('review-results').hidden = position ? true : !reviewData;
+    const heading = document.querySelector('#view-review .review-heading h1');
+    const copy = document.querySelector('#view-review .review-heading p');
+    if (heading) heading.textContent = position ? 'Analyze a position.' : 'Review your game.';
+    if (copy) copy.textContent = position ? 'Set up any legal position, evaluate it, then ask BOZO Coach what matters.' : 'Import a PGN, compare each phase, then ask BOZO Coach about any move.';
+  }));
+  $('position-starting').addEventListener('click', () => { positionLoadFen(new Chess().fen(), true); positionSyncFen(); });
+  $('position-clear').addEventListener('click', () => { positionEditor = {}; positionSyncFen(); renderPositionEditor(); });
+  $('position-flip').addEventListener('click', () => { positionOrientation = positionOrientation === 'white' ? 'black' : 'white'; renderPositionEditor(); });
+  $('position-result-flip').addEventListener('click', () => { positionOrientation = positionOrientation === 'white' ? 'black' : 'white'; renderPositionEditor(); if (positionAnalysis) paintPositionBoard(positionAnalysis.fen); });
+  $('position-side-to-move').addEventListener('change', positionSyncFen);
+  $('position-fen').addEventListener('change', () => positionLoadFen($('position-fen').value));
+  $('analyze-position').addEventListener('click', analyzePosition);
+  $('ask-position-coach').addEventListener('click', askPositionCoach);
+  $('clear-position-coach').addEventListener('click', () => { $('position-coach-question').value=''; $('position-coach-answer').textContent='Position analyzed. Choose a question below or ask your own.'; });
+  $$('[data-position-question]').forEach(b => b.addEventListener('click', () => { $('position-coach-question').value=b.dataset.positionQuestion; askPositionCoach(); }));
+  $('position-coach-question').addEventListener('keydown', e => { if (e.key === 'Enter') askPositionCoach(); });
+}
+
+initPositionAnalysis();
