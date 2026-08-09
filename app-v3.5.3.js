@@ -8032,3 +8032,197 @@ function finishPuzzleSession() {
 // BOZO universal board annotations
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeUniversalBoardAnnotations);
 else initializeUniversalBoardAnnotations();
+
+// ---- Position Analysis (Review tab) ----
+let positionEditor = {};
+let positionOrientation = 'white';
+let positionAnalysis = null;
+let positionSelectedPiece = 'K';
+
+function positionFenPlacement(board) {
+  const ranks = [];
+  for (let rank = 8; rank >= 1; rank--) {
+    let row = '', empty = 0;
+    for (const file of 'abcdefgh') {
+      const piece = board[`${file}${rank}`];
+      if (!piece) { empty++; continue; }
+      if (empty) { row += empty; empty = 0; }
+      row += piece;
+    }
+    if (empty) row += empty;
+    ranks.push(row);
+  }
+  return ranks.join('/');
+}
+
+function positionEditorFen() {
+  const side = $('position-side-to-move')?.value || 'w';
+  return `${positionFenPlacement(positionEditor)} ${side} - - 0 1`;
+}
+
+function positionLoadFen(fen, quiet = false) {
+  try {
+    const game = new Chess(fen.trim());
+    const placement = game.fen().split(' ')[0];
+    positionEditor = {};
+    placement.split('/').forEach((row, ri) => {
+      let fi = 0;
+      for (const ch of row) {
+        if (/\d/.test(ch)) fi += Number(ch);
+        else { positionEditor[`${'abcdefgh'[fi]}${8-ri}`] = ch; fi++; }
+      }
+    });
+    const parts = game.fen().split(' ');
+    if ($('position-side-to-move')) $('position-side-to-move').value = parts[1] || 'w';
+    renderPositionEditor();
+    if (!quiet) $('position-message').textContent = '';
+    return true;
+  } catch (error) {
+    if (!quiet) $('position-message').textContent = 'That FEN is not a legal chess position.';
+    return false;
+  }
+}
+
+function positionSyncFen() {
+  if ($('position-fen')) $('position-fen').value = positionEditorFen();
+}
+
+function renderPositionPalette() {
+  const palette = $('position-piece-palette');
+  if (!palette) return;
+  const pieces = ['K','Q','R','B','N','P','k','q','r','b','n','p'];
+  palette.innerHTML = pieces.map(piece => `<button type="button" data-position-piece="${piece}" class="${positionSelectedPiece===piece?'active':''}" title="Place ${piece === piece.toUpperCase() ? 'White' : 'Black'} piece">${webPiece(piece)}</button>`).join('') + `<button type="button" data-position-piece="erase" class="${positionSelectedPiece==='erase'?'active':''}" title="Erase">⌫</button>`;
+  $$('[data-position-piece]').forEach(button => button.addEventListener('click', () => {
+    positionSelectedPiece = button.dataset.positionPiece;
+    renderPositionPalette();
+  }));
+}
+
+function renderPositionEditor() {
+  const board = $('position-editor-board');
+  if (!board) return;
+  const ranks = positionOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = positionOrientation === 'white' ? [...'abcdefgh'] : [...'hgfedcba'];
+  board.innerHTML = ranks.flatMap(rank => files.map(file => {
+    const sq = `${file}${rank}`;
+    return `<button type="button" class="position-editor-square" data-position-square="${sq}" aria-label="${sq}">${webPiece(positionEditor[sq] || '')}</button>`;
+  })).join('');
+  $$('[data-position-square]').forEach(square => square.addEventListener('click', () => {
+    const sq = square.dataset.positionSquare;
+    if (positionSelectedPiece === 'erase') delete positionEditor[sq];
+    else positionEditor[sq] = positionSelectedPiece;
+    positionSyncFen();
+    renderPositionEditor();
+  }));
+  renderPositionPalette();
+}
+
+function paintPositionBoard(fen) {
+  const target = $('position-analysis-board');
+  if (!target) return;
+  const board = fenBoard(fen);
+  const ranks = positionOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = positionOrientation === 'white' ? [...'abcdefgh'] : [...'hgfedcba'];
+  target.innerHTML = ranks.flatMap(rank => files.map(file => {
+    const row = 8-rank, col = file.charCodeAt(0)-97;
+    return `<div data-square="${file}${rank}">${webPiece(board[row][col])}</div>`;
+  })).join('');
+}
+
+function paintPositionEval(cp = 0, mate = null) {
+  let whitePct = mate != null ? (mate > 0 ? 97 : 3) : 50 + 47 * Math.tanh(cp / 500);
+  whitePct = Math.max(3, Math.min(97, whitePct));
+  if ($('position-eval-white-zone')) $('position-eval-white-zone').style.height = `${whitePct}%`;
+  if ($('position-eval-black-zone')) $('position-eval-black-zone').style.height = `${100-whitePct}%`;
+}
+
+async function analyzePosition() {
+  const message = $('position-message');
+  const button = $('analyze-position');
+  message.textContent = '';
+  const rawFen = $('position-fen').value.trim();
+  if (!positionLoadFen(rawFen)) return;
+  const fen = positionEditorFen();
+  let game;
+  try { game = new Chess(fen); } catch (_) { message.textContent = 'That position cannot be analyzed. Check both kings and the side to move.'; return; }
+  button.disabled = true; button.textContent = 'Analyzing…';
+  try {
+    const engine = await getReviewEngine();
+    await engine.newGame();
+    const depth = Number($('position-depth').value || 14);
+    const result = await engine.analyze(fen, depth);
+    const cp = whiteReviewEval(result, game.turn());
+    const bestSan = reviewUciToSan(fen, result.bestMove) || result.bestMove || '—';
+    const pvSan = reviewPvToSan(fen, result.pv || [], 8);
+    positionAnalysis = { fen, cp, mate: result.mate, bestMove: bestSan, bestMoveUci: result.bestMove, pv: result.pv || [], pvSan };
+    $('position-results').hidden = false;
+    paintPositionBoard(fen); paintPositionEval(cp, result.mate);
+    $('position-description').textContent = reviewPositionDescription(cp, result.mate);
+    $('position-evaluation').textContent = formatReviewEval(cp, result.mate);
+    $('position-best-move').textContent = bestSan;
+    $('position-turn-label').textContent = game.turn() === 'w' ? 'White' : 'Black';
+    $('position-eval-summary').textContent = `${reviewPositionDescription(cp, result.mate)}. ${game.turn()==='w'?'White':'Black'} to move${bestSan !== '—' ? `, with ${bestSan} as the strongest continuation.` : '.'}`;
+    $('position-best-line').textContent = pvSan.length ? `Recommended line: ${pvSan.join(' ')}` : 'No principal variation available.';
+    $('position-coach-answer').textContent = 'Position analyzed. Choose a question below or ask your own.';
+    $('position-results').scrollIntoView({behavior:'smooth', block:'start'});
+  } catch (error) {
+    console.error(error); message.textContent = error?.message || 'Position analysis failed.';
+  } finally { button.disabled = false; button.textContent = 'Analyze position'; }
+}
+
+async function askPositionCoach() {
+  const answer = $('position-coach-answer'), button = $('ask-position-coach');
+  if (!state.session?.user) { answer.textContent = 'Sign in before using BOZO Coach.'; return; }
+  if (!positionAnalysis) { answer.textContent = 'Analyze the position first.'; return; }
+  const perspective = $('position-perspective').value;
+  const question = $('position-coach-question').value.trim() || 'What is the main plan in this position, why is the best move strong, and what should I watch for?';
+  button.disabled = true; button.textContent = 'BOZO Coach is thinking…';
+  answer.innerHTML = '<div class="coach-thinking">Turning the position into a practical explanation…</div>';
+  try {
+    const { data, error } = await sb.functions.invoke('explain-move', { body: {
+      mode: 'position_analysis', fen: positionAnalysis.fen, playedMove: '',
+      selectedSide: perspective === 'neutral' ? '' : perspective,
+      bestMove: positionAnalysis.bestMove,
+      principalVariation: positionAnalysis.pv,
+      principalVariationSan: positionAnalysis.pvSan,
+      evaluationAfter: positionAnalysis.cp,
+      evaluationUnit: 'centipawns from White perspective', question
+    }});
+    if (error) throw error;
+    const ex = data?.explanation;
+    if (!ex) throw new Error(data?.error || 'BOZO Coach returned no explanation.');
+    const parts = [ex.summary, ex.playedMoveIdea, ex.practicalPlan?.length ? `<b>Plan:</b><ul>${ex.practicalPlan.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul>` : '', ex.watchFor ? `<b>Watch for:</b> ${escapeHtml(ex.watchFor)}` : ''].filter(Boolean);
+    answer.innerHTML = parts.map((x,i) => i < 2 && typeof x === 'string' && !x.startsWith('<') ? `<p>${escapeHtml(x)}</p>` : x).join('');
+  } catch (error) { console.error(error); answer.textContent = error?.message || 'BOZO Coach could not explain this position.'; }
+  finally { button.disabled = false; button.textContent = 'Ask BOZO'; }
+}
+
+function initPositionAnalysis() {
+  if (!$('review-position-mode')) return;
+  const startFen = new Chess().fen();
+  positionLoadFen(startFen, true); positionSyncFen();
+  $$('[data-review-mode]').forEach(button => button.addEventListener('click', () => {
+    const position = button.dataset.reviewMode === 'position';
+    $$('[data-review-mode]').forEach(b => b.classList.toggle('active', b === button));
+    $('review-game-mode').hidden = position;
+    $('review-position-mode').hidden = !position;
+    $('review-results').hidden = position ? true : !reviewData;
+    const heading = document.querySelector('#view-review .review-heading h1');
+    const copy = document.querySelector('#view-review .review-heading p');
+    if (heading) heading.textContent = position ? 'Analyze a position.' : 'Review your game.';
+    if (copy) copy.textContent = position ? 'Set up any legal position, evaluate it, then ask BOZO Coach what matters.' : 'Import a PGN, compare each phase, then ask BOZO Coach about any move.';
+  }));
+  $('position-starting').addEventListener('click', () => { positionLoadFen(new Chess().fen(), true); positionSyncFen(); });
+  $('position-clear').addEventListener('click', () => { positionEditor = {}; positionSyncFen(); renderPositionEditor(); });
+  $('position-flip').addEventListener('click', () => { positionOrientation = positionOrientation === 'white' ? 'black' : 'white'; renderPositionEditor(); });
+  $('position-result-flip').addEventListener('click', () => { positionOrientation = positionOrientation === 'white' ? 'black' : 'white'; renderPositionEditor(); if (positionAnalysis) paintPositionBoard(positionAnalysis.fen); });
+  $('position-side-to-move').addEventListener('change', positionSyncFen);
+  $('position-fen').addEventListener('change', () => positionLoadFen($('position-fen').value));
+  $('analyze-position').addEventListener('click', analyzePosition);
+  $('ask-position-coach').addEventListener('click', askPositionCoach);
+  $('clear-position-coach').addEventListener('click', () => { $('position-coach-question').value=''; $('position-coach-answer').textContent='Position analyzed. Choose a question below or ask your own.'; });
+  $$('[data-position-question]').forEach(b => b.addEventListener('click', () => { $('position-coach-question').value=b.dataset.positionQuestion; askPositionCoach(); }));
+  $('position-coach-question').addEventListener('keydown', e => { if (e.key === 'Enter') askPositionCoach(); });
+}
+
+initPositionAnalysis();

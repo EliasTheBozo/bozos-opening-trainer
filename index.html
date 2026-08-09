@@ -499,6 +499,12 @@
         <span id="review-engine-state" class="cloud-pill">Engine loads when needed</span>
       </div>
 
+      <div class="review-mode-tabs" role="tablist" aria-label="Review mode">
+        <button class="active" type="button" data-review-mode="game">Review a Game</button>
+        <button type="button" data-review-mode="position">Analyze a Position</button>
+      </div>
+
+      <div id="review-game-mode">
       <div class="review-import-card">
         <div class="review-import-tabs">
           <button class="active" data-review-input="paste">Paste PGN</button>
@@ -558,6 +564,65 @@
         </div>
 
         <div id="review-import-message" class="auth-message"></div>
+      </div>
+
+      </div>
+
+      <div id="review-position-mode" hidden>
+        <div class="review-import-card position-analysis-card">
+          <div class="position-analysis-heading">
+            <div><span class="eyebrow">POSITION LAB</span><h2>Set up any position.</h2><p>Paste a FEN or build the board, choose whose perspective you want, then let Stockfish analyze it.</p></div>
+          </div>
+          <div class="position-setup-grid">
+            <div>
+              <div class="position-editor-toolbar">
+                <button id="position-starting" type="button" class="button secondary">Starting position</button>
+                <button id="position-clear" type="button" class="button secondary">Clear board</button>
+                <button id="position-flip" type="button" class="button secondary">Flip board</button>
+              </div>
+              <div id="position-editor-board" class="web-duel-board review-board position-editor-board"></div>
+              <div id="position-piece-palette" class="position-piece-palette" aria-label="Piece palette"></div>
+              <small class="review-setting-help">Choose a piece, then click a square. Choose the eraser to remove pieces.</small>
+            </div>
+            <div class="position-setup-controls">
+              <label>FEN<textarea id="position-fen" rows="3" spellcheck="false"></textarea></label>
+              <div class="position-inline-settings">
+                <label>Side to move<select id="position-side-to-move"><option value="w">White</option><option value="b">Black</option></select></label>
+                <label>Coach perspective<select id="position-perspective"><option value="white">White</option><option value="black">Black</option><option value="neutral">Neutral</option></select></label>
+                <label>Analysis quality<select id="position-depth"><option value="10">Fast</option><option value="14" selected>Balanced · recommended</option><option value="18">Deep</option></select></label>
+              </div>
+              <button id="analyze-position" class="button primary">Analyze position</button>
+              <div id="position-message" class="auth-message"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="position-results" class="position-results" hidden>
+          <div class="review-workspace position-workspace">
+            <div class="review-board-column">
+              <div class="review-board-frame">
+                <div class="review-vertical-eval" id="position-vertical-eval"><div id="position-eval-black-zone" class="review-eval-black-zone"></div><div id="position-eval-white-zone" class="review-eval-white-zone"></div><span class="review-eval-side-label">Black</span><span class="review-eval-side-label review-eval-position-bottom">White</span></div>
+                <div class="review-board-shell"><div id="position-analysis-board" class="web-duel-board review-board"></div><svg id="position-analysis-arrow-layer" class="board-arrow-layer" viewBox="0 0 800 800" aria-hidden="true"></svg></div>
+              </div>
+              <button id="position-result-flip" class="button secondary position-result-flip">Flip board</button>
+            </div>
+            <aside class="review-side-column">
+              <div class="review-selected-card">
+                <div><span class="eyebrow">POSITION ANALYSIS</span><h2 id="position-eval-title">Analyzed position</h2></div>
+                <p id="position-eval-summary">Run an analysis to see the evaluation and best continuation.</p>
+                <div id="position-best-line" class="review-recommended-line"></div>
+                <div class="review-move-facts"><div><span>Position</span><b id="position-description">Equal</b></div><div><span>Evaluation</span><b id="position-evaluation">0.00</b></div><div><span>Best move</span><b id="position-best-move">—</b></div><div><span>Side to move</span><b id="position-turn-label">White</b></div></div>
+              </div>
+              <section class="bozo-coach-panel review-coach-panel">
+                <div class="coach-heading"><div><span class="eyebrow">BOZO COACH</span><h3>What should I understand here?</h3></div><span class="coach-move-label">Position</span></div>
+                <div id="position-coach-answer" class="coach-answer">Analyze the position, then ask BOZO about the plan, threats, or best move.</div>
+                <div class="review-coach-shortcuts"><button type="button" data-position-question="What is the main plan in this position?">What is the plan?</button><button type="button" data-position-question="Why is the best move strongest here?">Why this best move?</button><button type="button" data-position-question="What should I watch out for in this position?">What should I watch for?</button></div>
+                <label class="coach-question-label">Ask your own question<input id="position-coach-question" maxlength="300" placeholder="What should I understand about this position?"></label>
+                <div class="coach-actions"><button id="ask-position-coach" class="button primary">Ask BOZO</button><button id="clear-position-coach" class="button secondary">Clear</button></div>
+              </section>
+            </aside>
+          </div>
+        </div>
       </div>
 
       <div id="review-results" hidden>
