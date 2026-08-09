@@ -5898,7 +5898,7 @@ function webPiece(symbol) {
   if (!id) return '';
 
   const color = id[0] === 'w' ? 'white' : 'black';
-  const source = `./assets/pieces/bozo-universal/${id}.svg?v=3.0.1`;
+  const source = `./assets/pieces/bozo-universal/${id}.png?v=3.0.3`;
 
   return `<img
     class="bozo-chess-piece bozo-chess-piece-${color}"

@@ -1,4 +1,3 @@
-BOZO Universal chess piece set.
-Single local Staunton-style SVG set used on every interactive board.
-White: warm ivory with dark outline. Black: graphite with subtle light edge.
-Files are self-contained SVG vectors; no remote fonts, scripts, or image URLs are required.
+BOZO Universal Pieces v3.0.3
+Exact transparent PNG assets extracted from the approved BOZO stone-piece concept render.
+All website chessboards load these same 12 files through webPiece() in app.js.

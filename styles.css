@@ -3152,7 +3152,7 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
 }
 
 
-/* v3.0.1 — UNIVERSAL BOZO BOARD + PIECE SYSTEM
+/* v3.0.2 — CRISP STONE UNIVERSAL PIECE SYSTEM
    One deterministic local Staunton set on every board.
    The board palette is intentionally lower-luminance to reduce eye strain. */
 :root {
@@ -3228,11 +3228,11 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
 }
 
 .bozo-chess-piece {
-  width: 91% !important;
-  height: 91% !important;
-  max-width: 91% !important;
-  max-height: 91% !important;
+  width: 94% !important;
+  height: 94% !important;
+  max-width: 94% !important;
+  max-height: 94% !important;
   object-fit: contain !important;
   object-position: center !important;
-  filter: drop-shadow(0 1.5px 1.5px rgba(0,0,0,.32)) !important;
+  filter: drop-shadow(0 1.25px 1px rgba(0,0,0,.38)) !important;
 }
