@@ -3299,3 +3299,83 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
   .bozo-mission-card{grid-template-columns:1fr;text-align:center}
   .bozo-mission-card img{margin:auto}
 }
+
+/* ============================================================
+   BOZO v3.2.2 — OPENING LIBRARY PUZZLE / RESPONSE NORMALIZATION
+   Prevent native white button backgrounds on Puzzle and opposite-color
+   response controls without changing Train's established appearance.
+   ============================================================ */
+.opening-family-card button,
+.family-lines button {
+  -webkit-appearance:none;
+  appearance:none;
+  font-family:inherit;
+}
+
+.opening-puzzle-button,
+.line-puzzle-button,
+.response-repertoire-button,
+.line-response-button {
+  border-style:solid !important;
+  border-width:1px !important;
+  box-shadow:none !important;
+  font-weight:900;
+  cursor:pointer;
+  transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease;
+}
+
+.opening-puzzle-button,
+.line-puzzle-button {
+  border-color:rgba(255,211,77,.45) !important;
+  background:rgba(255,211,77,.065) !important;
+  color:#ffd34d !important;
+}
+
+.response-repertoire-button,
+.line-response-button {
+  border-color:rgba(121,255,226,.28) !important;
+  background:rgba(121,255,226,.065) !important;
+  color:#79ffe2 !important;
+}
+
+.opening-puzzle-button:hover,
+.line-puzzle-button:hover {
+  border-color:rgba(255,211,77,.72) !important;
+  background:rgba(255,211,77,.13) !important;
+}
+
+.response-repertoire-button:hover,
+.line-response-button:hover {
+  border-color:rgba(121,255,226,.58) !important;
+  background:rgba(121,255,226,.12) !important;
+}
+
+.opening-puzzle-button:focus-visible,
+.line-puzzle-button:focus-visible,
+.response-repertoire-button:focus-visible,
+.line-response-button:focus-visible {
+  outline:2px solid #fff;
+  outline-offset:-3px;
+}
+
+.opening-puzzle-button:active,
+.line-puzzle-button:active,
+.response-repertoire-button:active,
+.line-response-button:active {
+  transform:translateY(1px);
+}
+
+/* Top-level single-line buttons share the same geometry as their neighbors. */
+.single-line-actions > button {
+  min-width:0;
+  min-height:48px;
+  padding:13px 14px;
+}
+
+/* Expanded variation actions use compact matching geometry. */
+.line-puzzle-button,
+.line-response-button {
+  padding:7px 10px;
+  border-radius:8px;
+  font-size:8px;
+}
