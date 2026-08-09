@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v3.5.3.css">
+  <link rel="stylesheet" href="./styles-v3.6.2.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -261,6 +261,7 @@
       <div class="train-mode-switch" role="tablist" aria-label="Training mode">
         <button id="train-mode-recall" class="active" type="button" role="tab" aria-selected="true">Recall Training</button>
         <button id="train-mode-puzzles" type="button" role="tab" aria-selected="false">Opening Puzzles</button>
+        <button id="train-mode-bozo-puzzles" type="button" role="tab" aria-selected="false">BOZO Puzzles</button>
       </div>
 
       <div id="train-recall-mode">
@@ -307,6 +308,15 @@
       </div>
 
       <div id="train-puzzle-mode" hidden>
+        <section id="bozo-puzzle-picker" class="panel train-picker puzzle-picker" hidden>
+          <div class="panel-heading"><div><span>BOZO PUZZLES</span><h2>Choose your path.</h2></div></div>
+          <p class="puzzle-picker-copy">These positions are generated independently of the opening library. BOZO uses Stockfish to judge the position, and more than one move can be a valid path when the chess supports it.</p>
+          <div class="bozo-puzzle-launch">
+            <div class="study-tip"><b>Not a one-answer puzzle.</b><br>Best, strong, and playable moves can all continue. Your choice determines the position BOZO gives you next.</div>
+            <button id="bozo-puzzle-start" class="button primary" type="button">Generate 5 BOZO puzzles</button>
+          </div>
+        </section>
+
         <section id="puzzle-picker" class="panel train-picker puzzle-picker">
           <div class="panel-heading"><div><span>OPENING PUZZLES</span><h2>Jump into the position.</h2></div></div>
           <p class="puzzle-picker-copy">BOZO picks a random position from a published opening and asks you to find the continuation. Choose a line, or let BOZO surprise you.</p>
@@ -1679,7 +1689,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v3.5.3.js"></script>
+  <script src="./app-v3.6.2.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
