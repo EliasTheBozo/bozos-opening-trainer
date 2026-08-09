@@ -229,6 +229,12 @@
         <button id="train-new-line" class="button secondary" type="button">Choose another line</button>
       </div>
 
+      <div class="train-mode-switch" role="tablist" aria-label="Training mode">
+        <button id="train-mode-recall" class="active" type="button" role="tab" aria-selected="true">Recall Training</button>
+        <button id="train-mode-puzzles" type="button" role="tab" aria-selected="false">Opening Puzzles</button>
+      </div>
+
+      <div id="train-recall-mode">
       <section id="train-picker" class="panel train-picker">
         <div class="panel-heading"><div><span>CHOOSE A LINE</span><h2>What do you want to train?</h2></div></div>
         <div class="train-picker-controls">
@@ -269,6 +275,48 @@
         <div class="stats-grid train-result-grid"><article><span>First-try accuracy</span><b id="train-result-accuracy">0%</b><small>Moves solved immediately</small></article><article><span>Mistakes</span><b id="train-result-mistakes">0</b><small>Incorrect attempts</small></article><article><span>Moves trained</span><b id="train-result-moves">0</b><small>Your repertoire moves</small></article></div>
         <div class="train-result-actions"><button id="train-again" class="button primary" type="button">Train again</button><button id="train-study-line" class="button secondary" type="button">Study this line</button></div>
       </section>
+      </div>
+
+      <div id="train-puzzle-mode" hidden>
+        <section id="puzzle-picker" class="panel train-picker puzzle-picker">
+          <div class="panel-heading"><div><span>OPENING PUZZLES</span><h2>Jump into the position.</h2></div></div>
+          <p class="puzzle-picker-copy">BOZO picks a random position from a published opening and asks you to find the continuation. Choose a line, or let BOZO surprise you.</p>
+          <div class="train-picker-controls">
+            <label>Search openings<input id="puzzle-opening-search" placeholder="Polish, Sicilian, Caro-Kann…"></label>
+            <div class="puzzle-picker-buttons"><button id="puzzle-search-button" class="button secondary" type="button">Search</button><button id="puzzle-random-button" class="button primary" type="button">Surprise me</button></div>
+          </div>
+          <div id="puzzle-opening-results" class="train-opening-results"><div class="empty-state"><div>🧩</div><b>Pick an opening or go random</b><span>Each session contains 5 automatically generated opening puzzles.</span></div></div>
+        </section>
+
+        <section id="puzzle-session" class="train-session" hidden>
+          <div class="train-session-topbar">
+            <div><span class="eyebrow">OPENING PUZZLE <b id="puzzle-number">1/5</b></span><h2 id="puzzle-title">Find the continuation.</h2><p id="puzzle-subtitle"></p></div>
+            <div class="train-live-stats"><span>Score <b id="puzzle-score">0</b></span><span>Streak <b id="puzzle-streak">0</b></span><span>First try <b id="puzzle-accuracy">0%</b></span></div>
+          </div>
+          <div class="train-layout">
+            <div>
+              <div class="study-board-shell train-board-shell puzzle-board-shell"><div id="puzzle-board" class="web-duel-board train-board"></div></div>
+              <div id="puzzle-feedback" class="train-feedback" data-state="neutral"><b>Your move.</b><span>Find the continuation from this opening position.</span></div>
+              <div class="train-actions"><button id="puzzle-hint" class="button secondary" type="button">Hint</button><button id="puzzle-answer" class="button secondary" type="button">Show answer</button><button id="puzzle-skip" class="button secondary" type="button">Skip puzzle</button></div>
+            </div>
+            <aside class="panel train-sidebar puzzle-sidebar">
+              <span class="eyebrow">POSITION</span>
+              <h3 id="puzzle-turn-label">White to move</h3>
+              <p id="puzzle-instruction">Find the best continuation from the repertoire.</p>
+              <div class="train-mini-track"><span id="puzzle-track-fill"></span></div>
+              <div class="puzzle-context"><span>Starting after</span><b id="puzzle-start-label">Move —</b></div>
+              <div id="puzzle-move-history" class="train-move-history"></div>
+              <div class="study-tip">The position can begin anywhere in the line. Correct moves keep the streak alive; BOZO plays the book replies.</div>
+            </aside>
+          </div>
+        </section>
+
+        <section id="puzzle-results" class="panel train-results puzzle-results" hidden>
+          <div class="eyebrow">PUZZLE SESSION COMPLETE</div><h2 id="puzzle-results-title">Nice run.</h2>
+          <div class="stats-grid train-result-grid"><article><span>Score</span><b id="puzzle-result-score">0</b><small>Points earned</small></article><article><span>First-try accuracy</span><b id="puzzle-result-accuracy">0%</b><small>Puzzle moves solved immediately</small></article><article><span>Best streak</span><b id="puzzle-result-streak">0</b><small>Correct moves in a row</small></article></div>
+          <div class="train-result-actions"><button id="puzzle-again" class="button primary" type="button">Run it again</button><button id="puzzle-new-line" class="button secondary" type="button">Choose another line</button></div>
+        </section>
+      </div>
     </section>
 
     <section id="view-dashboard" class="view">

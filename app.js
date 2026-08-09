@@ -1069,6 +1069,7 @@ function renderOpeningFamily(family) {
         <div class="single-line-actions four-actions">
           <button class="study-button" onclick="openStudyById('${preview.id}')">Study</button>
           <button class="train-opening-button" onclick="startTrainingOpening('${preview.id}')">Train</button>
+          <button class="opening-puzzle-button" onclick="startOpeningPuzzles('${preview.id}')">Puzzle</button>
           <button class="response-repertoire-button" onclick="openResponseRepertoire('${preview.id}')">${responseButtonLabel(preview)}</button>
           <button class="family-bot-button"
                   onclick="openBotForOpening('${escapeHtml(challengeName).replace(/'/g, "\\'")}')">
@@ -1123,6 +1124,7 @@ function renderOpeningFamily(family) {
                   <div class="line-action-row four-line-actions">
                     <button class="line-study-button" onclick="openStudyById('${line.id}')">Study</button>
                     <button class="line-train-button" onclick="startTrainingOpening('${line.id}')">Train</button>
+                    <button class="line-puzzle-button" onclick="startOpeningPuzzles('${line.id}')">Puzzle</button>
                     <button class="line-response-button" onclick="openResponseRepertoire('${line.id}')">Responses</button>
                     <button class="line-bot-button"
                             onclick="openBotForOpening('${escapeHtml(lineChallengeName).replace(/'/g, "\\'")}')">
@@ -6880,7 +6882,7 @@ $('public-beta-report').addEventListener('click', openBetaIssueReport);
 $('public-beta-modal-report').addEventListener('click', openBetaIssueReport);
 
 
-// WEB v2.8.0 — Recall Training Engine
+// WEB v2.9.0 — Recall Training Engine + Opening Puzzles
 let trainOpening = null;
 let trainGame = null;
 let trainMoves = [];
@@ -6908,7 +6910,7 @@ $('train-opening-search')?.addEventListener('input', e => {
   clearTimeout(trainSearchTimer);
   trainSearchTimer = setTimeout(() => { if (e.currentTarget.value.trim().length >= 2) searchTrainOpenings(e.currentTarget.value); }, 280);
 });
-$('train-new-line')?.addEventListener('click', () => { trainOpening = null; prepareTrainPage(); $('train-opening-search')?.focus(); });
+$('train-new-line')?.addEventListener('click', () => resetCurrentTrainMode());
 $('train-restart')?.addEventListener('click', () => beginTrainSession());
 $('train-again')?.addEventListener('click', () => beginTrainSession());
 $('train-study-line')?.addEventListener('click', () => { if (trainOpening) openStudyOpening(trainOpening.id, { repertoireSide: trainUserSide }); });
@@ -7074,4 +7076,333 @@ function finishTrainSession() {
     localStorage.setItem(trainingStorageKey(trainOpening.id), JSON.stringify({ attempts:(previous.attempts||0)+1, bestAccuracy:Math.max(previous.bestAccuracy||0, accuracy), lastAccuracy:accuracy, mistakes:trainStats.mistakes, trainedAt:new Date().toISOString() }));
   } catch {}
   logActivity?.('opening_trained', { opening_id: trainOpening.id, opening: trainOpening.name, variation: trainOpening.variation || 'Main Line', accuracy }).catch?.(()=>{});
+}
+
+
+// WEB v2.9.0 — Opening Puzzle Engine
+let trainMode = 'recall';
+let puzzleOpening = null;
+let puzzlePool = [];
+let puzzleGame = null;
+let puzzleMoves = [];
+let puzzleUserSide = 'white';
+let puzzleStartPly = 0;
+let puzzlePly = 0;
+let puzzleTargetUserMoves = 1;
+let puzzleSolvedInCurrent = 0;
+let puzzleSelectedSquare = null;
+let puzzleAttemptsForPly = 0;
+let puzzleHintUsed = false;
+let puzzleAnswerUsed = false;
+let puzzleSearchTimer = null;
+let puzzleUsedStarts = new Set();
+let puzzleCompleting = false;
+let puzzleStats = { index:0, total:5, score:0, streak:0, bestStreak:0, userMoves:0, firstTry:0, mistakes:0, skipped:0 };
+
+function puzzleStorageKey() { return 'bozo_opening_puzzles_v1'; }
+
+function setTrainMode(mode = 'recall') {
+  trainMode = mode === 'puzzles' ? 'puzzles' : 'recall';
+  const recall = trainMode === 'recall';
+  $('train-recall-mode').hidden = !recall;
+  $('train-puzzle-mode').hidden = recall;
+  $('train-mode-recall')?.classList.toggle('active', recall);
+  $('train-mode-puzzles')?.classList.toggle('active', !recall);
+  $('train-mode-recall')?.setAttribute('aria-selected', String(recall));
+  $('train-mode-puzzles')?.setAttribute('aria-selected', String(!recall));
+  if ($('train-new-line')) $('train-new-line').textContent = recall ? 'Choose another line' : 'New puzzle line';
+  if (!recall && !puzzleGame && !$('puzzle-results')?.hidden) return;
+  if (!recall && !puzzleGame) showPuzzlePicker();
+}
+
+function resetCurrentTrainMode() {
+  if (trainMode === 'puzzles') {
+    puzzleOpening = null;
+    puzzlePool = [];
+    puzzleGame = null;
+    showPuzzlePicker();
+    $('puzzle-opening-search')?.focus();
+    return;
+  }
+  trainOpening = null;
+  prepareTrainPage();
+  $('train-opening-search')?.focus();
+}
+
+$('train-mode-recall')?.addEventListener('click', () => setTrainMode('recall'));
+$('train-mode-puzzles')?.addEventListener('click', () => setTrainMode('puzzles'));
+$('puzzle-search-button')?.addEventListener('click', () => searchPuzzleOpenings($('puzzle-opening-search').value));
+$('puzzle-opening-search')?.addEventListener('keydown', e => { if (e.key === 'Enter') searchPuzzleOpenings(e.currentTarget.value); });
+$('puzzle-opening-search')?.addEventListener('input', e => {
+  clearTimeout(puzzleSearchTimer);
+  puzzleSearchTimer = setTimeout(() => { if (e.currentTarget.value.trim().length >= 2) searchPuzzleOpenings(e.currentTarget.value); }, 280);
+});
+$('puzzle-random-button')?.addEventListener('click', startRandomOpeningPuzzles);
+$('puzzle-hint')?.addEventListener('click', showPuzzleHint);
+$('puzzle-answer')?.addEventListener('click', showPuzzleAnswer);
+$('puzzle-skip')?.addEventListener('click', skipPuzzle);
+$('puzzle-again')?.addEventListener('click', () => puzzleOpening ? startOpeningPuzzles(puzzleOpening.id) : startRandomOpeningPuzzles());
+$('puzzle-new-line')?.addEventListener('click', () => { puzzleOpening = null; puzzlePool = []; puzzleGame = null; showPuzzlePicker(); });
+
+function showPuzzlePicker() {
+  if (!$('puzzle-picker')) return;
+  $('puzzle-picker').hidden = false;
+  $('puzzle-session').hidden = true;
+  $('puzzle-results').hidden = true;
+}
+
+async function searchPuzzleOpenings(query = '') {
+  const root = $('puzzle-opening-results');
+  if (!root) return;
+  const text = query.trim();
+  root.innerHTML = '<div class="empty-state"><div>⌛</div><b>Building puzzles…</b></div>';
+  let req = sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('status','published').limit(60);
+  if (text) req = req.or(`name.ilike.%${text}%,variation.ilike.%${text}%,eco.ilike.%${text}%`);
+  const { data, error } = await req.order('name');
+  if (error) { root.innerHTML = `<div class="empty-state"><div>⚠</div><b>Could not load openings</b><span>${escapeHtml(readableError(error))}</span></div>`; return; }
+  const rows = (data || []).filter(openingSupportsPuzzles);
+  if (!rows.length) { root.innerHTML = '<div class="empty-state"><div>🧩</div><b>No puzzle-ready lines</b><span>Try a broader opening name.</span></div>'; return; }
+  root.innerHTML = rows.slice(0,40).map(row => {
+    const side = inferOpeningSide(row);
+    return `<button class="train-opening-result puzzle-opening-result" type="button" data-puzzle-opening="${row.id}"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.variation || 'Main Line')} · ${escapeHtml(row.eco || 'ECO —')}</small></span><em>5 puzzles · ${side === 'neutral' ? 'White' : side}</em></button>`;
+  }).join('');
+  root.querySelectorAll('[data-puzzle-opening]').forEach(button => button.addEventListener('click', () => startOpeningPuzzles(button.dataset.puzzleOpening)));
+}
+
+function openingSupportsPuzzles(row) {
+  if (!row?.pgn) return false;
+  try {
+    const game = new Chess();
+    if (!game.load_pgn(row.pgn, { sloppy:true })) return false;
+    return game.history().length >= 3;
+  } catch { return false; }
+}
+
+async function fetchPuzzleOpening(openingId) {
+  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('id',openingId).maybeSingle();
+  if (error || !data) throw error || new Error('Opening not found');
+  return data;
+}
+
+async function startOpeningPuzzles(openingId) {
+  route('train');
+  setTrainMode('puzzles');
+  try {
+    puzzleOpening = await fetchPuzzleOpening(openingId);
+    puzzlePool = [puzzleOpening];
+    beginPuzzleSession();
+  } catch (error) { toast(readableError(error)); }
+}
+window.startOpeningPuzzles = startOpeningPuzzles;
+
+async function startRandomOpeningPuzzles() {
+  route('train');
+  setTrainMode('puzzles');
+  const root = $('puzzle-opening-results');
+  if (root) root.innerHTML = '<div class="empty-state"><div>🎲</div><b>BOZO is shuffling the library…</b><span>Finding five puzzle-ready positions.</span></div>';
+  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('status','published').limit(120);
+  if (error) { showPuzzlePicker(); return toast(readableError(error)); }
+  puzzleOpening = null;
+  puzzlePool = shuffleArray((data || []).filter(openingSupportsPuzzles)).slice(0,25);
+  if (!puzzlePool.length) { showPuzzlePicker(); return toast('No puzzle-ready opening lines were found.'); }
+  beginPuzzleSession();
+}
+
+function shuffleArray(items) {
+  const copy = [...items];
+  for (let i=copy.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [copy[i],copy[j]]=[copy[j],copy[i]]; }
+  return copy;
+}
+
+function beginPuzzleSession() {
+  puzzleStats = { index:0, total:5, score:0, streak:0, bestStreak:0, userMoves:0, firstTry:0, mistakes:0, skipped:0 };
+  puzzleUsedStarts = new Set();
+  $('puzzle-picker').hidden = true;
+  $('puzzle-results').hidden = true;
+  $('puzzle-session').hidden = false;
+  startNextPuzzle();
+}
+
+function choosePuzzleOpening() {
+  if (puzzleOpening) return puzzleOpening;
+  if (!puzzlePool.length) return null;
+  return puzzlePool[puzzleStats.index % puzzlePool.length] || puzzlePool[Math.floor(Math.random()*puzzlePool.length)];
+}
+
+function buildPuzzleForOpening(opening) {
+  const parser = new Chess();
+  if (!parser.load_pgn(opening.pgn, { sloppy:true })) return null;
+  const moves = parser.history();
+  const inferred = inferOpeningSide(opening);
+  const userSide = inferred === 'black' ? 'black' : 'white';
+  const parity = userSide === 'white' ? 0 : 1;
+  let candidates = moves.map((_,i)=>i).filter(i => i%2===parity && i < moves.length);
+  const midCandidates = candidates.filter(i => i >= 4);
+  if (midCandidates.length) candidates = midCandidates;
+  if (!candidates.length) return null;
+  const unused = candidates.filter(i => !puzzleUsedStarts.has(`${opening.id}:${i}`));
+  const pool = unused.length ? unused : candidates;
+  const startPly = pool[Math.floor(Math.random()*pool.length)];
+  puzzleUsedStarts.add(`${opening.id}:${startPly}`);
+  const remainingUserMoves = candidates.filter(i => i >= startPly).length;
+  const maxTarget = Math.max(1, Math.min(3, remainingUserMoves));
+  const targetUserMoves = 1 + Math.floor(Math.random()*maxTarget);
+  return { opening, moves, userSide, startPly, targetUserMoves };
+}
+
+function startNextPuzzle() {
+  puzzleCompleting = false;
+  if (puzzleStats.index >= puzzleStats.total) return finishPuzzleSession();
+  let spec = null;
+  for (let tries=0; tries<Math.max(4,puzzlePool.length); tries++) {
+    const opening = puzzleOpening || puzzlePool[(puzzleStats.index + tries) % puzzlePool.length];
+    spec = buildPuzzleForOpening(opening);
+    if (spec) break;
+  }
+  if (!spec) return finishPuzzleSession();
+  puzzleMoves = spec.moves;
+  puzzleUserSide = spec.userSide;
+  puzzleStartPly = spec.startPly;
+  puzzlePly = spec.startPly;
+  puzzleTargetUserMoves = spec.targetUserMoves;
+  puzzleSolvedInCurrent = 0;
+  puzzleSelectedSquare = null;
+  puzzleAttemptsForPly = 0;
+  puzzleHintUsed = false;
+  puzzleAnswerUsed = false;
+  puzzleGame = new Chess();
+  for (let i=0;i<puzzleStartPly;i++) puzzleGame.move(puzzleMoves[i], { sloppy:true });
+  puzzleCurrentOpening = spec.opening;
+  $('puzzle-title').textContent = 'Find the continuation.';
+  $('puzzle-subtitle').textContent = `${spec.opening.name}${spec.opening.variation ? ' · '+spec.opening.variation : ''} · ${spec.opening.eco || 'ECO —'}`;
+  $('puzzle-number').textContent = `${puzzleStats.index+1}/${puzzleStats.total}`;
+  $('puzzle-start-label').textContent = puzzleStartPly ? `move ${Math.floor(puzzleStartPly/2)+1}` : 'the opening position';
+  setPuzzleFeedback('neutral','Your move.', puzzleTargetUserMoves === 1 ? 'Find the next repertoire move.' : `Find the next ${puzzleTargetUserMoves} repertoire moves.`);
+  advancePuzzleOpponentMoves();
+  paintPuzzleBoard();
+  updatePuzzleUI();
+}
+let puzzleCurrentOpening = null;
+
+function puzzleSideToMove() { return puzzleGame?.turn() === 'b' ? 'black' : 'white'; }
+function isPuzzleUserTurn() { return puzzleSideToMove() === puzzleUserSide; }
+
+function advancePuzzleOpponentMoves() {
+  while (puzzlePly < puzzleMoves.length && !isPuzzleUserTurn()) {
+    const move = puzzleGame.move(puzzleMoves[puzzlePly], { sloppy:true });
+    if (!move) break;
+    puzzlePly++;
+  }
+  if (puzzlePly >= puzzleMoves.length && puzzleSolvedInCurrent < puzzleTargetUserMoves) completeCurrentPuzzle();
+}
+
+function paintPuzzleBoard() {
+  const boardEl = $('puzzle-board');
+  if (!boardEl || !puzzleGame) return;
+  const ranks = puzzleUserSide === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = puzzleUserSide === 'white' ? ['a','b','c','d','e','f','g','h'] : ['h','g','f','e','d','c','b','a'];
+  const html=[];
+  for (const rank of ranks) for (const file of files) {
+    const square=`${file}${rank}`; const piece=puzzleGame.get(square); const symbol=piece?`${piece.color}${piece.type.toUpperCase()}`:'';
+    html.push(`<button type="button" data-square="${square}" data-piece-color="${piece?.color==='w'?'white':piece?.color==='b'?'black':''}" class="${puzzleSelectedSquare===square?'selected':''}">${webPiece(symbol)}</button>`);
+  }
+  boardEl.innerHTML=html.join('');
+  boardEl.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>clickPuzzleSquare(button.dataset.square)));
+}
+
+function clickPuzzleSquare(square) {
+  if (!puzzleGame || puzzlePly >= puzzleMoves.length || !isPuzzleUserTurn()) return;
+  const myColor = puzzleUserSide === 'white' ? 'w' : 'b';
+  if (!puzzleSelectedSquare) {
+    const piece=puzzleGame.get(square); if (!piece || piece.color!==myColor) return;
+    puzzleSelectedSquare=square; paintPuzzleBoard(); return;
+  }
+  const from=puzzleSelectedSquare; puzzleSelectedSquare=null;
+  const move=puzzleGame.move({from,to:square,promotion:'q'});
+  if (!move) { paintPuzzleBoard(); return; }
+  const expectedSan=puzzleMoves[puzzlePly];
+  puzzleGame.undo();
+  puzzleAttemptsForPly++;
+  if (move.san !== expectedSan) {
+    puzzleStats.mistakes++; puzzleStats.streak=0;
+    setPuzzleFeedback('wrong','Not quite.', puzzleAttemptsForPly===1 ? 'Try the position again.' : 'Use a hint if you need one.');
+    paintPuzzleBoard(); updatePuzzleUI(); return;
+  }
+  puzzleGame.move(expectedSan,{sloppy:true});
+  puzzleStats.userMoves++;
+  const cleanFirstTry = puzzleAttemptsForPly===1 && !puzzleHintUsed && !puzzleAnswerUsed;
+  if (cleanFirstTry) { puzzleStats.firstTry++; puzzleStats.streak++; puzzleStats.score+=100; }
+  else if (!puzzleAnswerUsed) { puzzleStats.score += puzzleHintUsed ? 60 : 50; puzzleStats.streak=0; }
+  else { puzzleStats.streak=0; }
+  puzzleStats.bestStreak=Math.max(puzzleStats.bestStreak,puzzleStats.streak);
+  puzzleSolvedInCurrent++; puzzlePly++;
+  setPuzzleFeedback('correct', cleanFirstTry ? 'Correct! +100' : 'Correct!', expectedSan);
+  puzzleAttemptsForPly=0; puzzleHintUsed=false; puzzleAnswerUsed=false;
+  if (puzzleSolvedInCurrent >= puzzleTargetUserMoves || puzzlePly >= puzzleMoves.length) {
+    paintPuzzleBoard(); updatePuzzleUI();
+    puzzleCompleting = true;
+    setTimeout(() => completeCurrentPuzzle(false, true), 480);
+    return;
+  }
+  advancePuzzleOpponentMoves(); paintPuzzleBoard(); updatePuzzleUI();
+}
+
+function expectedPuzzleMove() {
+  if (!puzzleGame || puzzlePly >= puzzleMoves.length || !isPuzzleUserTurn()) return null;
+  const clone=new Chess(puzzleGame.fen());
+  return clone.move(puzzleMoves[puzzlePly],{sloppy:true});
+}
+
+function showPuzzleHint() {
+  const move=expectedPuzzleMove(); if (!move) return;
+  puzzleHintUsed=true; puzzleStats.streak=0;
+  const piece=puzzleGame.get(move.from); const names={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
+  setPuzzleFeedback('hint','Hint',`Look for a ${names[piece?.type]||'piece'} move from the ${move.from[0]}-file.`); updatePuzzleUI();
+}
+function showPuzzleAnswer() {
+  const move=expectedPuzzleMove(); if (!move) return;
+  puzzleAnswerUsed=true; puzzleStats.streak=0;
+  setPuzzleFeedback('answer','Answer',`${move.san} · ${move.from} → ${move.to}`); updatePuzzleUI();
+}
+function skipPuzzle() {
+  if (!puzzleGame || puzzleCompleting) return;
+  puzzleStats.skipped++; puzzleStats.streak=0;
+  completeCurrentPuzzle(true);
+}
+function setPuzzleFeedback(stateName,title,copy) {
+  const el=$('puzzle-feedback'); if (!el) return;
+  el.dataset.state=stateName; el.innerHTML=`<b>${escapeHtml(title)}</b><span>${escapeHtml(copy)}</span>`;
+  el.classList.remove('puzzle-pop'); void el.offsetWidth; el.classList.add('puzzle-pop');
+}
+function updatePuzzleUI() {
+  const accuracy=puzzleStats.userMoves ? Math.round(puzzleStats.firstTry/puzzleStats.userMoves*100) : 0;
+  $('puzzle-score').textContent=puzzleStats.score;
+  $('puzzle-streak').textContent=puzzleStats.streak;
+  $('puzzle-accuracy').textContent=`${accuracy}%`;
+  $('puzzle-turn-label').textContent=puzzleGame ? `${puzzleSideToMove()[0].toUpperCase()+puzzleSideToMove().slice(1)} to move` : 'Find the move';
+  $('puzzle-instruction').textContent=`${puzzleSolvedInCurrent}/${puzzleTargetUserMoves} continuation moves solved`;
+  $('puzzle-track-fill').style.width=`${puzzleTargetUserMoves ? Math.min(100,puzzleSolvedInCurrent/puzzleTargetUserMoves*100) : 0}%`;
+  const history=puzzleGame?.history().slice(puzzleStartPly) || [];
+  $('puzzle-move-history').innerHTML=history.length ? history.map((m,i)=>`<span>${escapeHtml(m)}</span>`).join('') : '<small>No continuation moves revealed yet.</small>';
+}
+function completeCurrentPuzzle(skipped=false, forced=false) {
+  if (!puzzleGame || (puzzleCompleting && !forced)) return;
+  puzzleCompleting=true;
+  puzzleGame=null;
+  puzzleStats.index++;
+  if (puzzleStats.index >= puzzleStats.total) return finishPuzzleSession();
+  setTimeout(startNextPuzzle, skipped ? 80 : 220);
+}
+function finishPuzzleSession() {
+  $('puzzle-session').hidden=true; $('puzzle-results').hidden=false;
+  const accuracy=puzzleStats.userMoves ? Math.round(puzzleStats.firstTry/puzzleStats.userMoves*100) : 0;
+  $('puzzle-result-score').textContent=puzzleStats.score;
+  $('puzzle-result-accuracy').textContent=`${accuracy}%`;
+  $('puzzle-result-streak').textContent=puzzleStats.bestStreak;
+  $('puzzle-results-title').textContent=accuracy===100?'Perfect puzzle run.':accuracy>=85?'Opening instincts are sharp.':accuracy>=65?'Strong run. Keep building.':'BOZO found some weak spots.';
+  try {
+    const previous=JSON.parse(localStorage.getItem(puzzleStorageKey())||'{}');
+    localStorage.setItem(puzzleStorageKey(),JSON.stringify({sessions:(previous.sessions||0)+1,bestScore:Math.max(previous.bestScore||0,puzzleStats.score),bestStreak:Math.max(previous.bestStreak||0,puzzleStats.bestStreak),lastAccuracy:accuracy,lastScore:puzzleStats.score,playedAt:new Date().toISOString()}));
+  } catch {}
+  logActivity?.('opening_puzzles_completed',{ opening_id:puzzleOpening?.id||null, opening:puzzleOpening?.name||'Random openings', score:puzzleStats.score, accuracy, best_streak:puzzleStats.bestStreak }).catch?.(()=>{});
 }
