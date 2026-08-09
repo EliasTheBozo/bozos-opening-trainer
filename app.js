@@ -1532,6 +1532,7 @@ const BOZO_CLOUD_OPENINGS = [
     variation:'Bozo Main Line',
     pgn:'1. Nf3 d5 2. b4 Nf6 3. Bb2 g6 4. h3 Bg7 5. g4 Qd6 6. a3 c5 7. g5 Nh5 8. Bxg7 Nxg7 9. bxc5 Qxc5 10. e3 O-O 11. d4 Qc7 12. Nbd2 Be6 13. h4 Nd7 14. Qb1 Bg4 15. Bd3 e5 16. Nxe5 Nxe5 17. dxe5 Qxe5 18. O-O Bh3 19. Re1 f6 20. f4 Qe6 21. Qd1 Bg4 22. Nf3 Qd6 23. gxf6 Qxf6 24. Be2 Rad8 25. Qd4 Qe7 26. Ng5 Bxe2 27. Rxe2 Nf5 28. Qd3 Nxh4 29. Rh2 Rf5 30. Kh1 h6 31. Rg1 hxg5 32. Rxh4 gxh4 33. Rxg6+ Kh7 34. Qxf5 Qe4+ 35. Qxe4 dxe4 36. Re6 Rd2 37. c4 Re2 38. Rxe4',
     source_type:'bozo',
+    repertoire_side:'white',
     notes:'A BOZO custom Réti system that develops into a Polish-Grob pawn expansion.',
     author_explanations: {
       "1": "This move develops our knight to control e5 allowing for b4 and bb2 hitting g7 without an easy central pawn expansion from black to block the diagonal which leads to black playing Nf6 where we then go for h3 g4.",
@@ -1617,6 +1618,7 @@ const BOZO_CLOUD_OPENINGS = [
     variation:'Main Line',
     pgn:'1. b4 Nf6 2. Bb2 g6 3. g4 Bg7 4. g5 Nh5 5. Bxg7 Nxg7 6. c4 O-O 7. Qb3',
     source_type:'bozo',
+    repertoire_side:'white',
     notes:'A BOZO custom variation combining the Polish setup with a Grob-style g-pawn expansion.'
   },
   {
@@ -1625,6 +1627,7 @@ const BOZO_CLOUD_OPENINGS = [
     variation:'h5 Counterstrike',
     pgn:'1. b4 Nf6 2. Bb2 g6 3. g4 Bg7 4. g5 Nh5 5. Bxg7 Nxg7 6. c4 h5 7. gxh6 Rxh6 8. Qb3',
     source_type:'bozo',
+    repertoire_side:'white',
     notes:'A BOZO custom branch where Black challenges the advanced g-pawn with ...h5.'
   }
 ];
@@ -2035,6 +2038,25 @@ function matchingBozoOpeningDefinition(opening) {
     item.name === opening.name &&
     (item.variation || 'Main Line') === (opening.variation || 'Main Line')
   ) || null;
+}
+
+function studyRepertoireSide() {
+  if (!studyOpening) return 'Neutral';
+  const definition = matchingBozoOpeningDefinition(studyOpening);
+  const raw = definition?.repertoire_side
+    || studyOpening?.metadata?.repertoire_side
+    || studyOpening?.metadata?.repertoireSide
+    || studyOpening?.metadata?.side
+    || '';
+  const normalized = String(raw).trim().toLowerCase();
+  if (normalized === 'white' || normalized === 'w') return 'White';
+  if (normalized === 'black' || normalized === 'b') return 'Black';
+  return 'Neutral';
+}
+
+function studyMoveSide(ply = studyPly) {
+  if (!ply) return 'Neutral';
+  return ply % 2 === 1 ? 'White' : 'Black';
 }
 
 function studyAuthorExplanation(ply = studyPly) {
@@ -2478,7 +2500,10 @@ async function askCurrentStudyMove() {
         mode: 'study',
         gameStatus: 'study',
         moveHistory: studyMoves.slice(0, studyPly),
+        authorExplanation: studyAuthorExplanation(studyPly),
         authoritativeOpeningNote: studyAuthorExplanation(studyPly),
+        repertoireSide: studyRepertoireSide(),
+        moveSide: studyMoveSide(studyPly),
         verifiedBoardFacts: coachFacts,
         strictGrounding: true
       }

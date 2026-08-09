@@ -52,6 +52,12 @@ Deno.serve(async (request) => {
     const playedMove = cleanText(body.playedMove, 20);
     const opening = cleanText(body.opening, 120);
     const variation = cleanText(body.variation, 120);
+    const authorExplanation = cleanText(
+      body.authorExplanation ?? body.authoritativeOpeningNote,
+      5000,
+    );
+    const repertoireSide = normalizePerspectiveSide(body.repertoireSide);
+    const providedMoveSide = normalizePerspectiveSide(body.moveSide);
     const question = cleanText(body.question, 300);
     const mode = cleanText(body.mode, 30);
     const gameStatus = cleanText(body.gameStatus, 30);
@@ -88,11 +94,6 @@ Deno.serve(async (request) => {
     const moveAccuracy = finiteOrNull(body.moveAccuracy);
     const openingAccuracy = finiteOrNull(body.openingAccuracy);
     const overallAccuracy = finiteOrNull(body.overallAccuracy);
-    const authoritativeOpeningNote = cleanText(body.authoritativeOpeningNote, 4000);
-    const verifiedBoardFacts =
-      body.verifiedBoardFacts && typeof body.verifiedBoardFacts === "object"
-        ? body.verifiedBoardFacts
-        : null;
 
     const moveHistory = Array.isArray(body.moveHistory)
       ? body.moveHistory.slice(0, 120).map((move: unknown) => cleanText(move, 20))
@@ -105,6 +106,27 @@ Deno.serve(async (request) => {
           .slice(0, 12)
           .map((move: unknown) => cleanText(move, 20))
       : [];
+
+    // Deterministic board grounding. The model should never have to reconstruct
+    // piece locations from memory or infer that a piece is still on an old square.
+    const currentBoard = parseFenBoard(fen);
+    const previousBoard = previousFen ? parseFenBoard(previousFen) : null;
+    const currentBoardText = boardToPromptText(currentBoard);
+    const previousBoardText = previousBoard
+      ? boardToPromptText(previousBoard)
+      : "Not supplied";
+    const moveFacts = previousBoard
+      ? deriveMoveFacts(previousBoard, currentBoard, playedMove)
+      : null;
+    const moveFactsText = moveFactsToPromptText(moveFacts);
+    const developmentStatusText = developmentStatusToPromptText(currentBoard);
+    const moveSide = providedMoveSide !== 'Neutral'
+      ? providedMoveSide
+      : moveFacts?.mover ?? 'Neutral';
+    const perspectiveContext = repertoirePerspectiveToPromptText(
+      repertoireSide,
+      moveSide,
+    );
 
     if (!fen || !playedMove) {
       return json(
@@ -171,89 +193,241 @@ Compare the two moves in terms of:
 No engine evaluation was supplied. Do not call the move best, inaccurate, or mistaken.
 `;
 
-    const groundedBoardContext = verifiedBoardFacts
-      ? `
-VERIFIED CURRENT BOARD FACTS:
-${JSON.stringify(verifiedBoardFacts, null, 2)}
-
-The verified board facts are authoritative for piece locations, captures, attacks, and the move that was played.
-Do not contradict them. Do not refer to a piece on an old square from move history.
-If a tactical claim is not supported by the verified facts, omit it.
-`
-      : `
-No separate verified board map was supplied. Be conservative with tactical claims and do not invent piece locations.
-`;
-
-    const openingKnowledgeContext = authoritativeOpeningNote
-      ? `
-AUTHORITATIVE HUMAN OPENING EXPLANATION:
-${authoritativeOpeningNote}
-
-This note was written specifically for this move in this exact BOZO repertoire.
-Treat the stated purpose and plan as the authoritative opening idea.
-Use the verified board to explain that idea clearly, but do not replace it with a generic guessed purpose.
-Do not contradict the author note unless it conflicts with the verified current board. If there is a conflict, prioritize the board facts and avoid the conflicting claim.
-`
-      : `
-No human-authored opening explanation was supplied. Explain only what can be supported by the current position and supplied engine/context facts.
-`;
-
-    const prompt = `
+const prompt = `
 You are BOZO Coach, a friendly chess teacher.
 
-Explain the supplied move using only the position, opening context, and engine facts provided.
-Never invent a piece, attack, threat, evaluation, or opening fact.
-Speak like a practical chess coach, not an evaluation report.
-Never begin with "Stockfish says," "the engine says," or a numerical score.
-Lead with the position's most important human idea.
-Use plain language for a developing chess player.
+Your job is to help the user UNDERSTAND the supplied move.
 
-When a human-authored opening explanation is supplied, start from that explanation.
-The human note determines WHY the theoretical move is played; the verified board determines WHAT is currently true.
-Do not downgrade a specific author idea into a generic statement like "develops a piece" when the note gives a more important purpose.
-If the note says a move prevents or prepares a specific plan, explain that plan using the board rather than substituting a different reason.
+There are two possible situations:
 
-When a better move is supplied, genuinely compare the two moves:
+1. An AUTHOR EXPLANATION is supplied.
+2. No AUTHOR EXPLANATION is supplied.
+
+AUTHOR EXPLANATION RULES — HIGHEST PRIORITY:
+
+If an AUTHOR EXPLANATION is supplied, it is the authoritative explanation
+for WHY this move is played in this repertoire.
+
+The author is the source of truth for the intended opening idea.
+
+Your job is NOT to discover a different reason for the move.
+Your job is NOT to replace the author's explanation with a more generic chess explanation.
+Your job is NOT to decide that another feature of the move is more important.
+
+When an AUTHOR EXPLANATION exists, you must:
+
+1. Make the author's stated idea the main point of the summary.
+2. Explain why that exact idea makes sense using the verified current board.
+3. Do NOT add a separate strategic purpose, threat, target, development claim, or plan unless it is directly necessary to explain the author's stated idea.
+4. Do NOT search the board for additional "interesting" features to mention.
+5. Prefer repeating the author's idea accurately over making the answer broader.
+6. Never contradict or replace the author's intended purpose unless it is physically impossible according to the verified board state.
+7. If the author's note is already clear and complete, a short paraphrase is better than an expanded explanation.
+
+Example:
+
+If the AUTHOR EXPLANATION says:
+"Develops the bishop and prevents us from immediately playing c4 to challenge Black's center."
+
+Then the explanation MUST focus on:
+- developing the bishop,
+- controlling or reinforcing the position in a way that makes c4 less effective,
+- and why preventing or discouraging c4 matters.
+
+Do NOT replace that explanation with unrelated observations such as:
+- attacking h3,
+- connecting rooks,
+- generic development,
+- king safety,
+- or some other feature of the position,
+
+unless those observations directly help explain the author's stated idea.
+
+Another example:
+
+If the AUTHOR EXPLANATION says:
+"Recaptures."
+
+Then do not invent a deep strategic lesson.
+Simply explain that the move recaptures and restores the material balance.
+
+If the AUTHOR EXPLANATION describes a tactical trick or planned sequence,
+preserve that idea and explain how it works on the verified board.
+
+If no AUTHOR EXPLANATION is supplied, explain the move normally using
+the verified board state, move facts, opening context, and engine facts provided.
+
+REPERTOIRE-PERSPECTIVE RULES — MANDATORY:
+
+${perspectiveContext}
+
+- The repertoire side is the side the student is learning to play.
+- The move side is the side that made the currently selected move.
+- In an AUTHOR EXPLANATION, the words "we", "us", and "our" always refer to the REPERTOIRE SIDE, not automatically to the side that made the current move.
+- If the current move was played by the opponent of the repertoire side, explain it as the opponent's response to our repertoire plan. Do not switch perspective and talk as though the student is now playing the opponent's side.
+- If the current move was played by the repertoire side, explain it as our move and our plan.
+- If the repertoire side is Neutral, avoid "we/us/our" and refer explicitly to White and Black.
+- Never infer repertoire perspective from whose move is currently selected.
+- Never infer repertoire perspective from board orientation; flipping the board is only a display choice.
+
+BOARD-GROUNDING RULES — MANDATORY:
+
+- The VERIFIED CURRENT BOARD is authoritative for every current piece location.
+- Do not reconstruct the board from memory of the opening or from earlier moves.
+- Never assume a pawn or piece is still on a square it occupied earlier.
+- Before mentioning a piece on a specific square, verify that the supplied current board actually contains that piece there.
+- If a tactical or positional claim cannot be verified from the supplied board and facts, omit it rather than guessing.
+- Empty squares may be discussed as targets, routes, or controlled squares, but never describe a piece as occupying an empty square.
+- The VERIFIED MOVE FACTS are authoritative for which piece moved, where it came from, where it went, and whether a capture or castle occurred.
+- When the move facts say "Not reliably inferred", do not invent the missing detail.
+- Never contradict the physical board position even if an author note contains an accidental square or piece-location mistake.
+- If the author's strategic idea is valid but one minor board detail is mistaken, preserve the strategic idea while silently correcting the board detail.
+
+RELEVANCE RULES — MANDATORY:
+
+- When an AUTHOR EXPLANATION exists, do not introduce any new main idea beyond what the author supplied.
+- Secondary observations are optional, not required. In author mode, omission is preferred to speculation.
+- Do not claim a side has completed minor-piece development unless VERIFIED DEVELOPMENT STATUS explicitly says all minor pieces are developed.
+- If VERIFIED DEVELOPMENT STATUS lists an undeveloped bishop or knight, never say or imply that minor-piece development is complete.
+- Do not equate a geometric attack with meaningful pressure, a threat, or a target.
+- Do not call a pawn or piece "pressured", "targeted", "attacked", "loose", or "vulnerable" unless that claim is central to the author explanation or there is a concrete tactical consequence supplied by engine data.
+- A defended piece may still be attacked geometrically, but do not present that geometry as strategically important unless the author explanation or engine evidence makes it important.
+- Do not mention squares, diagonals, files, attacks, or plans merely because they exist on the board.
+- Prefer a shorter accurate explanation over a longer explanation containing speculative or generic chess commentary.
+
+STYLE RULES:
+
+Speak like a practical chess coach talking to a developing player.
+
+Use straightforward language.
+
+Do not add unnecessary flourish.
+
+A forced recapture may simply be explained as a recapture.
+
+Do not manufacture strategic depth where none is needed.
+
+Never begin with:
+- "Stockfish says"
+- "the engine says"
+- "according to the engine"
+- or a numerical evaluation.
+
+When an AUTHOR EXPLANATION exists, the summary should sound like an expansion
+of the author's note rather than an independent analysis of the move.
+
+Keep the summary under 120 words.
+
+GAME REVIEW RULES:
+
+When a better move is supplied during game review:
 - explain what the played move was trying to accomplish,
 - explain what the better move accomplishes differently,
 - state whether the difference is tactical, positional, or mainly practical,
 - and give a concrete plan the player can remember.
 
-Use the surrounding moves to create a short game narrative.
-Distinguish between how the position developed before the move, what the move changed,
-and what the following moves demonstrated.
-Do not invent a clear plan when the preceding moves do not support one; say the position was flexible instead.
+When no better move or engine evaluation is supplied, do not call the move
+best, inaccurate, mistaken, or inferior.
 
-A practical plan must name useful actions such as improving a piece, contesting a file,
-preventing a break, trading a dangerous attacker, or preparing a pawn break.
-Do not merely say "develop," "improve the position," or "follow the engine line."
-Keep the summary under 120 words.
+Use surrounding moves only when they help explain the author's idea or the
+current decision.
+
+Do not invent a narrative merely because previous moves are available.
 
 Mode: ${mode || "study"}
 Opening: ${opening || "Unknown"}
 Variation: ${variation || "Main Line"}
+Repertoire side: ${repertoireSide}
+Side that played the selected move: ${moveSide}
 Move number: ${moveNumber ?? "Unknown"}
 Move played: ${playedMove}
-Position before the move: ${previousFen || "Not supplied"}
-Position after the move: ${fen}
-Move history: ${moveHistory.join(" ")}
-Question: ${question || "What is the purpose of this move?"}
 
-${groundedBoardContext}
+AUTHOR EXPLANATION:
+${authorExplanation || "Not supplied"}
 
-${openingKnowledgeContext}
+Position before the move (FEN):
+${previousFen || "Not supplied"}
+
+Position after the move (FEN):
+${fen}
+
+VERIFIED MOVE FACTS:
+${moveFactsText}
+
+VERIFIED PREVIOUS BOARD:
+${previousBoardText}
+
+VERIFIED CURRENT BOARD:
+${currentBoardText}
+
+VERIFIED DEVELOPMENT STATUS:
+${developmentStatusText}
+
+Move history:
+${moveHistory.join(" ")}
+
+User question:
+${question || "What is the purpose of this move?"}
 
 ${engineContext}
+
+OUTPUT GUIDANCE:
+
+For "summary":
+- If an author explanation exists, paraphrase that explanation and nothing else unless one extra sentence is strictly needed to make the author's idea understandable.
+- Do not add unrelated development, attack, pressure, target, king-safety, rook-activity, or future-plan commentary.
+- If the author's explanation is already sufficient, keep the summary close to it.
+
+For "howWeGotHere":
+- In author mode, use an empty string unless prior moves are necessary to understand the author's explanation.
+
+For "whatChanged":
+- In author mode, describe only the board change directly relevant to the author's explanation. Otherwise use an empty string.
+
+For "planContinuity":
+- In author mode, only connect the move to a plan explicitly present in the author explanation. Otherwise use an empty string.
+
+For "comparison":
+- Use an empty string unless a real comparison is supplied by game-review evidence.
+
+For "playedMoveIdea":
+- In author mode, restate the author's explanation faithfully.
+
+For "betterMoveIdea":
+- Use an empty string unless a better move is actually supplied.
+
+For "practicalPlan":
+- In author mode, return an empty array unless the author explanation itself contains a clear next-step plan.
+- Never invent two or three plans just because the field exists.
+
+For "purpose":
+- In author mode, every purpose item must be directly supported by the AUTHOR EXPLANATION.
+- Do not add secondary purposes simply because they are true.
+- One purpose item is perfectly acceptable.
+- Never say development is complete unless VERIFIED DEVELOPMENT STATUS explicitly confirms it.
+
+For "watchFor":
+- In author mode, use an empty string unless the author explanation itself contains a warning or a directly related practical consequence.
+- Do not invent a threat just to fill this field.
+
+For "suggestedQuestion":
+- Prefer a question that asks about the author's stated idea.
+- It may be an empty string if no useful question is needed.
+
+For arrows and highlights:
+- In author mode, only annotate the played move and squares explicitly relevant to the AUTHOR EXPLANATION.
+- Do not draw arrows for unrelated geometric attacks.
+- It is acceptable to return no arrows or highlights.
 
 Return only valid JSON matching:
 {
   "summary": "direct human explanation without mentioning an engine",
-  "howWeGotHere": "short account of the plan and pressure created by the preceding moves",
-  "whatChanged": "what the selected move changed and what the following moves revealed",
-  "planContinuity": "whether the move continued, changed, or abandoned the earlier plan",
-  "comparison": "the most important practical difference between the played move and better move",
-  "playedMoveIdea": "what the played move was trying to do and its drawback",
-  "betterMoveIdea": "what the better move accomplishes and why it is easier or stronger",
+  "howWeGotHere": "short account of relevant preceding ideas, or an empty string if unnecessary",
+  "whatChanged": "what the selected move changed",
+  "planContinuity": "how this move fits the repertoire plan",
+  "comparison": "important practical comparison when relevant, otherwise an empty string",
+  "playedMoveIdea": "what the played move is trying to accomplish",
+  "betterMoveIdea": "what the better move accomplishes when supplied, otherwise an empty string",
   "practicalPlan": ["two or three concrete next-step actions"],
   "purpose": ["up to three short position-specific ideas"],
   "watchFor": "one practical warning or an empty string",
@@ -276,7 +450,12 @@ Return only valid JSON matching:
 }
 
 Use at most three arrows and three highlights.
-Green may show the played move, blue the better continuation, red a danger, and yellow or purple a strategic idea.
+
+Green may show the played move.
+Blue may show a continuation.
+Red may show a danger.
+Yellow or purple may show a strategic idea.
+
 Only include annotations that directly support the explanation.
 `;
 
@@ -307,7 +486,7 @@ Only include annotations that directly support the explanation.
                 betterMoveIdea: { type: "string" },
                 practicalPlan: {
                   type: "array",
-                  minItems: 2,
+                  minItems: 0,
                   maxItems: 3,
                   items: { type: "string" },
                 },
@@ -426,6 +605,222 @@ Only include annotations that directly support the explanation.
     );
   }
 });
+
+type BoardPiece = {
+  color: "White" | "Black";
+  type: "King" | "Queen" | "Rook" | "Bishop" | "Knight" | "Pawn";
+  symbol: string;
+};
+
+type ParsedBoard = {
+  sideToMove: "White" | "Black";
+  pieces: Map<string, BoardPiece>;
+};
+
+type MoveFacts = {
+  mover: "White" | "Black";
+  piece: string;
+  from: string;
+  to: string;
+  capture: string;
+  castle: string;
+};
+
+function parseFenBoard(fen: string): ParsedBoard {
+  const [placement, activeColor] = fen.trim().split(/\s+/);
+  const pieces = new Map<string, BoardPiece>();
+  const ranks = placement?.split("/") ?? [];
+  const pieceNames: Record<string, BoardPiece["type"]> = {
+    k: "King",
+    q: "Queen",
+    r: "Rook",
+    b: "Bishop",
+    n: "Knight",
+    p: "Pawn",
+  };
+
+  for (let rankIndex = 0; rankIndex < 8; rankIndex++) {
+    const rankText = ranks[rankIndex] ?? "";
+    let fileIndex = 0;
+    for (const token of rankText) {
+      if (/^[1-8]$/.test(token)) {
+        fileIndex += Number(token);
+        continue;
+      }
+      if (fileIndex > 7) break;
+      const lower = token.toLowerCase();
+      const type = pieceNames[lower];
+      if (!type) continue;
+      const square = `${String.fromCharCode(97 + fileIndex)}${8 - rankIndex}`;
+      pieces.set(square, {
+        color: token === token.toUpperCase() ? "White" : "Black",
+        type,
+        symbol: token,
+      });
+      fileIndex += 1;
+    }
+  }
+
+  return {
+    sideToMove: activeColor === "b" ? "Black" : "White",
+    pieces,
+  };
+}
+
+function boardToPromptText(board: ParsedBoard): string {
+  const order = ["King", "Queen", "Rook", "Bishop", "Knight", "Pawn"];
+  const sideLines = (color: "White" | "Black") => {
+    const entries = [...board.pieces.entries()]
+      .filter(([, piece]) => piece.color === color)
+      .sort((a, b) => {
+        const typeDelta = order.indexOf(a[1].type) - order.indexOf(b[1].type);
+        return typeDelta || a[0].localeCompare(b[0]);
+      })
+      .map(([square, piece]) => `${piece.type} ${square}`);
+    return `${color}: ${entries.join(", ") || "none"}`;
+  };
+
+  return `${sideLines("White")}\n${sideLines("Black")}\nSide to move: ${board.sideToMove}`;
+}
+
+function deriveMoveFacts(
+  before: ParsedBoard,
+  after: ParsedBoard,
+  san: string,
+): MoveFacts {
+  const mover = before.sideToMove;
+  const opponent = mover === "White" ? "Black" : "White";
+
+  const removedOwn = [...before.pieces.entries()].filter(([square, piece]) => {
+    if (piece.color !== mover) return false;
+    const now = after.pieces.get(square);
+    return !now || now.color !== mover || now.type !== piece.type;
+  });
+  const addedOwn = [...after.pieces.entries()].filter(([square, piece]) => {
+    if (piece.color !== mover) return false;
+    const old = before.pieces.get(square);
+    return !old || old.color !== mover || old.type !== piece.type;
+  });
+  const removedOpponent = [...before.pieces.entries()].filter(([square, piece]) => {
+    if (piece.color !== opponent) return false;
+    const now = after.pieces.get(square);
+    return !now || now.color !== opponent || now.type !== piece.type;
+  });
+
+  const castle = /^O-O(-O)?[+#]?$/.test(san)
+    ? san.startsWith("O-O-O")
+      ? "Queenside castling"
+      : "Kingside castling"
+    : "No";
+
+  if (castle !== "No") {
+    const kingFrom = removedOwn.find(([, p]) => p.type === "King")?.[0] ?? "Not reliably inferred";
+    const kingTo = addedOwn.find(([, p]) => p.type === "King")?.[0] ?? "Not reliably inferred";
+    return {
+      mover,
+      piece: "King (castling move; rook also moved)",
+      from: kingFrom,
+      to: kingTo,
+      capture: "No",
+      castle,
+    };
+  }
+
+  // For ordinary moves there should normally be exactly one vacated own square
+  // and one newly occupied own square. Promotions can change the piece type, but
+  // the origin/destination are still reliably visible from the board diff.
+  const fromEntry = removedOwn.length === 1 ? removedOwn[0] : null;
+  const toEntry = addedOwn.length === 1 ? addedOwn[0] : null;
+
+  return {
+    mover,
+    piece: fromEntry?.[1].type ?? toEntry?.[1].type ?? "Not reliably inferred",
+    from: fromEntry?.[0] ?? "Not reliably inferred",
+    to: toEntry?.[0] ?? "Not reliably inferred",
+    capture: removedOpponent.length
+      ? removedOpponent.map(([square, p]) => `${p.color} ${p.type} on ${square}`).join(", ")
+      : "No",
+    castle,
+  };
+}
+
+function moveFactsToPromptText(facts: MoveFacts | null): string {
+  if (!facts) return "Not supplied";
+  return [
+    `Side that moved: ${facts.mover}`,
+    `Piece moved: ${facts.piece}`,
+    `From: ${facts.from}`,
+    `To: ${facts.to}`,
+    `Capture: ${facts.capture}`,
+    `Castle: ${facts.castle}`,
+  ].join("\n");
+}
+
+type PerspectiveSide = "White" | "Black" | "Neutral";
+
+function normalizePerspectiveSide(value: unknown): PerspectiveSide {
+  const normalized = cleanText(value, 20).toLowerCase();
+  if (normalized === "white" || normalized === "w") return "White";
+  if (normalized === "black" || normalized === "b") return "Black";
+  return "Neutral";
+}
+
+function repertoirePerspectiveToPromptText(
+  repertoireSide: PerspectiveSide,
+  moveSide: PerspectiveSide,
+): string {
+  if (repertoireSide === "Neutral") {
+    return `REPERTOIRE SIDE: Neutral\nCURRENT MOVE SIDE: ${moveSide}\nThis is not a side-specific repertoire. Explain the move neutrally using White and Black.`;
+  }
+
+  const opponent = repertoireSide === "White" ? "Black" : "White";
+  const relationship = moveSide === repertoireSide
+    ? "The selected move belongs to the repertoire side. Explain it as OUR move and OUR intended plan."
+    : moveSide === opponent
+      ? "The selected move belongs to the opponent. Explain what the opponent is trying to do AGAINST OUR repertoire and how it affects OUR plan."
+      : "The selected move side was not supplied reliably. Preserve the repertoire perspective and avoid assuming who made the move.";
+
+  return [
+    `REPERTOIRE SIDE: ${repertoireSide}`,
+    `OPPONENT SIDE: ${opponent}`,
+    `CURRENT MOVE SIDE: ${moveSide}`,
+    `In author notes, we/us/our = ${repertoireSide}.`,
+    relationship,
+  ].join("\n");
+}
+
+function developmentStatusToPromptText(board: ParsedBoard): string {
+  const startingMinorSquares: Array<{
+    color: "White" | "Black";
+    square: string;
+    type: "Bishop" | "Knight";
+  }> = [
+    { color: "White", square: "b1", type: "Knight" },
+    { color: "White", square: "g1", type: "Knight" },
+    { color: "White", square: "c1", type: "Bishop" },
+    { color: "White", square: "f1", type: "Bishop" },
+    { color: "Black", square: "b8", type: "Knight" },
+    { color: "Black", square: "g8", type: "Knight" },
+    { color: "Black", square: "c8", type: "Bishop" },
+    { color: "Black", square: "f8", type: "Bishop" },
+  ];
+
+  const lines = (color: "White" | "Black") => {
+    const undeveloped = startingMinorSquares
+      .filter((entry) => entry.color === color)
+      .filter((entry) => {
+        const piece = board.pieces.get(entry.square);
+        return piece?.color === color && piece?.type === entry.type;
+      })
+      .map((entry) => `${entry.type} ${entry.square}`);
+
+    return undeveloped.length
+      ? `${color} undeveloped minor pieces still on starting squares: ${undeveloped.join(", ")}`
+      : `${color} minor pieces have all left their starting squares.`;
+  };
+
+  return `${lines("White")}\n${lines("Black")}`;
+}
 
 function cleanText(value: unknown, maximumLength: number): string {
   return typeof value === "string"
