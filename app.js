@@ -747,28 +747,121 @@ $('announcement-dismiss')?.addEventListener('click', () => {
   if (card) card.hidden = true;
 });
 
+const OPENING_DISCOVERY_TAGS = new Set(['white','black','positional','tactical','aggressive','gambit','system']);
+const openingBrowserFilters = new Set();
+let openingLibraryRows = [];
+
 $('opening-search-button').addEventListener('click', () => searchOpenings($('opening-search-input').value));
 $('opening-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') searchOpenings(e.target.value); });
+$('opening-search-input').addEventListener('input', () => {
+  if (!$('opening-search-input').value.trim() && openingLibraryRows.length) renderOpeningBrowserRows(openingLibraryRows, '');
+});
 
-async function searchOpenings(query) {
+document.querySelectorAll('[data-opening-filter]').forEach(button => {
+  button.addEventListener('click', () => {
+    const tag = button.dataset.openingFilter;
+    if (openingBrowserFilters.has(tag)) openingBrowserFilters.delete(tag);
+    else openingBrowserFilters.add(tag);
+    syncOpeningFilterChips();
+    searchOpenings($('opening-search-input').value);
+  });
+});
+
+$('opening-filter-clear')?.addEventListener('click', () => {
+  openingBrowserFilters.clear();
+  $('opening-search-input').value = '';
+  syncOpeningFilterChips();
+  searchOpenings('');
+});
+
+function syncOpeningFilterChips() {
+  document.querySelectorAll('[data-opening-filter]').forEach(button => {
+    button.classList.toggle('active', openingBrowserFilters.has(button.dataset.openingFilter));
+  });
+}
+
+function parseOpeningDiscoveryQuery(query = '') {
+  const words = String(query).trim().split(/\s+/).filter(Boolean);
+  const textWords = [];
+  const tags = new Set(openingBrowserFilters);
+  words.forEach(word => {
+    const normalized = word.toLowerCase().replace(/[^a-z-]/g, '');
+    if (OPENING_DISCOVERY_TAGS.has(normalized)) tags.add(normalized);
+    else textWords.push(word);
+  });
+  return { text: textWords.join(' ').trim(), tags };
+}
+
+function openingMoveSans(pgn = '') {
+  return String(pgn)
+    .replace(/\{[^}]*\}/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\d+\.(?:\.\.)?/g, ' ')
+    .replace(/1-0|0-1|1\/2-1\/2|\*/g, ' ')
+    .trim().split(/\s+/).filter(Boolean);
+}
+
+function explicitOpeningSide(opening = {}) {
+  const definition = typeof matchingBozoOpeningDefinition === 'function' ? matchingBozoOpeningDefinition(opening) : null;
+  const raw = definition?.repertoire_side
+    || opening?.metadata?.repertoire_side
+    || opening?.metadata?.repertoireSide
+    || opening?.metadata?.side
+    || '';
+  const normalized = String(raw).trim().toLowerCase();
+  if (normalized === 'white' || normalized === 'w') return 'white';
+  if (normalized === 'black' || normalized === 'b') return 'black';
+  return '';
+}
+
+function inferOpeningSide(opening = {}) {
+  const explicit = explicitOpeningSide(opening);
+  if (explicit) return explicit;
+  const text = `${opening.name || ''} ${opening.variation || ''}`.toLowerCase();
+  if (/defen[sc]e|countergambit|sicilian|caro-kann|french|scandinavian|pirc|alekhine|petrov|philidor|gr[uü]nfeld|benoni|dutch/.test(text)) return 'black';
+  if (/opening|attack|system|gambit|game|london|catalan|english|bird|polish|r[ée]ti|vienna|italian|spanish/.test(text)) return 'white';
+  return 'neutral';
+}
+
+function openingDiscoveryTags(opening = {}) {
+  const tags = new Set();
+  const side = inferOpeningSide(opening);
+  if (side !== 'neutral') tags.add(side);
+  const text = `${opening.name || ''} ${opening.variation || ''} ${opening.notes || ''}`.toLowerCase();
+
+  if (/gambit|countergambit/.test(text)) tags.add('gambit');
+  if (/attack|gambit|countergambit|gro[b]?|wing|dragon|najdorf|fried liver|smith-morra|evans|marshall|four pawns/.test(text)) tags.add('aggressive');
+  if (/gambit|countergambit|trap|sacrifice|sharp|attack|fried liver|smith-morra|evans|marshall/.test(text)) tags.add('tactical');
+  if (/system|closed|declined|slav|caro-kann|london|catalan|queen'?s indian|nimzo|r[ée]ti|english|stonewall|colle|hedgehog|petrov/.test(text)) tags.add('positional');
+  if (/system|london|colle|stonewall|hippopotamus/.test(text)) tags.add('system');
+  if (!tags.has('tactical') && !tags.has('aggressive')) tags.add('positional');
+  return tags;
+}
+
+function openingMatchesDiscovery(opening, tags) {
+  if (!tags?.size) return true;
+  const openingTags = openingDiscoveryTags(opening);
+  return [...tags].every(tag => openingTags.has(tag));
+}
+
+function renderOpeningBrowserRows(rows, query = '') {
   const target = $('opening-results');
-  target.innerHTML = '<div class="empty-state"><div>⌛</div><b>Searching theory…</b></div>';
+  const parsed = parseOpeningDiscoveryQuery(query);
+  const filtered = rows.filter(opening => openingMatchesDiscovery(opening, parsed.tags));
+  const summary = $('opening-filter-summary');
+  if (summary) {
+    const active = [...parsed.tags];
+    summary.textContent = active.length
+      ? `${filtered.length.toLocaleString()} matching lines · ${active.map(tag => tag[0].toUpperCase() + tag.slice(1)).join(' + ')}`
+      : `${filtered.length.toLocaleString()} published lines available.`;
+  }
 
-  let req = sb.from('openings').select('id,eco,name,variation,pgn,source_type').eq('status','published').limit(10000);
-  if (query.trim()) req = req.or(`name.ilike.%${query.trim()}%,variation.ilike.%${query.trim()}%,eco.ilike.%${query.trim()}%`);
-  const { data, error } = await req.order('name');
-
-  if (error) {
-    target.innerHTML = `<div class="empty-state"><div>⚠</div><b>Could not load the cloud library</b><span>${escapeHtml(readableError(error))}</span></div>`;
+  if (!filtered.length) {
+    target.innerHTML = `<div class="empty-state"><div>♟</div><b>No openings match those filters</b><span>Try removing a style, switching sides, or searching a broader name.</span></div>`;
     return;
   }
 
-  if (!data?.length) {
-    target.innerHTML = `<div class="empty-state"><div>📚</div><b>No published cloud openings found</b><span>The Android opening library is currently bundled locally. The next backend step is importing those 3,800+ lines into the public.openings table.</span></div>`;
-    return;
-  }
-
-  const families = groupOpeningFamilies(data);
+  const families = groupOpeningFamilies(filtered);
   target.innerHTML = families.map(renderOpeningFamily).join('');
   window.BozoMastery?.refreshAll?.();
 
@@ -784,6 +877,29 @@ async function searchOpenings(query) {
       button.querySelector('.family-chevron').textContent = expanded ? '⌄' : '⌃';
     });
   });
+}
+
+async function searchOpenings(query) {
+  const target = $('opening-results');
+  target.innerHTML = '<div class="empty-state"><div>⌛</div><b>Searching theory…</b></div>';
+  const parsed = parseOpeningDiscoveryQuery(query);
+
+  let req = sb.from('openings').select('id,eco,name,variation,pgn,source_type,notes,metadata').eq('status','published').limit(10000);
+  if (parsed.text) req = req.or(`name.ilike.%${parsed.text}%,variation.ilike.%${parsed.text}%,eco.ilike.%${parsed.text}%`);
+  const { data, error } = await req.order('name');
+
+  if (error) {
+    target.innerHTML = `<div class="empty-state"><div>⚠</div><b>Could not load the cloud library</b><span>${escapeHtml(readableError(error))}</span></div>`;
+    return;
+  }
+
+  if (!data?.length) {
+    target.innerHTML = `<div class="empty-state"><div>📚</div><b>No published cloud openings found</b><span>Try another opening name or clear the filters.</span></div>`;
+    return;
+  }
+
+  openingLibraryRows = data;
+  renderOpeningBrowserRows(data, query);
 }
 
 function familyBaseName(name = '') {
@@ -898,6 +1014,18 @@ function openStudyById(openingId) {
   openStudyOpening(openingId);
 }
 
+function openingTagMarkup(opening) {
+  const tags = [...openingDiscoveryTags(opening)].filter(tag => ['white','black','positional','tactical','aggressive','gambit','system'].includes(tag));
+  return tags.slice(0, 4).map(tag => `<span class="opening-style-tag ${tag}">${escapeHtml(tag)}</span>`).join('');
+}
+
+function responseButtonLabel(opening) {
+  const side = inferOpeningSide(opening);
+  if (side === 'white') return 'Common Black responses';
+  if (side === 'black') return 'Common White responses';
+  return 'Common responses';
+}
+
 function renderOpeningFamily(family) {
   const lineCount = family.lines.length;
   const single = lineCount === 1;
@@ -917,6 +1045,7 @@ function renderOpeningFamily(family) {
             · ${single ? 'OPENING LINE' : 'OPENING FAMILY'}
           </span>
           <h3>${escapeHtml(family.name)}</h3>
+          <div class="opening-style-tags">${openingTagMarkup(preview)}</div>
           <p>
             ${single ? '1 published line' : `${lineCount.toLocaleString()} variations`}
             ${officialCount ? ` · ${officialCount} official` : ''}
@@ -936,8 +1065,9 @@ function renderOpeningFamily(family) {
       </div>
 
       ${single ? `
-        <div class="single-line-actions three-actions">
+        <div class="single-line-actions four-actions">
           <button class="study-button" onclick="openStudyById('${preview.id}')">Study</button>
+          <button class="response-repertoire-button" onclick="openResponseRepertoire('${preview.id}')">${responseButtonLabel(preview)}</button>
           <button class="family-bot-button"
                   onclick="openBotForOpening('${escapeHtml(challengeName).replace(/'/g, "\\'")}')">
             Play bot
@@ -949,8 +1079,9 @@ function renderOpeningFamily(family) {
         </div>
         ${communityOpeningActions(preview)}
       ` : `
-        <div class="family-action-row four-actions">
+        <div class="family-action-row five-actions">
           <button class="study-button" onclick="openStudyById('${preview.id}')">Study preview</button>
+          <button class="response-repertoire-button" onclick="openResponseRepertoire('${preview.id}')">${responseButtonLabel(preview)}</button>
           <button class="family-bot-button"
                   onclick="openBotForOpening('${escapeHtml(family.name).replace(/'/g, "\\'")}')">
             Play bot
@@ -987,8 +1118,9 @@ function renderOpeningFamily(family) {
                   </div>
                   <code>${escapeHtml(line.pgn || '')}</code>
                   ${line.notes ? `<p>${escapeHtml(line.notes)}</p>` : ''}
-                  <div class="line-action-row three-line-actions">
+                  <div class="line-action-row four-line-actions">
                     <button class="line-study-button" onclick="openStudyById('${line.id}')">Study</button>
+                    <button class="line-response-button" onclick="openResponseRepertoire('${line.id}')">Responses</button>
                     <button class="line-bot-button"
                             onclick="openBotForOpening('${escapeHtml(lineChallengeName).replace(/'/g, "\\'")}')">
                       Bot
@@ -1007,6 +1139,124 @@ function renderOpeningFamily(family) {
       `}
     </article>
   `;
+}
+
+
+function oppositeRepertoireSide(side = '') {
+  return String(side).toLowerCase() === 'black' ? 'White' : 'Black';
+}
+
+function sameMovePrefix(a, b, count) {
+  if (a.length < count || b.length < count) return false;
+  for (let i = 0; i < count; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+async function openResponseRepertoire(openingId) {
+  const modal = $('response-repertoire-modal');
+  const root = $('response-repertoire-root');
+  const title = $('response-repertoire-title');
+  const copy = $('response-repertoire-copy');
+  if (!modal || !root) return;
+
+  modal.hidden = false;
+  root.innerHTML = '<div class="response-loading">Finding common replies…</div>';
+
+  let selected = openingLibraryRows.find(row => String(row.id) === String(openingId));
+  if (!selected) {
+    const { data, error } = await sb.from('openings')
+      .select('id,eco,name,variation,pgn,source_type,notes,metadata')
+      .eq('id', openingId).maybeSingle();
+    if (error || !data) {
+      root.innerHTML = `<div class="response-empty">Could not load this opening.<br>${escapeHtml(readableError(error || new Error('Opening not found')))}</div>`;
+      return;
+    }
+    selected = data;
+  }
+
+  const ownerSide = inferOpeningSide(selected);
+  const effectiveOwnerSide = ownerSide === 'neutral' ? 'white' : ownerSide;
+  const trainingSide = oppositeRepertoireSide(effectiveOwnerSide);
+  const selectedMoves = openingMoveSans(selected.pgn);
+  const prefixCount = effectiveOwnerSide === 'black' ? 2 : 1;
+  const responseIndex = prefixCount;
+  const prefix = selectedMoves.slice(0, prefixCount);
+
+  title.textContent = `Common responses to ${selected.name}`;
+  copy.textContent = `Train as ${trainingSide} against this ${effectiveOwnerSide === 'white' ? 'White' : 'Black'} repertoire. Starting from ${prefix.join(' ') || 'the opening position'}.`;
+
+  const { data: candidates, error } = await sb.from('openings')
+    .select('id,eco,name,variation,pgn,source_type,notes,metadata')
+    .eq('status','published')
+    .limit(10000);
+  if (error) {
+    root.innerHTML = `<div class="response-empty">Could not load common replies.<br>${escapeHtml(readableError(error))}</div>`;
+    return;
+  }
+
+  const groups = new Map();
+  for (const candidate of candidates || []) {
+    const moves = openingMoveSans(candidate.pgn);
+    if (!sameMovePrefix(selectedMoves, moves, prefixCount)) continue;
+    const reply = moves[responseIndex];
+    if (!reply) continue;
+    if (!groups.has(reply)) groups.set(reply, []);
+    groups.get(reply).push({ ...candidate, moves });
+  }
+
+  const responses = [...groups.entries()]
+    .map(([reply, lines]) => {
+      lines.sort((a,b) => b.moves.length - a.moves.length || String(a.name).localeCompare(String(b.name)));
+      return { reply, lines, representative: lines[0] };
+    })
+    .sort((a,b) => b.lines.length - a.lines.length || a.reply.localeCompare(b.reply))
+    .slice(0, 12);
+
+  if (!responses.length) {
+    root.innerHTML = '<div class="response-empty">No alternate published responses were found from this starting position yet.</div>';
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="response-repertoire-summary">
+      <span>${responses.length} common replies</span>
+      <span>Training side: <b>${trainingSide}</b></span>
+    </div>
+    <div class="response-repertoire-list">
+      ${responses.map((item, index) => {
+        const line = item.representative;
+        return `<article class="response-repertoire-card">
+          <div class="response-rank">${index + 1}</div>
+          <div class="response-card-content">
+            <div class="response-card-heading">
+              <div><span>COMMON REPLY</span><h3>${escapeHtml(item.reply)}</h3></div>
+              <span class="response-line-count">${item.lines.length} line${item.lines.length === 1 ? '' : 's'}</span>
+            </div>
+            <p>${escapeHtml(line.name)}${line.variation ? ` · ${escapeHtml(line.variation)}` : ''}</p>
+            <code>${formatPreviewMoves(line.pgn || '', 4)}</code>
+            <div class="response-card-actions">
+              <button class="button primary" onclick="openResponseStudy('${line.id}','${trainingSide.toLowerCase()}')">Study as ${trainingSide}</button>
+              <button class="button secondary" onclick="openStudyById('${line.id}')">View line</button>
+            </div>
+          </div>
+        </article>`;
+      }).join('')}
+    </div>`;
+}
+
+function closeResponseRepertoire() {
+  const modal = $('response-repertoire-modal');
+  if (modal) modal.hidden = true;
+}
+
+$('close-response-repertoire')?.addEventListener('click', closeResponseRepertoire);
+$('response-repertoire-modal')?.addEventListener('click', event => {
+  if (event.target === $('response-repertoire-modal')) closeResponseRepertoire();
+});
+
+function openResponseStudy(openingId, side) {
+  closeResponseRepertoire();
+  openStudyOpening(openingId, { repertoireSide: side, orientation: side });
 }
 
 
@@ -1703,7 +1953,8 @@ async function importOpeningLibrary() {
           ? 'lichess-org/chess-openings'
           : 'bozos-opening-trainer',
         imported_at: new Date().toISOString(),
-        author_explanations: row.author_explanations || null
+        author_explanations: row.author_explanations || null,
+        repertoire_side: row.repertoire_side || null
       }
     })).filter(row => {
       const key = `${row.name}|${row.variation || ''}|${row.pgn}`;
@@ -2004,6 +2255,7 @@ function renderGroupedMoveRows(moves = [], currentPly = moves.length) {
 }
 
 let studyOpening = null;
+let studySideOverride = null;
 let studyGame = null;
 let studyMoves = [];
 let studyPly = 0;
@@ -2041,6 +2293,8 @@ function matchingBozoOpeningDefinition(opening) {
 }
 
 function studyRepertoireSide() {
+  if (studySideOverride === 'white') return 'White';
+  if (studySideOverride === 'black') return 'Black';
   if (!studyOpening) return 'Neutral';
   const definition = matchingBozoOpeningDefinition(studyOpening);
   const raw = definition?.repertoire_side
@@ -2086,7 +2340,7 @@ function updateStudyAuthorExplanation() {
   panel.hidden = false;
 }
 
-async function openStudyOpening(openingId) {
+async function openStudyOpening(openingId, options = {}) {
   const { data, error } = await sb.from('openings')
     .select('id,eco,name,variation,pgn,notes,metadata')
     .eq('id', openingId)
@@ -2095,6 +2349,9 @@ async function openStudyOpening(openingId) {
   if (error || !data) return toast(readableError(error || new Error('Opening not found')));
 
   studyOpening = data;
+  studySideOverride = ['white','black'].includes(String(options.repertoireSide || '').toLowerCase())
+    ? String(options.repertoireSide).toLowerCase()
+    : null;
   window.BozoMastery?.startSession?.(data, 0);
   studyGame = new Chess();
   const parser = new Chess();
@@ -2103,7 +2360,9 @@ async function openStudyOpening(openingId) {
 
   studyMoves = parser.history();
   studyPly = 0;
-  studyOrientation = 'white';
+  studyOrientation = ['white','black'].includes(String(options.orientation || '').toLowerCase())
+    ? String(options.orientation).toLowerCase()
+    : (studySideOverride || 'white');
   $('study-title').textContent = data.name;
   $('study-subtitle').textContent = `${data.variation || 'Main Line'} · ${data.eco || 'ECO —'}`;
   $('study-pgn').textContent = data.pgn;
@@ -2117,6 +2376,7 @@ async function openStudyOpening(openingId) {
 
 function closeStudy() {
   $('study-modal').hidden = true;
+  studySideOverride = null;
 }
 
 function setStudyPly(nextPly) {

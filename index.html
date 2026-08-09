@@ -186,10 +186,27 @@
           <h1>Explore the theory.</h1>
           <p>Search the cloud opening database. Published lines appear here automatically.</p>
         </div>
-        <div class="search-box">
-          <input id="opening-search-input" placeholder="Search Polish, Italian, Bird…">
+        <div class="search-box opening-search-box">
+          <input id="opening-search-input" placeholder="Search openings or try ‘white aggressive’…">
           <button id="opening-search-button" class="button primary">Search</button>
         </div>
+      </div>
+      <div class="opening-discovery-bar" aria-label="Opening discovery filters">
+        <div>
+          <span class="eyebrow">NOT SURE WHAT TO PLAY?</span>
+          <strong>Browse by side or style.</strong>
+        </div>
+        <div class="opening-filter-chips">
+          <button type="button" data-opening-filter="white">White</button>
+          <button type="button" data-opening-filter="black">Black</button>
+          <button type="button" data-opening-filter="positional">Positional</button>
+          <button type="button" data-opening-filter="tactical">Tactical</button>
+          <button type="button" data-opening-filter="aggressive">Aggressive</button>
+          <button type="button" data-opening-filter="gambit">Gambit</button>
+          <button type="button" data-opening-filter="system">System</button>
+          <button type="button" id="opening-filter-clear" class="opening-filter-clear">Clear</button>
+        </div>
+        <div id="opening-filter-summary" class="opening-filter-summary">Showing all published openings.</div>
       </div>
       <div id="opening-results" class="opening-grid">
         <div class="empty-state">
@@ -1010,6 +1027,16 @@
     </div>
   </div>
 
+  <div id="response-repertoire-modal" class="modal-backdrop" hidden>
+    <div class="response-repertoire-modal">
+      <button id="close-response-repertoire" class="modal-close">×</button>
+      <div class="eyebrow">RESPONSE REPERTOIRE</div>
+      <h2 id="response-repertoire-title">Common responses</h2>
+      <p id="response-repertoire-copy">Choose a common reply and train the other side of the opening.</p>
+      <div id="response-repertoire-root" class="response-repertoire-root"></div>
+    </div>
+  </div>
+
   <div id="study-modal" class="modal-backdrop" hidden>
     <div class="duel-game-modal study-modal">
       <button id="close-study-modal" class="modal-close">×</button>
@@ -1439,7 +1466,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app.js?v=2.7.12"></script>
+  <script src="./app.js?v=2.7.13"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
