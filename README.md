@@ -667,3 +667,14 @@ Features:
 - Added warm ivory shading to White and graphite shading to Black for improved board contrast.
 - Preserved the original custom BOZO set in `assets/pieces/bozo-custom/` as a fallback.
 - No database or Supabase changes required.
+
+
+## v3.0.1 — Universal Board Readability
+
+- Added one universal local Staunton-style piece set in `assets/pieces/bozo-universal/`.
+- Every board renderer now loads the same 12 SVG assets through `webPiece()`.
+- Removed the custom-per-piece primary source that could partially render or leave missing pieces.
+- Darkened both board square colors to reduce glare in long study/review sessions.
+- Strengthened piece separation with ivory/graphite fills, outlines, and a restrained drop shadow.
+- Updated CSS/JS cache versions so browsers do not keep stale piece paths.
+- No Supabase or database changes are required.

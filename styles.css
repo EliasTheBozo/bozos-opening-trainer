@@ -3150,3 +3150,89 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
   .review-phase-grid { grid-template-columns:1fr; }
   .review-event-timeline { grid-template-columns:1fr; }
 }
+
+
+/* v3.0.1 — UNIVERSAL BOZO BOARD + PIECE SYSTEM
+   One deterministic local Staunton set on every board.
+   The board palette is intentionally lower-luminance to reduce eye strain. */
+:root {
+  --board-light: #B8A77D;
+  --board-dark: #5A485F;
+  --board-coordinate: #302936;
+  --board-border: #E78A2E;
+}
+
+.chess-square.light,
+.square.light,
+.board-square.light,
+[data-square-color="light"] {
+  background: var(--board-light) !important;
+}
+.chess-square.dark,
+.square.dark,
+.board-square.dark,
+[data-square-color="dark"] {
+  background: var(--board-dark) !important;
+}
+
+.chessboard > :nth-child(16n+1),
+.chessboard > :nth-child(16n+3),
+.chessboard > :nth-child(16n+5),
+.chessboard > :nth-child(16n+7),
+.chessboard > :nth-child(16n+10),
+.chessboard > :nth-child(16n+12),
+.chessboard > :nth-child(16n+14),
+.chessboard > :nth-child(16n+16),
+.study-board > :nth-child(16n+1),
+.study-board > :nth-child(16n+3),
+.study-board > :nth-child(16n+5),
+.study-board > :nth-child(16n+7),
+.study-board > :nth-child(16n+10),
+.study-board > :nth-child(16n+12),
+.study-board > :nth-child(16n+14),
+.study-board > :nth-child(16n+16) {
+  background: var(--board-light) !important;
+}
+.chessboard > :nth-child(16n+2),
+.chessboard > :nth-child(16n+4),
+.chessboard > :nth-child(16n+6),
+.chessboard > :nth-child(16n+8),
+.chessboard > :nth-child(16n+9),
+.chessboard > :nth-child(16n+11),
+.chessboard > :nth-child(16n+13),
+.chessboard > :nth-child(16n+15),
+.study-board > :nth-child(16n+2),
+.study-board > :nth-child(16n+4),
+.study-board > :nth-child(16n+6),
+.study-board > :nth-child(16n+8),
+.study-board > :nth-child(16n+9),
+.study-board > :nth-child(16n+11),
+.study-board > :nth-child(16n+13),
+.study-board > :nth-child(16n+15) {
+  background: var(--board-dark) !important;
+}
+
+.chessboard,
+.study-board,
+.review-board,
+.bot-board,
+.friend-board {
+  border-color: var(--board-border) !important;
+}
+
+.board-coordinate,
+.coordinate,
+.rank-label,
+.file-label {
+  color: var(--board-coordinate) !important;
+}
+
+.bozo-chess-piece {
+  width: 91% !important;
+  height: 91% !important;
+  max-width: 91% !important;
+  max-height: 91% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  filter: drop-shadow(0 1.5px 1.5px rgba(0,0,0,.32)) !important;
+}
