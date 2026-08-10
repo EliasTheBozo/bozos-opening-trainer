@@ -142,10 +142,9 @@ Deno.serve(async (request) => {
           .map((move: unknown) => cleanText(move, 20))
       : [];
 
-    const isPositionAnalysis = mode === "position_analysis";
-    if (!fen || (!playedMove && !isPositionAnalysis)) {
+    if (!fen || !playedMove) {
       return json(
-        { error: isPositionAnalysis ? "The current position is required." : "The current position and played move are required." },
+        { error: "The current position and played move are required." },
         400,
       );
     }
@@ -258,33 +257,7 @@ Deno.serve(async (request) => {
       );
     }
 
-    const engineContext = isPositionAnalysis
-      ? `
-POSITION ANALYSIS EVIDENCE — AUTHORITATIVE:
-- Raw evaluation: ${evaluationAfter ?? "Not supplied"}
-- Raw evaluation unit: ${evaluationUnit || "centipawns from White perspective"}
-- Side to move: ${currentBoard.sideToMove}
-- Requested coaching perspective: ${selectedSide}
-- Best move: ${bestMove || "Not supplied"}
-- Engine continuation: ${principalVariation.join(" ") || "Not supplied"}
-- Readable continuation: ${principalVariationSan.join(" ") || "Not supplied"}
-
-DETERMINISTIC POSITION FACTS:
-${materialStatusText}
-${pawnStructureText}
-${developmentStatusText}
-${positionFeaturesText}
-
-POSITION-ANALYSIS DISCIPLINE:
-- Explain the current position, not a move that was supposedly played.
-- Treat the supplied evaluation, side to move, best move, and continuation as authoritative.
-- Use the board facts to explain concrete plans, threats, piece activity, pawn structure, king safety, and candidate moves only when supported.
-- If the user selected White or Black, coach from that side's perspective. If perspective is unknown, use White and Black explicitly.
-- Do not invent a previous move, game story, opening history, or tactical sequence.
-- When explaining the best move, connect it to a concrete feature of the current board or supplied continuation.
-- Do not mention Stockfish unless the user explicitly asks which engine produced the analysis.
-`
-      : isGameReview
+    const engineContext = isGameReview
       ? `
 GAME REVIEW EVIDENCE — AUTHORITATIVE:
 
@@ -406,18 +379,10 @@ const prompt = `
 You are BOZO Coach, a friendly chess teacher.
 
 Your job is to help the user UNDERSTAND the supplied move.
-If Current mode = position_analysis, your job instead is to help the user understand the CURRENT POSITION and its best plan.
 
 MODE SEPARATION — HIGHEST PRIORITY:
 
 Current mode: ${mode || "study"}
-
-If Current mode = position_analysis:
-- Analyze the current FEN as a standalone position.
-- There may be no played move or previous FEN. That is intentional.
-- Explain plans, threats, candidate moves, and the supplied best continuation from the current board.
-- Never pretend a move was just played.
-- Address the selected coaching side when known; otherwise use White and Black explicitly.
 
 If Current mode = game_review:
 - Analyze the actual played game using the verified board, move facts, engine evidence,
@@ -684,7 +649,7 @@ Repertoire side: ${repertoireSide}
 Side that played this move: ${moveSide}
 Explanation perspective: ${effectivePerspective}
 Move number: ${moveNumber ?? "Unknown"}
-Move played: ${playedMove || (isPositionAnalysis ? "Not applicable — standalone position" : "Not supplied")}
+Move played: ${playedMove}
 
 AUTHOR EXPLANATION:
 ${effectiveAuthorExplanation || "Not supplied"}
@@ -724,10 +689,6 @@ ${engineContext}
 OUTPUT GUIDANCE:
 
 For "summary":
-- In position_analysis:
-  - Explain the practical character of the current position from the requested perspective.
-  - State the main plan or most important feature, not a fictional last move.
-  - Use the supplied best move and continuation when they clarify the plan.
 - In game_review:
   - Lead with the practical meaning of the selected move in the verified phase.
   - If the move is critical or a turning point, explain the concrete consequence clearly.
