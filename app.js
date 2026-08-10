@@ -3721,15 +3721,22 @@ async function getWebBotMoveEngine() {
   return getReviewEngine();
 }
 
+function whiteReviewMate(result, turn) {
+  if (result?.mate == null) return null;
+  // UCI scores are from the side-to-move perspective. Normalize mate signs
+  // exactly like centipawn scores so every Review consumer uses White's
+  // perspective: positive = White mates, negative = Black mates.
+  return turn === 'w' ? Number(result.mate) : -Number(result.mate);
+}
+
 function whiteReviewEval(result, turn) {
-  let cp;
-  if (result.mate != null) {
-    cp = result.mate > 0
-      ? REVIEW_MATE_SCORE - Math.abs(result.mate)
-      : -REVIEW_MATE_SCORE + Math.abs(result.mate);
-  } else {
-    cp = result.cp || 0;
+  const whiteMate = whiteReviewMate(result, turn);
+  if (whiteMate != null) {
+    return whiteMate > 0
+      ? REVIEW_MATE_SCORE - Math.abs(whiteMate)
+      : -REVIEW_MATE_SCORE + Math.abs(whiteMate);
   }
+  const cp = Number(result?.cp) || 0;
   return turn === 'w' ? cp : -cp;
 }
 
@@ -4105,7 +4112,7 @@ async function computeWebsiteReview(sans, depth, bookDepth, onProgress) {
       previousFen,
       fen,
       whiteCp: evalAfter,
-      mate: analysis.mate,
+      mate: whiteReviewMate(analysis, game.turn()),
       engineLoss: isBook ? 0 : engineLoss,
       rawEngineLoss: engineLoss,
       accuracy,
@@ -4130,9 +4137,11 @@ async function computeWebsiteReview(sans, depth, bookDepth, onProgress) {
     row.phase = reviewGamePhase(row.ply, rows.length, row.fen, phasePlan);
   });
 
+  const initialAnalysis = await engine.analyze(initialFen, depth);
   return {
     initialFen,
-    initialEval: whiteReviewEval(await engine.analyze(initialFen, depth), 'w'),
+    initialEval: whiteReviewEval(initialAnalysis, 'w'),
+    initialMate: whiteReviewMate(initialAnalysis, 'w'),
     rows,
     phasePlan
   };
@@ -4415,7 +4424,10 @@ function paintGameReview() {
     button.classList.toggle('active', Number(button.dataset.reviewStep) === reviewStepIndex)
   );
 
-  paintReviewEvaluation(selected?.whiteCp || 0, selected?.mate);
+  paintReviewEvaluation(
+    selected ? selected.whiteCp : reviewData.initialEval,
+    selected ? selected.mate : reviewData.initialMate
+  );
   updateReviewSelectedMove();
 
   $('review-start').disabled = reviewStepIndex === 0;
@@ -4459,6 +4471,10 @@ function paintReviewEvaluation(cp = 0, mate = null) {
   );
   const blackPercent = 100 - whitePercent;
   const description = reviewPositionDescription(cp, mate);
+  const whiteLabel = mate != null && mate > 0 ? `M${Math.abs(mate)}` : 'White';
+  const blackLabel = mate != null && mate < 0 ? `M${Math.abs(mate)}` : 'Black';
+  $('review-eval-top-label').textContent = reviewOrientation === 'white' ? blackLabel : whiteLabel;
+  $('review-eval-bottom-label').textContent = reviewOrientation === 'white' ? whiteLabel : blackLabel;
 
   $('review-eval-white-zone').style.height = `${whitePercent}%`;
   $('review-eval-black-zone').style.height = `${blackPercent}%`;
@@ -8322,14 +8338,15 @@ async function analyzePosition() {
     const cp = whiteReviewEval(result, game.turn());
     const bestSan = reviewUciToSan(fen, result.bestMove) || result.bestMove || '—';
     const pvSan = reviewPvToSan(fen, result.pv || [], 8);
-    positionAnalysis = { fen, cp, mate: result.mate, bestMove: bestSan, bestMoveUci: result.bestMove, pv: result.pv || [], pvSan };
+    const mate = whiteReviewMate(result, game.turn());
+    positionAnalysis = { fen, cp, mate, bestMove: bestSan, bestMoveUci: result.bestMove, pv: result.pv || [], pvSan };
     $('position-results').hidden = false;
-    paintPositionBoard(fen); paintPositionEval(cp, result.mate);
-    $('position-description').textContent = reviewPositionDescription(cp, result.mate);
-    $('position-evaluation').textContent = formatReviewEval(cp, result.mate);
+    paintPositionBoard(fen); paintPositionEval(cp, mate);
+    $('position-description').textContent = reviewPositionDescription(cp, mate);
+    $('position-evaluation').textContent = formatReviewEval(cp, mate);
     $('position-best-move').textContent = bestSan;
     $('position-turn-label').textContent = game.turn() === 'w' ? 'White' : 'Black';
-    $('position-eval-summary').textContent = `${reviewPositionDescription(cp, result.mate)}. ${game.turn()==='w'?'White':'Black'} to move${bestSan !== '—' ? `, with ${bestSan} as the strongest continuation.` : '.'}`;
+    $('position-eval-summary').textContent = `${reviewPositionDescription(cp, mate)}. ${game.turn()==='w'?'White':'Black'} to move${bestSan !== '—' ? `, with ${bestSan} as the strongest continuation.` : '.'}`;
     $('position-best-line').textContent = pvSan.length ? `Recommended line: ${pvSan.join(' ')}` : 'No principal variation available.';
     $('position-coach-answer').textContent = 'Position analyzed. Choose a question below or ask your own.';
     $('position-results').scrollIntoView({behavior:'smooth', block:'start'});
