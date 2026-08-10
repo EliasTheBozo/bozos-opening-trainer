@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.0.3.css">
+  <link rel="stylesheet" href="./styles-v4.1.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -459,6 +459,14 @@
           <span class="cloud-pill">BOZO v4.0</span>
         </div>
 
+        <section class="panel play-rating-panel">
+          <div class="panel-heading">
+            <div><span>YOUR BOZO RATING</span><h2 id="play-primary-rating">Rapid —</h2></div>
+            <button id="manage-ratings-button" class="button secondary small">Ratings</button>
+          </div>
+          <div id="play-rating-grid" class="play-rating-grid"></div>
+        </section>
+
         <div class="play-mode-grid">
           <article class="play-mode-card featured">
             <div class="eyebrow">PLAY BOZO</div>
@@ -492,11 +500,34 @@
             <button id="play-friend-existing" class="button secondary">Open friend challenges</button>
           </article>
 
-          <article class="play-mode-card muted-card">
+          <article class="play-mode-card" id="matchmaking-card">
             <div class="eyebrow">ONLINE MATCHMAKING</div>
             <h2>Find an opponent.</h2>
-            <p>Public queues, live clocks, ratings, reconnects, and matchmaking will build on this Play foundation.</p>
-            <button class="button secondary" disabled>Coming next</button>
+            <p>Choose a rated pool and enter the BOZO queue. Placement players are matched using their current hidden/visible estimate.</p>
+            <div class="play-quick-settings">
+              <label>Rating pool
+                <select id="matchmaking-pool">
+                  <option value="bullet">Bullet</option>
+                  <option value="blitz">Blitz</option>
+                  <option value="rapid" selected>Rapid</option>
+                  <option value="classical">Classical</option>
+                </select>
+              </label>
+              <label>Time control
+                <select id="matchmaking-time">
+                  <option value="60+0">1+0</option>
+                  <option value="180+0">3+0</option>
+                  <option value="180+2">3+2</option>
+                  <option value="300+0">5+0</option>
+                  <option value="600+0" selected>10+0</option>
+                  <option value="900+10">15+10</option>
+                </select>
+              </label>
+            </div>
+            <div id="matchmaking-rating-summary" class="matchmaking-rating-summary">Loading your rating…</div>
+            <button id="find-opponent-button" class="button primary">Find opponent</button>
+            <button id="cancel-matchmaking-button" class="button secondary" hidden>Leave queue</button>
+            <div id="matchmaking-status" class="matchmaking-status" aria-live="polite"></div>
           </article>
         </div>
 
@@ -1787,9 +1818,44 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.0.3.js"></script>
+  <script src="./app-v4.1.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
+
+  <div id="rating-setup-modal" class="modal-overlay" hidden>
+    <div class="modal-card rating-setup-card">
+      <button id="close-rating-setup" class="modal-close" aria-label="Close">×</button>
+      <div class="eyebrow">RATED PLAY</div>
+      <h2>Set your starting estimate.</h2>
+      <p class="muted">This only sets your provisional starting point. Your first 10 rated games move quickly, then normal rating changes settle down.</p>
+
+      <label class="rating-pool-label">Rating pool
+        <select id="rating-setup-pool">
+          <option value="bullet">Bullet</option>
+          <option value="blitz">Blitz</option>
+          <option value="rapid" selected>Rapid</option>
+          <option value="classical">Classical</option>
+        </select>
+      </label>
+
+      <div class="rating-tier-grid">
+        <button class="rating-tier" data-rating-tier="new">
+          <b>New to Chess</b><span>Start around 500</span>
+        </button>
+        <button class="rating-tier" data-rating-tier="intermediate">
+          <b>Intermediate</b><span>Start around 1500</span>
+        </button>
+        <button class="rating-tier" data-rating-tier="advanced">
+          <b>Advanced</b><span>Start around 2000</span>
+        </button>
+        <button class="rating-tier" data-rating-tier="unsure">
+          <b>Unsure</b><span>Start at ? · BOZO estimates you</span>
+        </button>
+      </div>
+      <div id="rating-setup-message" class="matchmaking-status"></div>
+    </div>
+  </div>
+
 </body>
 </html>
