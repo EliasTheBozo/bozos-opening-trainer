@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v3.6.5.css">
+  <link rel="stylesheet" href="./styles-v4.0.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -34,6 +34,7 @@
       <button data-route="library">Opening Library</button>
       <button data-route="train">Train</button>
       <button data-route="dashboard">Dashboard</button>
+      <button data-route="play">Play</button>
       <button data-route="challenges">Challenges</button>
       <button data-route="friends">Friends</button>
       <button data-route="review">Review</button>
@@ -446,6 +447,72 @@
     </section>
 
     
+
+    <section id="view-play" class="view">
+      <div class="play-page">
+        <div class="page-heading play-heading">
+          <div>
+            <div class="eyebrow">FREE PLAY</div>
+            <h1>Just play chess.</h1>
+            <p>Start from move one. No required opening, no theory lock, no coach during the game.</p>
+          </div>
+          <span class="cloud-pill">BOZO v4.0</span>
+        </div>
+
+        <div class="play-mode-grid">
+          <article class="play-mode-card featured">
+            <div class="eyebrow">PLAY BOZO</div>
+            <h2>Face the bot.</h2>
+            <p>Play a complete unrestricted game against BOZO Bot, then send it straight to Game Review.</p>
+            <div class="play-quick-settings">
+              <label>Your color
+                <select id="freeplay-color">
+                  <option value="white">White</option>
+                  <option value="black">Black</option>
+                  <option value="random">Random</option>
+                </select>
+              </label>
+              <label>BOZO strength
+                <select id="freeplay-strength">
+                  <option value="beginner">Beginner</option>
+                  <option value="casual">Casual</option>
+                  <option value="club" selected>Club</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="master">BOZO Master</option>
+                </select>
+              </label>
+            </div>
+            <button id="start-freeplay-bot" class="button primary">Play BOZO</button>
+          </article>
+
+          <article class="play-mode-card">
+            <div class="eyebrow">PLAY A FRIEND</div>
+            <h2>Challenge someone.</h2>
+            <p>Friend games already live in Opening Duels. Unrestricted realtime friend games are the next multiplayer layer.</p>
+            <button id="play-friend-existing" class="button secondary">Open friend challenges</button>
+          </article>
+
+          <article class="play-mode-card muted-card">
+            <div class="eyebrow">ONLINE MATCHMAKING</div>
+            <h2>Find an opponent.</h2>
+            <p>Public queues, live clocks, ratings, reconnects, and matchmaking will build on this Play foundation.</p>
+            <button class="button secondary" disabled>Coming next</button>
+          </article>
+        </div>
+
+        <section class="panel play-principles">
+          <div class="panel-heading">
+            <div><span>AFTER EVERY GAME</span><h2>Play becomes training.</h2></div>
+          </div>
+          <div class="play-after-grid">
+            <div><b>Review Game</b><span>Analyze every move with the existing BOZO review.</span></div>
+            <div><b>Find the opening</b><span>See what you played even though the game was unrestricted.</span></div>
+            <div><b>Train mistakes</b><span>Turn important positions into future BOZO training.</span></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
     <section id="view-challenges" class="view">
       <div id="challenges-guest" class="auth-required">
         <img src="./assets/bozo-mascot.webp" alt="">
@@ -1719,7 +1786,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v3.6.12.js"></script>
+  <script src="./app-v4.0.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
