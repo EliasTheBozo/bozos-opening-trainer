@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.0.2.css">
+  <link rel="stylesheet" href="./styles-v4.0.3.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -685,7 +685,7 @@
           <div class="review-workspace position-workspace">
             <div class="review-board-column">
               <div class="review-board-frame">
-                <div class="review-vertical-eval" id="position-vertical-eval"><div id="position-eval-black-zone" class="review-eval-black-zone"></div><div id="position-eval-white-zone" class="review-eval-white-zone"></div><span class="review-eval-side-label">Black</span><span class="review-eval-side-label review-eval-position-bottom">White</span></div>
+                <div class="review-vertical-eval" id="position-vertical-eval" role="img" aria-label="Equal position"><div id="position-eval-black-zone" class="review-eval-black-zone"></div><div id="position-eval-white-zone" class="review-eval-white-zone"></div><span id="position-eval-top-label" class="review-eval-side-label">Black</span><span id="position-eval-bottom-label" class="review-eval-side-label review-eval-position-bottom">White</span><span id="position-eval-value-label" class="review-eval-value-label position-eval-value-label">0.00</span></div>
                 <div class="review-board-shell">
                   <div id="position-analysis-board" class="web-duel-board review-board"></div>
                   <svg id="position-analysis-arrow-layer" class="board-arrow-layer"
@@ -1787,7 +1787,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.0.2.js"></script>
+  <script src="./app-v4.0.3.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
