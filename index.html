@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.1.2.css">
+  <link rel="stylesheet" href="./styles-v4.1.3.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1617,7 +1617,7 @@
 
       <div class="duel-game-header">
         <div>
-          <div class="eyebrow">BOZO BOT ARENA</div>
+          <div id="bot-arena-label" class="eyebrow">BOZO BOT ARENA</div>
           <h2 id="bot-game-title">Opening</h2>
           <p id="bot-game-subtitle"></p>
         </div>
@@ -1631,7 +1631,7 @@
         </div>
         <div class="bot-versus">VS</div>
         <div class="bot-fighter">
-          <span>BOZO BOT</span>
+          <span id="bot-opponent-label">BOZO BOT</span>
           <b id="bot-strength-label">Club</b>
         </div>
       </div>
@@ -1664,13 +1664,13 @@
 
         <aside class="duel-sidebar">
           <div class="duel-book-card">
-            <span>SELECTED LINE</span>
+            <span id="bot-sidebar-title">SELECTED LINE</span>
             <b id="bot-book-name"></b>
             <code id="bot-book-pgn"></code>
           </div>
 
           <div id="bot-game-status-card" class="bot-game-status-card">
-            <span class="eyebrow">TRAINING STATUS</span>
+            <span id="bot-status-title" class="eyebrow">TRAINING STATUS</span>
             <b id="bot-phase-label">Book phase</b>
             <p id="bot-game-message">Loading the selected line…</p>
           </div>
@@ -1852,7 +1852,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.1.2.js"></script>
+  <script src="./app-v4.1.3.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
