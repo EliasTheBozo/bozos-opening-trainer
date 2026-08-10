@@ -281,7 +281,11 @@
         </div>
         <div class="train-layout">
           <div>
-            <div class="study-board-shell train-board-shell"><div id="train-board" class="web-duel-board train-board"></div></div>
+            <div class="study-board-shell train-board-shell">
+              <div id="train-board" class="web-duel-board train-board"></div>
+              <svg id="train-user-arrow-layer" class="board-arrow-layer board-user-arrow-layer"
+                   viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
+            </div>
             <div id="train-feedback" class="train-feedback" data-state="neutral"><b>Your move.</b><span>Play the highlighted side's repertoire move from memory.</span></div>
             <div class="train-actions">
               <button id="train-hint" class="button secondary" type="button">Hint</button>
@@ -615,7 +619,13 @@
             <div class="review-board-column">
               <div class="review-board-frame">
                 <div class="review-vertical-eval" id="position-vertical-eval"><div id="position-eval-black-zone" class="review-eval-black-zone"></div><div id="position-eval-white-zone" class="review-eval-white-zone"></div><span class="review-eval-side-label">Black</span><span class="review-eval-side-label review-eval-position-bottom">White</span></div>
-                <div class="review-board-shell"><div id="position-analysis-board" class="web-duel-board review-board"></div><svg id="position-analysis-arrow-layer" class="board-arrow-layer" viewBox="0 0 800 800" aria-hidden="true"></svg></div>
+                <div class="review-board-shell">
+                  <div id="position-analysis-board" class="web-duel-board review-board"></div>
+                  <svg id="position-analysis-arrow-layer" class="board-arrow-layer"
+                       viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
+                  <svg id="position-analysis-user-arrow-layer" class="board-arrow-layer board-user-arrow-layer"
+                       viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg>
+                </div>
               </div>
               <button id="position-result-flip" class="button secondary position-result-flip">Flip board</button>
             </div>
@@ -687,6 +697,12 @@
                 <svg id="game-review-arrow-layer"
                      class="board-arrow-layer"
                      viewBox="0 0 800 800"
+                     preserveAspectRatio="none"
+                     aria-hidden="true"></svg>
+                <svg id="review-user-arrow-layer"
+                     class="board-arrow-layer board-user-arrow-layer"
+                     viewBox="0 0 800 800"
+                     preserveAspectRatio="none"
                      aria-hidden="true"></svg>
               </div>
             </div>
@@ -808,6 +824,11 @@
         <div class="study-board-column">
           <div class="study-board-shell">
             <div id="study-builder-board" class="web-duel-board study-board study-builder-board"></div>
+            <svg id="study-builder-user-arrow-layer"
+                 class="board-arrow-layer board-user-arrow-layer"
+                 viewBox="0 0 800 800"
+                 preserveAspectRatio="none"
+                 aria-hidden="true"></svg>
           </div>
 
           <div class="study-board-actions">
@@ -1281,6 +1302,12 @@
             <svg id="study-arrow-layer"
                  class="board-arrow-layer"
                  viewBox="0 0 800 800"
+                 preserveAspectRatio="none"
+                 aria-hidden="true"></svg>
+            <svg id="study-user-arrow-layer"
+                 class="board-arrow-layer board-user-arrow-layer"
+                 viewBox="0 0 800 800"
+                 preserveAspectRatio="none"
                  aria-hidden="true"></svg>
           </div>
           <div class="study-controls">
@@ -1692,7 +1719,7 @@
 <div id="toast" class="toast" hidden></div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v3.6.7.js"></script>
+  <script src="./app-v3.6.8.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
