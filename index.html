@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.5.0.css">
+  <link rel="stylesheet" href="./styles-v4.5.1.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -40,6 +40,7 @@
       <button data-route="review">Review</button>
       <button data-route="studies">Studies</button>
       <button class="support-nav-button" data-route="support">Support</button>
+      <button class="bozo-plus-nav-button" data-route="bozoplus">BOZO+</button>
       <button data-route="profile">Profile</button>
       <button id="owner-nav" data-route="owner" hidden>Owner's Office</button>
     </nav>
@@ -64,6 +65,7 @@
     <button data-route="review">Review</button>
     <button data-route="studies">Studies</button>
     <button class="support-nav-button" data-route="support">Support BOZO</button>
+    <button class="bozo-plus-nav-button" data-route="bozoplus">BOZO+</button>
     <button data-route="profile">Profile</button>
     <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
   </div>
@@ -1214,6 +1216,27 @@
       </div>
     </section>
 
+    <section id="view-bozoplus" class="view bozo-plus-view">
+      <div class="bozo-plus-page-shell">
+        <section class="bozo-plus-hero panel">
+          <img class="bozo-plus-page-crest" src="./assets/bozo-supporter.png" alt="BOZO Supporter crest">
+          <div>
+            <span class="eyebrow">BOZO+</span>
+            <h1>Make your BOZO profile yours.</h1>
+            <p>BOZO+ is the cosmetic supporter tier. Chess learning and competitive features stay the same for everyone.</p>
+            <div id="bozo-plus-page-status" class="bozo-plus-page-status">Checking supporter status…</div>
+            <button id="bozo-plus-open-settings" class="button primary" type="button">Open cosmetic settings</button>
+          </div>
+        </section>
+        <section class="bozo-plus-feature-grid">
+          <article class="panel bozo-plus-feature"><b>Animated profile pictures</b><p>Supporters can keep animated GIF and WebP avatars instead of flattening them.</p></article>
+          <article class="panel bozo-plus-feature"><b>Custom profile backgrounds</b><p>Upload a background image that appears on your BOZO profile.</p></article>
+          <article class="panel bozo-plus-feature"><b>Custom name colors</b><p>Choose a preset or use the full color picker and hex value.</p></article>
+          <article class="panel bozo-plus-feature"><b>Supporter crest</b><p>Your BOZO Supporter badge can appear on profiles and while playing rated games.</p></article>
+        </section>
+      </div>
+    </section>
+
     <section id="view-support" class="view support-view">
       <div class="support-hero">
         <div class="support-copy">
@@ -2040,7 +2063,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.5.0.js"></script>
+  <script src="./app-v4.5.1.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
