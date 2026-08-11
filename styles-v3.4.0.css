@@ -3660,3 +3660,133 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
   align-items:end;
 }
 .review-move-list-heading small { color:var(--muted); font-size:10px; }
+
+/* BOZO v4.2.1 — native dockable music player */
+.music-player-drag,
+.music-player-dismiss{
+  position:absolute;
+  z-index:4;
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  padding:0;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:999px;
+  color:#fff;
+  background:rgba(18,9,22,.98);
+  box-shadow:0 8px 24px rgba(0,0,0,.4);
+  font-weight:900;
+  line-height:1;
+}
+.music-player-drag{top:-12px;right:82px;cursor:grab;font-size:13px;letter-spacing:-2px}
+.music-player-dismiss{top:-12px;right:48px;cursor:pointer;font-size:19px}
+.music-player-drag:hover,.music-player-drag:focus-visible,
+.music-player-dismiss:hover,.music-player-dismiss:focus-visible{
+  border-color:rgba(121,255,226,.62);
+  background:#2b1235;
+  outline:none;
+}
+.spotify-mini-player.is-dragging{transition:none!important;user-select:none}
+.spotify-mini-player.is-dragging .music-player-drag{cursor:grabbing}
+.spotify-mini-player.is-dismissed{display:none!important}
+
+/* The current bottom-right placement remains the default. */
+.spotify-mini-player[data-music-dock="bottom-right"]{
+  left:auto!important;right:18px!important;top:auto!important;bottom:18px!important;transform:none!important;
+}
+.spotify-mini-player[data-music-dock="bottom-left"]{
+  left:18px!important;right:auto!important;top:auto!important;bottom:18px!important;transform:none!important;
+}
+
+/* Side docks use BOZO's unused page gutters as a vertical music rail. */
+.spotify-mini-player[data-music-dock="left"],
+.spotify-mini-player[data-music-dock="right"]{
+  top:50%!important;
+  bottom:auto!important;
+  width:154px!important;
+  min-width:154px!important;
+  max-width:154px!important;
+  grid-template-columns:1fr!important;
+  gap:10px!important;
+  padding:42px 12px 14px!important;
+  border-radius:22px!important;
+  transform:translateY(-50%)!important;
+}
+.spotify-mini-player[data-music-dock="left"]{left:18px!important;right:auto!important}
+.spotify-mini-player[data-music-dock="right"]{right:18px!important;left:auto!important}
+.spotify-mini-player[data-music-dock="left"] .spotify-track-summary,
+.spotify-mini-player[data-music-dock="right"] .spotify-track-summary{
+  grid-template-columns:1fr!important;
+  justify-items:center;
+  text-align:center;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-track-summary img,
+.spotify-mini-player[data-music-dock="right"] .spotify-track-summary img,
+.spotify-mini-player[data-music-dock="left"] .youtube-mini-art,
+.spotify-mini-player[data-music-dock="right"] .youtube-mini-art{
+  width:58px!important;height:58px!important;border-radius:13px!important;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-track-summary>div,
+.spotify-mini-player[data-music-dock="right"] .spotify-track-summary>div{
+  width:100%;text-align:center;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-mini-controls,
+.spotify-mini-player[data-music-dock="right"] .spotify-mini-controls{
+  justify-content:center;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-progress-wrap,
+.spotify-mini-player[data-music-dock="right"] .spotify-progress-wrap{
+  grid-template-columns:1fr!important;
+  gap:5px!important;
+  text-align:center;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-progress-wrap>span,
+.spotify-mini-player[data-music-dock="right"] .spotify-progress-wrap>span{display:none}
+.spotify-mini-player[data-music-dock="left"] .spotify-volume-control,
+.spotify-mini-player[data-music-dock="right"] .spotify-volume-control{
+  grid-template-columns:1fr!important;
+  justify-items:center;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-volume-control>span,
+.spotify-mini-player[data-music-dock="right"] .spotify-volume-control>span{display:none}
+.spotify-mini-player[data-music-dock="left"] .music-player-drag,
+.spotify-mini-player[data-music-dock="right"] .music-player-drag{top:8px;left:10px;right:auto}
+.spotify-mini-player[data-music-dock="left"] .music-player-dismiss,
+.spotify-mini-player[data-music-dock="right"] .music-player-dismiss{top:8px;right:10px}
+.spotify-mini-player[data-music-dock="left"] .music-player-collapse,
+.spotify-mini-player[data-music-dock="right"] .music-player-collapse{top:8px;right:46px}
+
+/* Collapsed side dock stays a small vertical pill rather than expanding horizontally. */
+.spotify-mini-player.is-collapsed[data-music-dock="left"],
+.spotify-mini-player.is-collapsed[data-music-dock="right"]{
+  width:86px!important;min-width:86px!important;max-width:86px!important;
+  padding:42px 8px 10px!important;
+  border-radius:20px!important;
+}
+.spotify-mini-player.is-collapsed[data-music-dock="left"] .spotify-track-summary,
+.spotify-mini-player.is-collapsed[data-music-dock="right"] .spotify-track-summary{
+  display:none!important;
+}
+.spotify-mini-player.is-collapsed[data-music-dock="left"] .spotify-mini-controls,
+.spotify-mini-player.is-collapsed[data-music-dock="right"] .spotify-mini-controls{
+  flex-direction:column!important;
+}
+.spotify-mini-player.is-collapsed[data-music-dock="left"] .music-player-drag,
+.spotify-mini-player.is-collapsed[data-music-dock="right"] .music-player-drag{left:7px}
+.spotify-mini-player.is-collapsed[data-music-dock="left"] .music-player-dismiss,
+.spotify-mini-player.is-collapsed[data-music-dock="right"] .music-player-dismiss{right:7px}
+.spotify-mini-player.is-collapsed[data-music-dock="left"] .music-player-collapse,
+.spotify-mini-player.is-collapsed[data-music-dock="right"] .music-player-collapse{right:28px}
+
+/* The existing global bottom padding is only needed for bottom docks. */
+html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="left"] body,
+html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="right"] body{
+  padding-bottom:0!important;
+}
+
+@media(max-width:700px){
+  .spotify-mini-player[data-music-dock="bottom-right"]{right:8px!important;bottom:8px!important}
+  .spotify-mini-player[data-music-dock="bottom-left"]{left:8px!important;bottom:8px!important}
+  .music-player-drag{right:76px}
+}
