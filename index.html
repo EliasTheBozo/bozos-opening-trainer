@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.1.8.css">
+  <link rel="stylesheet" href="./styles-v4.1.9.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1009,6 +1009,47 @@
           </div>
         </div>
 
+        <nav class="profile-chess-tabs" aria-label="Profile sections">
+          <button class="active" type="button" data-profile-tab="overview">Overview</button>
+          <button type="button" data-profile-tab="games">Game History</button>
+          <button type="button" data-profile-tab="settings">Settings</button>
+        </nav>
+
+        <section id="profile-overview-tab" class="profile-chess-tab">
+          <section class="panel profile-rating-panel">
+            <div class="panel-heading">
+              <div><span>RATINGS</span><h2>Your chess ratings</h2></div>
+            </div>
+            <div id="profile-rating-grid" class="profile-rating-grid">
+              <div class="empty-state mini"><span>Loading ratings…</span></div>
+            </div>
+          </section>
+
+          <section class="panel profile-history-panel">
+            <div class="panel-heading">
+              <div><span>RECENT GAMES</span><h2>Latest rated games</h2></div>
+              <button id="profile-view-all-games" class="button secondary small" type="button">View all</button>
+            </div>
+            <div id="profile-recent-games" class="profile-game-list">
+              <div class="empty-state mini"><span>Loading games…</span></div>
+            </div>
+          </section>
+        </section>
+
+        <section id="profile-games-tab" class="profile-chess-tab" hidden>
+          <section class="panel profile-history-panel">
+            <div class="panel-heading">
+              <div><span>GAME HISTORY</span><h2>Rated games</h2></div>
+              <button id="profile-games-refresh" class="button secondary small" type="button">Refresh</button>
+            </div>
+            <p class="profile-history-help">Every rated online game appears here. Open any completed game directly in Game Review.</p>
+            <div id="profile-game-history" class="profile-game-list">
+              <div class="empty-state mini"><span>Loading games…</span></div>
+            </div>
+          </section>
+        </section>
+
+        <div id="profile-settings-tab" class="profile-chess-tab" hidden>
         <div class="profile-layout">
           <section class="panel">
             <div class="panel-heading"><div><span>PROFILE</span><h2>Edit your identity</h2></div></div>
@@ -1098,6 +1139,7 @@
             </div>
             <button id="sign-out-button" class="button secondary">Sign out</button>
           </section>
+        </div>
         </div>
       </div>
     </section>
@@ -1330,42 +1372,72 @@
   </div>
 
 
-  <div id="friend-profile-modal" class="modal-backdrop" hidden>
+  <div id="friend-profile-modal" class="modal-backdrop friend-profile-backdrop" hidden>
     <div class="auth-modal friend-profile-modal">
       <button id="close-friend-profile" class="modal-close" type="button">×</button>
-      <div class="friend-profile-hero">
-        <img id="friend-profile-avatar" src="./assets/bozo-mascot.webp" alt="Friend profile picture">
-        <div>
-          <div id="friend-profile-personality" class="role-badge">Player</div>
-          <h2 id="friend-profile-ign">Player</h2>
-          <p id="friend-profile-username">@username</p>
+
+      <div class="friend-profile-scroll">
+        <div class="friend-profile-hero">
+          <img id="friend-profile-avatar" src="./assets/bozo-mascot.webp" alt="Friend profile picture">
+          <div>
+            <div id="friend-profile-personality" class="role-badge">Player</div>
+            <h2 id="friend-profile-ign">Player</h2>
+            <p id="friend-profile-username">@username</p>
+          </div>
+        </div>
+
+        <nav class="friend-profile-tabs" aria-label="Friend profile sections">
+          <button class="active" type="button" data-friend-profile-tab="overview">Overview</button>
+          <button type="button" data-friend-profile-tab="ratings">Ratings</button>
+          <button type="button" data-friend-profile-tab="games">Games</button>
+        </nav>
+
+        <div id="friend-profile-overview-tab" class="friend-profile-tab">
+          <div class="friend-profile-section">
+            <span class="eyebrow">FAVORITE REPERTOIRE</span>
+            <div class="friend-repertoire-grid">
+              <article><span>WHITE</span><b id="friend-profile-white-opening">Not selected</b></article>
+              <article><span>BLACK VS 1.e4</span><b id="friend-profile-black-e4-opening">Not selected</b></article>
+              <article><span>BLACK VS 1.d4</span><b id="friend-profile-black-d4-opening">Not selected</b></article>
+            </div>
+          </div>
+
+          <div class="friend-profile-section">
+            <span class="eyebrow">BOZO STATS</span>
+            <div class="friend-stats-grid">
+              <article><b id="friend-profile-openings-studied">0</b><span>Openings studied</span></article>
+              <article><b id="friend-profile-reviews">0</b><span>Games reviewed</span></article>
+              <article><b id="friend-profile-suggestions">0</b><span>Suggestions accepted</span></article>
+              <article><b id="friend-profile-member-since">—</b><span>Member since</span></article>
+            </div>
+          </div>
+
+          <div class="friend-profile-section">
+            <span class="eyebrow">RECENT ACTIVITY</span>
+            <div id="friend-profile-activity" class="activity-feed compact"></div>
+          </div>
+
+          <div class="friend-profile-section">
+            <span class="eyebrow">ABOUT</span>
+            <p id="friend-profile-bio">This player has not added a bio yet.</p>
+          </div>
+        </div>
+
+        <div id="friend-profile-ratings-tab" class="friend-profile-tab" hidden>
+          <div class="friend-profile-section">
+            <span class="eyebrow">CHESS RATINGS</span>
+            <div id="friend-profile-rating-grid" class="profile-rating-grid"></div>
+          </div>
+        </div>
+
+        <div id="friend-profile-games-tab" class="friend-profile-tab" hidden>
+          <div class="friend-profile-section">
+            <span class="eyebrow">GAME HISTORY</span>
+            <div id="friend-profile-game-history" class="profile-game-list"></div>
+          </div>
         </div>
       </div>
-      <div class="friend-profile-section">
-        <span class="eyebrow">FAVORITE REPERTOIRE</span>
-        <div class="friend-repertoire-grid">
-          <article><span>WHITE</span><b id="friend-profile-white-opening">Not selected</b></article>
-          <article><span>BLACK VS 1.e4</span><b id="friend-profile-black-e4-opening">Not selected</b></article>
-          <article><span>BLACK VS 1.d4</span><b id="friend-profile-black-d4-opening">Not selected</b></article>
-        </div>
-      </div>
-      <div class="friend-profile-section">
-        <span class="eyebrow">BOZO STATS</span>
-        <div class="friend-stats-grid">
-          <article><b id="friend-profile-openings-studied">0</b><span>Openings studied</span></article>
-          <article><b id="friend-profile-reviews">0</b><span>Games reviewed</span></article>
-          <article><b id="friend-profile-suggestions">0</b><span>Suggestions accepted</span></article>
-          <article><b id="friend-profile-member-since">—</b><span>Member since</span></article>
-        </div>
-      </div>
-      <div class="friend-profile-section">
-        <span class="eyebrow">RECENT ACTIVITY</span>
-        <div id="friend-profile-activity" class="activity-feed compact"></div>
-      </div>
-      <div class="friend-profile-section">
-        <span class="eyebrow">ABOUT</span>
-        <p id="friend-profile-bio">This player has not added a bio yet.</p>
-      </div>
+
       <div class="friend-profile-actions">
         <button id="friend-profile-challenge" class="button primary" type="button">Challenge</button>
         <button id="friend-profile-close-button" class="button secondary" type="button">Close</button>
@@ -1852,7 +1924,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.1.8.js"></script>
+  <script src="./app-v4.1.9.js"></script>
   <script src="./bozo-music-controller.js?v=2.7.4"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
