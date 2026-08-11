@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.3.3.css">
+  <link rel="stylesheet" href="./styles-v4.4.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1453,6 +1453,7 @@
       </div>
 
       <div class="friend-profile-actions">
+        <button id="friend-profile-spectate" class="button secondary" type="button" hidden>Spectate</button>
         <button id="friend-profile-challenge" class="button primary" type="button">Challenge</button>
         <button id="friend-profile-close-button" class="button secondary" type="button">Close</button>
       </div>
@@ -1713,7 +1714,7 @@
       <div class="bot-battle-strip">
         <div class="bot-fighter">
           <div class="bot-fighter-copy">
-            <span>YOU</span>
+            <span id="bot-player-role-label">YOU</span>
             <b id="bot-player-color-label">White</b>
           </div>
           <strong id="rated-my-clock" class="rated-live-clock" hidden>10:00</strong>
@@ -1789,6 +1790,15 @@
             <span id="bot-status-title" class="eyebrow">TRAINING STATUS</span>
             <b id="bot-phase-label">Book phase</b>
             <p id="bot-game-message">Loading the selected line…</p>
+            <div id="rated-connection-status" class="rated-connection-status" hidden>
+              <span class="rated-connection-dot"></span>
+              <span id="rated-connection-text">Connected</span>
+            </div>
+          </div>
+
+          <div id="rated-captured-material" class="rated-captured-material" hidden>
+            <div><span class="eyebrow">CAPTURED BY WHITE</span><div id="rated-captured-by-white" class="rated-captured-pieces"></div></div>
+            <div><span class="eyebrow">CAPTURED BY BLACK</span><div id="rated-captured-by-black" class="rated-captured-pieces"></div></div>
           </div>
 
           <div>
@@ -1968,7 +1978,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.3.3.js"></script>
+  <script src="./app-v4.4.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
