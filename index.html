@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.5.2.css">
+  <link rel="stylesheet" href="./styles-v4.6.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1235,6 +1235,17 @@
             <button id="bozo-plus-open-settings" class="button primary" type="button">Open cosmetic settings</button>
           </div>
         </section>
+        <section id="bozo-paypal-sandbox-card" class="bozo-paypal-sandbox-card panel">
+          <span class="eyebrow">PAYPAL SANDBOX</span>
+          <h2>Subscription setup</h2>
+          <p>Initialize the BOZO+ Sandbox product and recurring plans. This does not charge anyone yet.</p>
+          <div class="bozo-paypal-plan-row">
+            <div><b>Monthly</b><span>$5.99 / month</span></div>
+            <div><b>Annual</b><span>$59.99 / year</span></div>
+          </div>
+          <button id="bozo-paypal-initialize" class="button primary" type="button">Initialize PayPal Sandbox</button>
+          <pre id="bozo-paypal-setup-result" class="bozo-paypal-setup-result">Not initialized in this browser yet.</pre>
+        </section>
         <section class="bozo-plus-feature-grid">
           <article class="panel bozo-plus-feature"><b>Animated profile pictures</b><p>Supporters can keep animated GIF and WebP avatars instead of flattening them.</p></article>
           <article class="panel bozo-plus-feature"><b>Custom profile backgrounds</b><p>Upload a background image that appears on your BOZO profile.</p></article>
@@ -2070,7 +2081,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.5.2.js"></script>
+  <script src="./app-v4.6.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
