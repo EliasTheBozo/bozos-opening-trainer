@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.2.0.css">
+  <link rel="stylesheet" href="./styles-v4.1.9.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -643,11 +643,6 @@
         </div>
 
         <div class="review-settings review-settings-player-side">
-        <div class="music-dock-tools" aria-label="Music player controls">
-          <button id="music-player-minimize" class="music-dock-tool" type="button" title="Minimize music player" aria-label="Minimize music player">−</button>
-          <button id="music-player-dismiss" class="music-dock-tool" type="button" title="Hide music player" aria-label="Hide music player">×</button>
-        </div>
-
           <label>
             You played
             <select id="review-player-side" aria-describedby="review-side-help">
@@ -1855,6 +1850,8 @@
     </section>
   </aside>
   <div id="spotify-mini-player" class="spotify-mini-player" hidden>
+    <button class="music-player-drag" type="button" aria-label="Move music player" title="Drag music player">⋮⋮</button>
+    <button class="music-player-dismiss" type="button" aria-label="Hide music player" title="Hide player">×</button>
     <button class="music-player-collapse" type="button" aria-label="Minimize music player" title="Minimize player">⌄</button>
     <button id="spotify-mini-open" class="spotify-track-summary" type="button"><img id="spotify-track-image" alt="" hidden><div><b id="spotify-track-name">Nothing playing</b><span id="spotify-track-artist">Spotify</span></div></button>
     <div class="spotify-mini-controls"><button id="spotify-previous" type="button">⏮</button><button id="spotify-play-pause" type="button">▶</button><button id="spotify-next" type="button">⏭</button></div>
@@ -1863,6 +1860,8 @@
   </div>
 
   <div id="youtube-mini-player" class="spotify-mini-player youtube-mini-player" hidden>
+    <button class="music-player-drag" type="button" aria-label="Move music player" title="Drag music player">⋮⋮</button>
+    <button class="music-player-dismiss" type="button" aria-label="Hide music player" title="Hide player">×</button>
     <button class="music-player-collapse" type="button" aria-label="Minimize music player" title="Minimize player">⌄</button>
     <button id="youtube-mini-open" class="spotify-track-summary" type="button">
       <div class="youtube-mini-art">▶</div>
@@ -1929,8 +1928,8 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.2.0.js"></script>
-  <script src="./bozo-music-controller.js?v=2.7.4"></script>
+  <script src="./app-v4.1.9.js"></script>
+  <script src="./bozo-music-controller.js?v=2.8.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
 </body>
