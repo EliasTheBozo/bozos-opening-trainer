@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.4.0.css">
+  <link rel="stylesheet" href="./styles-v4.5.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1017,7 +1017,13 @@
             <button id="profile-avatar-edit" class="profile-avatar-edit" type="button" aria-label="Change profile picture">✎</button>
           </div>
           <div>
-            <div id="profile-role-badge" class="role-badge">Member</div>
+            <div class="profile-badge-row">
+              <div id="profile-role-badge" class="role-badge">Member</div>
+              <div id="profile-supporter-badge" class="bozo-supporter-chip" hidden>
+                <img src="./assets/bozo-supporter.png" alt="">
+                <span>BOZO+</span>
+              </div>
+            </div>
             <h1 id="profile-ign">Player</h1>
             <p id="profile-username">@username</p>
           </div>
@@ -1068,11 +1074,11 @@
           <section class="panel">
             <div class="panel-heading"><div><span>PROFILE</span><h2>Edit your identity</h2></div></div>
             <div class="profile-picture-editor">
-              <input id="profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <input id="profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
               <img id="profile-avatar-preview" src="./assets/bozo-mascot.webp" alt="New profile picture preview">
               <div>
                 <b>Profile picture</b>
-                <span>JPG, PNG, or WebP. BOZO crops it to a square and optimizes it.</span>
+                <span>JPG, PNG, WebP, or GIF. BOZO+ can preserve animated GIF/WebP profile pictures.</span>
                 <div class="profile-picture-actions">
                   <button id="profile-avatar-choose" class="button secondary" type="button">Choose image</button>
                   <button id="profile-avatar-upload" class="button primary" type="button" disabled>Upload picture</button>
@@ -1136,6 +1142,56 @@
                 </div>
               </div>
             </div>
+            <section id="bozo-plus-customizer" class="bozo-plus-customizer">
+              <div class="bozo-plus-heading">
+                <div>
+                  <span class="eyebrow">BOZO+</span>
+                  <h3>Supporter cosmetics</h3>
+                  <p id="bozo-plus-status-copy">Support BOZO to unlock profile cosmetics.</p>
+                </div>
+                <img class="bozo-plus-crest" src="./assets/bozo-supporter.png" alt="BOZO Supporter crest">
+              </div>
+
+              <div id="bozo-plus-locked" class="bozo-plus-locked">
+                <b>BOZO+ required</b>
+                <span>Animated avatars, custom backgrounds, and name colors are supporter cosmetics.</span>
+              </div>
+
+              <div id="bozo-plus-controls" hidden>
+                <div class="bozo-plus-field">
+                  <label>Name color</label>
+                  <div class="bozo-color-presets" id="bozo-name-color-presets">
+                    <button type="button" data-bozo-color="#fff4ea" style="--swatch:#fff4ea">Classic</button>
+                    <button type="button" data-bozo-color="#b784ff" style="--swatch:#b784ff">Purple</button>
+                    <button type="button" data-bozo-color="#69f0c1" style="--swatch:#69f0c1">Mint</button>
+                    <button type="button" data-bozo-color="#ffb347" style="--swatch:#ffb347">Orange</button>
+                    <button type="button" data-bozo-color="#ff7fa8" style="--swatch:#ff7fa8">Pink</button>
+                    <button type="button" data-bozo-color="#7cc7ff" style="--swatch:#7cc7ff">Blue</button>
+                  </div>
+                  <div class="bozo-color-custom">
+                    <input id="bozo-name-color-picker" type="color" value="#b784ff">
+                    <input id="bozo-name-color-hex" type="text" maxlength="7" value="#b784ff" aria-label="Custom name color hex">
+                  </div>
+                </div>
+
+                <div class="bozo-plus-field">
+                  <label>Profile background</label>
+                  <div class="bozo-background-editor">
+                    <input id="bozo-background-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+                    <div id="bozo-background-preview" class="bozo-background-preview"><span>No custom background</span></div>
+                    <div class="profile-picture-actions">
+                      <button id="bozo-background-choose" class="button secondary" type="button">Choose background</button>
+                      <button id="bozo-background-upload" class="button primary" type="button" disabled>Upload background</button>
+                      <button id="bozo-background-remove" class="button ghost" type="button">Remove</button>
+                    </div>
+                    <small id="bozo-background-status" class="profile-avatar-status">JPG, PNG, WebP, or GIF up to 10 MB.</small>
+                  </div>
+                </div>
+
+                <button id="bozo-plus-save-colors" class="button primary" type="button">Save BOZO+ cosmetics</button>
+              </div>
+            </section>
+
             <button id="profile-save-button" class="button primary">Save profile</button>
           </section>
 
@@ -1394,7 +1450,13 @@
         <div class="friend-profile-hero">
           <img id="friend-profile-avatar" src="./assets/bozo-mascot.webp" alt="Friend profile picture">
           <div>
-            <div id="friend-profile-personality" class="role-badge">Player</div>
+            <div class="profile-badge-row">
+              <div id="friend-profile-personality" class="role-badge">Player</div>
+              <div id="friend-profile-supporter" class="bozo-supporter-chip small" hidden>
+                <img src="./assets/bozo-supporter.png" alt="">
+                <span>Supporter</span>
+              </div>
+            </div>
             <h2 id="friend-profile-ign">Player</h2>
             <p id="friend-profile-username">@username</p>
           </div>
@@ -1715,7 +1777,7 @@
         <div class="bot-fighter">
           <div class="bot-fighter-copy">
             <span id="bot-player-role-label">YOU</span>
-            <b id="bot-player-color-label">White</b>
+            <div class="live-player-name-row"><b id="bot-player-color-label">White</b><img id="rated-my-supporter-badge" class="live-supporter-badge" src="./assets/bozo-supporter.png" alt="BOZO Supporter" hidden></div>
           </div>
           <strong id="rated-my-clock" class="rated-live-clock" hidden>10:00</strong>
         </div>
@@ -1723,7 +1785,7 @@
         <div class="bot-fighter">
           <div class="bot-fighter-copy">
             <span id="bot-opponent-label">BOZO BOT</span>
-            <b id="bot-strength-label">Club</b>
+            <div class="live-player-name-row"><b id="bot-strength-label">Club</b><img id="rated-opponent-supporter-badge" class="live-supporter-badge" src="./assets/bozo-supporter.png" alt="BOZO Supporter" hidden></div>
           </div>
           <strong id="rated-opponent-clock" class="rated-live-clock" hidden>10:00</strong>
         </div>
@@ -1978,7 +2040,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.4.1.js"></script>
+  <script src="./app-v4.5.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
