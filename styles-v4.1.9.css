@@ -4078,3 +4078,100 @@ body:has(#rating-setup-modal:not([hidden])){
   .friend-profile-scroll{padding:22px 18px 8px}
   .friend-profile-actions{padding:12px 18px 16px}
 }
+
+
+/* ============================================================
+   BOZO v4.2.2 — smart draggable music player
+   The player itself is the drag surface. No extra drag/dismiss buttons.
+   ============================================================ */
+.music-player-drag,
+.music-player-dismiss{display:none!important}
+
+.spotify-mini-player[data-draggable-player="true"]{
+  cursor:grab;
+  user-select:none;
+  touch-action:none;
+  transition:right .2s ease,left .2s ease,top .2s ease,bottom .2s ease,width .2s ease,transform .2s ease,border-radius .2s ease;
+}
+.spotify-mini-player[data-draggable-player="true"] button,
+.spotify-mini-player[data-draggable-player="true"] input,
+.spotify-mini-player[data-draggable-player="true"] a{
+  cursor:pointer;
+}
+.spotify-mini-player.is-dragging{
+  cursor:grabbing!important;
+  transition:none!important;
+  opacity:.96;
+  box-shadow:0 24px 70px rgba(0,0,0,.62);
+}
+
+/* Horizontal bottom docks */
+.spotify-mini-player[data-music-dock="bottom-right"]{
+  left:auto!important;right:18px!important;top:auto!important;bottom:18px!important;transform:none!important;
+}
+.spotify-mini-player[data-music-dock="bottom-left"]{
+  left:18px!important;right:auto!important;top:auto!important;bottom:18px!important;transform:none!important;
+}
+
+/* Vertical side docks: fit the actual content into a tall rail. */
+.spotify-mini-player[data-music-dock="left"],
+.spotify-mini-player[data-music-dock="right"]{
+  top:50%!important;bottom:auto!important;
+  width:190px!important;
+  max-width:190px!important;
+  min-width:190px!important;
+  grid-template-columns:1fr!important;
+  grid-auto-flow:row!important;
+  gap:12px!important;
+  padding:16px 14px!important;
+  transform:translateY(-50%)!important;
+  border-radius:22px!important;
+}
+.spotify-mini-player[data-music-dock="left"]{left:18px!important;right:auto!important}
+.spotify-mini-player[data-music-dock="right"]{right:18px!important;left:auto!important}
+
+.spotify-mini-player[data-music-dock="left"] .spotify-track-summary,
+.spotify-mini-player[data-music-dock="right"] .spotify-track-summary{
+  grid-template-columns:54px minmax(0,1fr)!important;
+  width:100%;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-track-summary img,
+.spotify-mini-player[data-music-dock="right"] .spotify-track-summary img,
+.spotify-mini-player[data-music-dock="left"] .youtube-mini-art,
+.spotify-mini-player[data-music-dock="right"] .youtube-mini-art{
+  width:54px!important;height:54px!important;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-mini-controls,
+.spotify-mini-player[data-music-dock="right"] .spotify-mini-controls{
+  justify-content:center!important;
+  width:100%;
+}
+.spotify-mini-player[data-music-dock="left"] .spotify-progress-wrap,
+.spotify-mini-player[data-music-dock="right"] .spotify-progress-wrap,
+.spotify-mini-player[data-music-dock="left"] .spotify-volume-control,
+.spotify-mini-player[data-music-dock="right"] .spotify-volume-control{
+  display:grid!important;
+  width:100%;
+}
+.spotify-mini-player[data-music-dock="left"].is-collapsed,
+.spotify-mini-player[data-music-dock="right"].is-collapsed{
+  width:170px!important;min-width:170px!important;max-width:170px!important;
+  grid-template-columns:1fr!important;
+  border-radius:22px!important;
+}
+
+/* Side docking should not reserve a fake bottom strip. */
+html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="left"] body,
+html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="right"] body{
+  padding-bottom:0!important;
+}
+
+@media(max-width:700px){
+  .spotify-mini-player[data-music-dock="left"],
+  .spotify-mini-player[data-music-dock="right"]{
+    left:auto!important;right:8px!important;top:auto!important;bottom:8px!important;
+    width:calc(100vw - 16px)!important;max-width:none!important;min-width:0!important;
+    grid-template-columns:minmax(130px,1fr) auto!important;
+    transform:none!important;border-radius:16px!important;
+  }
+}

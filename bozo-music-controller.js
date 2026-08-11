@@ -3,14 +3,14 @@
 
   const COLLAPSE_KEY = 'bozoMusicPlayerCollapsed';
   const DOCK_KEY = 'bozoMusicPlayerDock';
-  const HIDDEN_KEY = 'bozoMusicPlayerHidden';
   const VALID_DOCKS = new Set(['bottom-right', 'bottom-left', 'left', 'right']);
+  const DEFAULT_DOCK = 'bottom-right';
 
   let activeProvider = null;
   let collapsed = false;
-  let dismissed = false;
-  let dock = 'bottom-right';
+  let dock = DEFAULT_DOCK;
   let dragging = null;
+  let suppressNextClick = false;
 
   function getPlayers() {
     return [
@@ -35,12 +35,10 @@
         : savedCollapse === '1';
 
       const savedDock = localStorage.getItem(DOCK_KEY);
-      dock = VALID_DOCKS.has(savedDock) ? savedDock : 'bottom-right';
-      dismissed = localStorage.getItem(HIDDEN_KEY) === '1';
+      dock = VALID_DOCKS.has(savedDock) ? savedDock : DEFAULT_DOCK;
     } catch (_) {
       collapsed = window.matchMedia('(max-width: 700px)').matches;
-      dock = 'bottom-right';
-      dismissed = false;
+      dock = DEFAULT_DOCK;
     }
   }
 
@@ -50,7 +48,7 @@
 
   function effectiveDock() {
     if (window.matchMedia('(max-width: 700px)').matches && (dock === 'left' || dock === 'right')) {
-      return 'bottom-right';
+      return DEFAULT_DOCK;
     }
     return dock;
   }
@@ -58,17 +56,25 @@
   function syncDocumentState() {
     document.documentElement.dataset.musicProvider = activeProvider || '';
     document.documentElement.dataset.musicCollapsed = collapsed ? 'true' : 'false';
-    document.documentElement.dataset.musicActive = activeProvider && !dismissed ? 'true' : 'false';
+    document.documentElement.dataset.musicActive = activeProvider ? 'true' : 'false';
     document.documentElement.dataset.musicDock = effectiveDock();
-    document.documentElement.dataset.musicDismissed = dismissed ? 'true' : 'false';
+  }
+
+  function clearInlineDragPosition(player) {
+    player.style.left = '';
+    player.style.top = '';
+    player.style.right = '';
+    player.style.bottom = '';
+    player.style.transform = '';
   }
 
   function syncPlayerClasses() {
     const activeDock = effectiveDock();
     getPlayers().forEach((player) => {
       player.classList.toggle('is-collapsed', collapsed);
-      player.classList.toggle('is-dismissed', dismissed);
+      player.classList.toggle('is-vertical', activeDock === 'left' || activeDock === 'right');
       player.dataset.musicDock = activeDock;
+      player.setAttribute('data-draggable-player', 'true');
 
       const collapseButton = player.querySelector('.music-player-collapse');
       if (collapseButton) {
@@ -83,12 +89,8 @@
     collapsed = Boolean(next);
     syncDocumentState();
     syncPlayerClasses();
-
     if (options.persist !== false) persist(COLLAPSE_KEY, collapsed ? '1' : '0');
-
-    window.dispatchEvent(new CustomEvent('bozo:music-collapse', {
-      detail: { collapsed }
-    }));
+    window.dispatchEvent(new CustomEvent('bozo:music-collapse', { detail: { collapsed } }));
   }
 
   function toggleCollapsed() {
@@ -96,30 +98,13 @@
   }
 
   function setDock(next, options = {}) {
-    if (!VALID_DOCKS.has(next)) return;
+    if (!VALID_DOCKS.has(next)) next = DEFAULT_DOCK;
     dock = next;
+    getPlayers().forEach(clearInlineDragPosition);
     syncDocumentState();
     syncPlayerClasses();
     if (options.persist !== false) persist(DOCK_KEY, dock);
-
-    window.dispatchEvent(new CustomEvent('bozo:music-dock', {
-      detail: { dock }
-    }));
-  }
-
-  function setDismissed(next, options = {}) {
-    dismissed = Boolean(next);
-    syncDocumentState();
-    syncPlayerClasses();
-    if (options.persist !== false) persist(HIDDEN_KEY, dismissed ? '1' : '0');
-
-    window.dispatchEvent(new CustomEvent('bozo:music-dismiss', {
-      detail: { dismissed }
-    }));
-  }
-
-  function restorePlayer() {
-    setDismissed(false);
+    window.dispatchEvent(new CustomEvent('bozo:music-dock', { detail: { dock } }));
   }
 
   function setActiveProvider(provider) {
@@ -135,72 +120,100 @@
     syncPlayerClasses();
     setCollapsed(collapsed, { persist: false });
 
-    window.dispatchEvent(new CustomEvent('bozo:music-provider', {
-      detail: { provider }
-    }));
+    window.dispatchEvent(new CustomEvent('bozo:music-provider', { detail: { provider } }));
   }
 
   function getActiveProvider() {
     return activeProvider;
   }
 
-  function startDrag(event, player) {
-    if (event.button !== 0 || !player || dismissed) return;
+  function isInteractiveControl(target) {
+    if (!(target instanceof Element)) return false;
+    // The track summary itself can still start a drag; a normal click remains a normal click.
+    return Boolean(target.closest(
+      '.spotify-mini-controls, .spotify-progress-wrap, .spotify-volume-control, ' +
+      '.music-player-collapse, input, select, textarea, a, button:not(.spotify-track-summary)'
+    ));
+  }
+
+  function beginPotentialDrag(event, player) {
+    if (event.button !== 0 || !player || isInteractiveControl(event.target)) return;
     const rect = player.getBoundingClientRect();
     dragging = {
       player,
       pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
       offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top
+      offsetY: event.clientY - rect.top,
+      moved: false
     };
-
-    player.classList.add('is-dragging');
-    player.style.left = `${rect.left}px`;
-    player.style.top = `${rect.top}px`;
-    player.style.right = 'auto';
-    player.style.bottom = 'auto';
-    player.style.transform = 'none';
     player.setPointerCapture?.(event.pointerId);
-    event.preventDefault();
-    event.stopPropagation();
   }
 
   function moveDrag(event) {
     if (!dragging || event.pointerId !== dragging.pointerId) return;
-    const { player, offsetX, offsetY } = dragging;
+    const { player, startX, startY, offsetX, offsetY } = dragging;
+
+    if (!dragging.moved) {
+      const distance = Math.hypot(event.clientX - startX, event.clientY - startY);
+      if (distance < 7) return;
+      dragging.moved = true;
+      player.classList.add('is-dragging');
+      const rect = player.getBoundingClientRect();
+      player.style.left = `${rect.left}px`;
+      player.style.top = `${rect.top}px`;
+      player.style.right = 'auto';
+      player.style.bottom = 'auto';
+      player.style.transform = 'none';
+    }
+
     const rect = player.getBoundingClientRect();
     const x = Math.max(8, Math.min(window.innerWidth - rect.width - 8, event.clientX - offsetX));
-    const y = Math.max(64, Math.min(window.innerHeight - rect.height - 8, event.clientY - offsetY));
+    const y = Math.max(72, Math.min(window.innerHeight - rect.height - 8, event.clientY - offsetY));
     player.style.left = `${x}px`;
     player.style.top = `${y}px`;
     event.preventDefault();
   }
 
-  function finishDrag(event) {
-    if (!dragging || event.pointerId !== dragging.pointerId) return;
-    const { player } = dragging;
-    const rect = player.getBoundingClientRect();
-    dragging = null;
-    player.classList.remove('is-dragging');
-
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
+  function chooseDock(rect) {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
 
-    // Side docks win when released near the middle left/right portions of the viewport.
-    let nextDock;
-    if (cx < vw * 0.28 && cy < vh * 0.82) nextDock = 'left';
-    else if (cx > vw * 0.72 && cy < vh * 0.82) nextDock = 'right';
-    else if (cx < vw / 2) nextDock = 'bottom-left';
-    else nextDock = 'bottom-right';
+    // Deliberately conservative snap zones. The central page is never a valid dock.
+    const sideZone = Math.min(260, vw * 0.18);
+    const bottomZone = Math.min(190, vh * 0.24);
 
-    player.style.left = '';
-    player.style.top = '';
-    player.style.right = '';
-    player.style.bottom = '';
-    player.style.transform = '';
+    const nearLeft = rect.left <= sideZone;
+    const nearRight = rect.right >= vw - sideZone;
+    const nearBottom = rect.bottom >= vh - bottomZone;
+
+    // Side docks are intended for the open left/right gutters, not the bottom corners.
+    if (nearLeft && cy < vh * 0.78) return 'left';
+    if (nearRight && cy < vh * 0.78) return 'right';
+
+    // Bottom edge keeps the familiar horizontal shape.
+    if (nearBottom) return cx < vw / 2 ? 'bottom-left' : 'bottom-right';
+
+    // Anything in the middle/top/content area is considered obstructive.
+    return DEFAULT_DOCK;
+  }
+
+  function finishDrag(event) {
+    if (!dragging || event.pointerId !== dragging.pointerId) return;
+    const { player, moved } = dragging;
+    dragging = null;
+
+    if (!moved) return;
+
+    suppressNextClick = true;
+    player.classList.remove('is-dragging');
+    const nextDock = chooseDock(player.getBoundingClientRect());
     setDock(nextDock);
+    setTimeout(() => { suppressNextClick = false; }, 0);
+    event.preventDefault();
   }
 
   function bindPlayerControls(player) {
@@ -214,23 +227,17 @@
       });
     }
 
-    const dragHandle = player.querySelector('.music-player-drag');
-    if (dragHandle && !dragHandle.dataset.bound) {
-      dragHandle.dataset.bound = 'true';
-      dragHandle.addEventListener('pointerdown', (event) => startDrag(event, player));
-      dragHandle.addEventListener('pointermove', moveDrag);
-      dragHandle.addEventListener('pointerup', finishDrag);
-      dragHandle.addEventListener('pointercancel', finishDrag);
-    }
-
-    const dismissButton = player.querySelector('.music-player-dismiss');
-    if (dismissButton && !dismissButton.dataset.bound) {
-      dismissButton.dataset.bound = 'true';
-      dismissButton.addEventListener('click', (event) => {
+    if (!player.dataset.dragSurfaceBound) {
+      player.dataset.dragSurfaceBound = 'true';
+      player.addEventListener('pointerdown', (event) => beginPotentialDrag(event, player));
+      player.addEventListener('pointermove', moveDrag);
+      player.addEventListener('pointerup', finishDrag);
+      player.addEventListener('pointercancel', finishDrag);
+      player.addEventListener('click', (event) => {
+        if (!suppressNextClick) return;
         event.preventDefault();
         event.stopPropagation();
-        setDismissed(true);
-      });
+      }, true);
     }
   }
 
@@ -240,22 +247,13 @@
     syncDocumentState();
     syncPlayerClasses();
 
-    // The navbar Music button is the permanent way to bring a dismissed player back.
-    const musicButton = document.getElementById('spotify-music-button');
-    if (musicButton && !musicButton.dataset.dockRestoreBound) {
-      musicButton.dataset.dockRestoreBound = 'true';
-      musicButton.addEventListener('click', () => {
-        if (dismissed) setDismissed(false);
-      });
-    }
-
     // Keep dialogs readable. When a modal opens, collapse the player without
     // changing the user's saved preference; restore it when all modals close.
     let modalForcedCollapse = false;
     let previousCollapsed = collapsed;
     const updateForModals = () => {
       const modalOpen = Boolean(document.querySelector('.modal-backdrop:not([hidden])'));
-      if (modalOpen && !collapsed && !dismissed) {
+      if (modalOpen && !collapsed) {
         previousCollapsed = collapsed;
         modalForcedCollapse = true;
         setCollapsed(true, { persist: false });
@@ -274,8 +272,13 @@
     updateForModals();
 
     window.addEventListener('resize', () => {
-      syncDocumentState();
-      syncPlayerClasses();
+      // Never leave a side dock in an unusable narrow viewport.
+      if (window.matchMedia('(max-width: 700px)').matches && (dock === 'left' || dock === 'right')) {
+        setDock(DEFAULT_DOCK, { persist: false });
+      } else {
+        syncDocumentState();
+        syncPlayerClasses();
+      }
     });
   }
 
@@ -287,9 +290,6 @@
     isCollapsed: () => collapsed,
     setDock,
     getDock: () => dock,
-    setDismissed,
-    restorePlayer,
-    isDismissed: () => dismissed,
     getCurrentPlayer: currentPlayer
   };
 
