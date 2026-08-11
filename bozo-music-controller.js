@@ -2,7 +2,7 @@
   'use strict';
 
   const COLLAPSE_KEY = 'bozoMusicPlayerCollapsed';
-  const DOCK_KEY = 'bozoMusicPlayerDock';
+  const DOCK_KEY = 'bozoMusicPlayerDockV2';
   const VALID_DOCKS = new Set(['bottom-right', 'bottom-left', 'left', 'right']);
   const DEFAULT_DOCK = 'bottom-right';
 
@@ -61,11 +61,7 @@
   }
 
   function clearInlineDragPosition(player) {
-    player.style.left = '';
-    player.style.top = '';
-    player.style.right = '';
-    player.style.bottom = '';
-    player.style.transform = '';
+    ['left','top','right','bottom','transform'].forEach((prop) => player.style.removeProperty(prop));
   }
 
   function syncPlayerClasses() {
@@ -100,7 +96,7 @@
   function setDock(next, options = {}) {
     if (!VALID_DOCKS.has(next)) next = DEFAULT_DOCK;
     dock = next;
-    getPlayers().forEach(clearInlineDragPosition);
+    getPlayers().forEach((player) => { clearInlineDragPosition(player); player.style.removeProperty('position'); });
     syncDocumentState();
     syncPlayerClasses();
     if (options.persist !== false) persist(DOCK_KEY, dock);
@@ -136,6 +132,17 @@
     ));
   }
 
+  function setDragPosition(player, left, top) {
+    // Dock CSS intentionally uses !important. During a live drag the inline
+    // coordinates must temporarily outrank those dock constraints.
+    player.style.setProperty('position', 'fixed', 'important');
+    player.style.setProperty('left', `${left}px`, 'important');
+    player.style.setProperty('top', `${top}px`, 'important');
+    player.style.setProperty('right', 'auto', 'important');
+    player.style.setProperty('bottom', 'auto', 'important');
+    player.style.setProperty('transform', 'none', 'important');
+  }
+
   function beginPotentialDrag(event, player) {
     if (event.button !== 0 || !player || isInteractiveControl(event.target)) return;
     const rect = player.getBoundingClientRect();
@@ -157,22 +164,17 @@
 
     if (!dragging.moved) {
       const distance = Math.hypot(event.clientX - startX, event.clientY - startY);
-      if (distance < 7) return;
+      if (distance < 6) return;
       dragging.moved = true;
       player.classList.add('is-dragging');
       const rect = player.getBoundingClientRect();
-      player.style.left = `${rect.left}px`;
-      player.style.top = `${rect.top}px`;
-      player.style.right = 'auto';
-      player.style.bottom = 'auto';
-      player.style.transform = 'none';
+      setDragPosition(player, rect.left, rect.top);
     }
 
     const rect = player.getBoundingClientRect();
     const x = Math.max(8, Math.min(window.innerWidth - rect.width - 8, event.clientX - offsetX));
     const y = Math.max(72, Math.min(window.innerHeight - rect.height - 8, event.clientY - offsetY));
-    player.style.left = `${x}px`;
-    player.style.top = `${y}px`;
+    setDragPosition(player, x, y);
     event.preventDefault();
   }
 
@@ -183,21 +185,23 @@
     const cy = rect.top + rect.height / 2;
 
     // Deliberately conservative snap zones. The central page is never a valid dock.
-    const sideZone = Math.min(260, vw * 0.18);
-    const bottomZone = Math.min(190, vh * 0.24);
+    const sideZone = Math.min(230, vw * 0.15);
+    const bottomZone = Math.min(135, vh * 0.16);
+    const navSafeTop = Math.max(88, vh * 0.10);
 
     const nearLeft = rect.left <= sideZone;
     const nearRight = rect.right >= vw - sideZone;
     const nearBottom = rect.bottom >= vh - bottomZone;
+    const verticallySafeForSide = cy > navSafeTop && cy < vh * 0.78;
 
-    // Side docks are intended for the open left/right gutters, not the bottom corners.
-    if (nearLeft && cy < vh * 0.78) return 'left';
-    if (nearRight && cy < vh * 0.78) return 'right';
+    // A side dock is valid only in the outer gutter and away from the nav/bottom controls.
+    if (nearLeft && verticallySafeForSide) return 'left';
+    if (nearRight && verticallySafeForSide) return 'right';
 
-    // Bottom edge keeps the familiar horizontal shape.
+    // Only the actual lower edge is a valid horizontal dock.
     if (nearBottom) return cx < vw / 2 ? 'bottom-left' : 'bottom-right';
 
-    // Anything in the middle/top/content area is considered obstructive.
+    // Center/top/content drops are obstructive and always return home.
     return DEFAULT_DOCK;
   }
 

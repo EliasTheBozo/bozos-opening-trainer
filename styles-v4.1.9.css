@@ -4175,3 +4175,21 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
     transform:none!important;border-radius:16px!important;
   }
 }
+
+/* ============================================================
+   BOZO v4.2.3 — smart music dock drag fix
+   ============================================================ */
+.spotify-mini-player.is-dragging{
+  pointer-events:auto!important;
+  z-index:9999!important;
+}
+.spotify-mini-player.is-dragging *{
+  user-select:none!important;
+}
+/* Controls remain controls; the shell, track summary, padding, and gaps are drag surfaces. */
+.spotify-mini-player[data-draggable-player="true"] .spotify-track-summary{
+  cursor:grab;
+}
+.spotify-mini-player.is-dragging .spotify-track-summary{
+  cursor:grabbing;
+}
