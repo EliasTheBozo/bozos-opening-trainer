@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.7.3.css">
+  <link rel="stylesheet" href="./styles-v4.7.4.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1508,8 +1508,30 @@
         <label>Username<input id="signup-username" maxlength="20" required></label>
         <label>Email<input id="signup-email" type="email" required autocomplete="email"></label>
         <label>Password<input id="signup-password" type="password" minlength="8" required autocomplete="new-password"></label>
+        <p class="auth-helper">You'll need to verify your email before using your BOZO account.</p>
         <button class="button primary" type="submit">Create account</button>
       </form>
+
+      <section id="auth-check-email" class="auth-verification-state" hidden>
+        <div class="auth-verification-icon" aria-hidden="true">✉</div>
+        <div class="eyebrow">ONE MORE STEP</div>
+        <h2>Check your email</h2>
+        <p>We sent a verification link to <strong id="auth-verification-email">your email</strong>.</p>
+        <p class="muted">Click the link in that email to verify your BOZO account. If you don't see it, check your spam or junk folder.</p>
+        <div class="auth-verification-actions">
+          <button id="auth-resend-verification" class="button secondary" type="button">Resend verification email</button>
+          <button id="auth-back-to-signin" class="text-button" type="button">Back to sign in</button>
+        </div>
+        <div id="auth-verification-message" class="auth-message"></div>
+      </section>
+
+      <section id="auth-verified" class="auth-verification-state" hidden>
+        <div class="auth-verification-icon success" aria-hidden="true">✓</div>
+        <div class="eyebrow">EMAIL VERIFIED</div>
+        <h2>You're ready to BOZO.</h2>
+        <p>Your email has been verified and your account is ready.</p>
+        <button id="auth-verified-continue" class="button primary" type="button">Continue to BOZO</button>
+      </section>
 
       <div id="auth-message" class="auth-message"></div>
     </div>
@@ -2143,7 +2165,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.7.3.js"></script>
+  <script src="./app-v4.7.4.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
