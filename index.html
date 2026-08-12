@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.6.2.css">
+  <link rel="stylesheet" href="./styles-v4.7.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -48,6 +48,15 @@
       <button data-route="studies">Studies</button>
       <button class="support-nav-button" data-route="support">Support</button>
       <button class="bozo-plus-nav-button" data-route="bozoplus">BOZO+</button>
+      <div class="notification-menu">
+        <button id="notification-bell" class="notification-bell" type="button" aria-label="Notifications" aria-expanded="false">
+          <span class="notification-bell-icon">●</span><span id="notification-count" class="notification-count" hidden>0</span>
+        </button>
+        <div id="notification-popover" class="notification-popover" hidden>
+          <div class="notification-popover-head"><b>Notifications</b><button id="notification-refresh" type="button">Refresh</button></div>
+          <div id="notification-list" class="notification-list"><div class="empty-state mini"><span>Nothing new.</span></div></div>
+        </div>
+      </div>
       <button data-route="profile">Profile</button>
       <button id="owner-nav" data-route="owner" hidden>Owner's Office</button>
     </nav>
@@ -432,6 +441,16 @@
             <div id="dashboard-achievements" class="achievement-grid"></div>
           </section>
         </div>
+
+        <section class="panel dashboard-retention-panel">
+          <div class="panel-heading"><div><span>PLAY</span><h2>Recent games & rating trend</h2></div><button id="dashboard-view-games" class="button secondary" type="button">View game history</button></div>
+          <div class="dashboard-trend-grid">
+            <article><span>Current rating</span><b id="dashboard-current-rating">—</b><small id="dashboard-current-pool">Rapid</small></article>
+            <article><span>Last 5 rated</span><b id="dashboard-last-five">—</b><small id="dashboard-last-five-label">No rated games yet</small></article>
+            <article><span>Most recent opponent</span><b id="dashboard-recent-opponent">—</b><small id="dashboard-recent-result">No rated games yet</small></article>
+          </div>
+          <div id="dashboard-recent-games" class="dashboard-recent-games"></div>
+        </section>
 
         <div class="dashboard-columns">
           <section class="panel">
@@ -1242,7 +1261,6 @@
               <h2>Support BOZO. Make your profile yours.</h2>
               <p>All chess learning and competitive features stay free. BOZO+ unlocks supporter cosmetics.</p>
             </div>
-            <span id="bozo-paypal-mode-pill" class="bozo-paypal-mode-pill">Sandbox</span>
           </div>
 
           <div id="bozo-paypal-current-subscription" class="bozo-paypal-current-subscription" hidden></div>
@@ -1251,7 +1269,7 @@
             <article class="bozo-paypal-plan-card">
               <span class="eyebrow">MONTHLY</span>
               <div class="bozo-paypal-price"><b>$5.99</b><span>/ month</span></div>
-              <p>Support BOZO month to month. Cancel through PayPal during Sandbox testing.</p>
+              <p>Support BOZO month to month. Cancel anytime through PayPal.</p>
               <div id="paypal-monthly-button" class="bozo-paypal-button-slot"></div>
             </article>
 
@@ -1265,7 +1283,7 @@
           </div>
 
           <div id="bozo-paypal-checkout-message" class="bozo-paypal-checkout-message">
-            Sign in to subscribe with PayPal Sandbox.
+            Sign in to subscribe with PayPal.
           </div>
         </section>
 
@@ -1275,6 +1293,19 @@
           <p>This initializes the BOZO+ product, plans, and verified webhook for the PayPal environment configured in Supabase.</p>
           <button id="bozo-paypal-initialize" class="button secondary" type="button">Initialize PayPal</button>
           <pre id="bozo-paypal-setup-result" class="bozo-paypal-setup-result">Checking backend…</pre>
+        </section>
+
+        <section id="bozo-plus-manage-card" class="bozo-plus-manage-card panel">
+          <span class="eyebrow">MANAGE BOZO+</span>
+          <h2>Your membership</h2>
+          <div id="bozo-plus-manage-status" class="bozo-plus-manage-status">
+            <div><span>Status</span><b>Checking…</b></div><div><span>Plan</span><b>—</b></div><div><span>Subscription</span><b>—</b></div>
+          </div>
+          <div class="bozo-plus-manage-actions">
+            <button id="bozo-plus-refresh-status" class="button secondary" type="button">Refresh status</button>
+            <a class="button secondary" href="https://www.paypal.com/myaccount/autopay/" target="_blank" rel="noopener">Manage in PayPal</a>
+          </div>
+          <p class="muted">Billing changes and cancellation are handled through PayPal. BOZO reflects PayPal's verified subscription status.</p>
         </section>
 
         <section class="bozo-plus-feature-grid">
@@ -1295,7 +1326,7 @@
 
           <div class="support-promise">
             <span>NO ADS</span>
-            <span>NO SUBSCRIPTIONS</span>
+            <span>NO LEARNING PAYWALLS</span>
             <span>LEARNING TOOLS FREE</span>
           </div>
 
@@ -2112,9 +2143,23 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.6.2.js"></script>
+  <script src="./app-v4.7.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
+
+  <div id="postgame-modal" class="postgame-modal" hidden>
+    <div class="postgame-backdrop" data-postgame-close></div>
+    <section class="postgame-card" role="dialog" aria-modal="true" aria-labelledby="postgame-title">
+      <button class="postgame-x" type="button" data-postgame-close aria-label="Close">×</button>
+      <span class="eyebrow">GAME COMPLETE</span><h2 id="postgame-title">Game finished</h2><p id="postgame-subtitle">Your result is ready.</p>
+      <div class="postgame-grid">
+        <div><span>Result</span><b id="postgame-result">—</b></div><div><span>Rating</span><b id="postgame-rating">—</b></div>
+        <div><span>Change</span><b id="postgame-delta">—</b></div><div><span>Opening</span><b id="postgame-opening">—</b></div>
+      </div>
+      <div class="postgame-actions"><button id="postgame-review" class="button primary" type="button">Review game</button><button id="postgame-rematch" class="button secondary" type="button">Rematch</button><button class="button secondary" type="button" data-postgame-close>Close</button></div>
+    </section>
+  </div>
+
 </body>
 </html>
