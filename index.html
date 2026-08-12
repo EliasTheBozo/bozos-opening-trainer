@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.6.1.css">
+  <link rel="stylesheet" href="./styles-v4.6.2.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1270,10 +1270,10 @@
         </section>
 
         <section id="bozo-paypal-owner-card" class="bozo-paypal-owner-card panel" hidden>
-          <span class="eyebrow">OWNER · PAYPAL SANDBOX</span>
+          <span class="eyebrow">OWNER · PAYPAL</span>
           <h3>Payment backend</h3>
-          <p>This connects the existing BOZO+ plans to BOZO's verified PayPal webhook. It does not create duplicate plans when the stored plan IDs already exist.</p>
-          <button id="bozo-paypal-initialize" class="button secondary" type="button">Finish PayPal Sandbox setup</button>
+          <p>This initializes the BOZO+ product, plans, and verified webhook for the PayPal environment configured in Supabase.</p>
+          <button id="bozo-paypal-initialize" class="button secondary" type="button">Initialize PayPal</button>
           <pre id="bozo-paypal-setup-result" class="bozo-paypal-setup-result">Checking backend…</pre>
         </section>
 
@@ -2112,7 +2112,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.6.1.js"></script>
+  <script src="./app-v4.6.2.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
