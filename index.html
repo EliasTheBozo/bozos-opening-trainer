@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.9.0.css">
+  <link rel="stylesheet" href="./styles-v4.9.1.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -2267,7 +2267,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.9.0.js"></script>
+  <script src="./app-v4.9.1.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
@@ -2294,6 +2294,10 @@
       <label>Club name<input id="club-name-input" maxlength="40" placeholder="Polish Opening Enjoyers"></label>
       <label>Club handle<input id="club-slug-input" maxlength="24" placeholder="polish-enjoyers"></label>
       <label>Description<textarea id="club-description-input" maxlength="500" rows="4"></textarea></label>
+      <label>Club icon
+        <input id="club-icon-file" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+        <small>PNG, JPG, WebP, or GIF. A default chess icon is used if you skip this.</small>
+      </label>
       <label>Visibility<select id="club-visibility-input"><option value="public">Public</option><option value="private">Private / invite only</option></select></label>
       <button id="submit-create-club" class="button primary">Create club</button>
       <div id="club-create-status" class="auth-message"></div>
@@ -2315,8 +2319,36 @@
         <label>Visibility<select id="arena-visibility"><option value="public">Public</option><option value="private">Private</option><option value="club_only">Club members only</option></select></label>
         <label>Rated<select id="arena-rated"><option value="true">Rated</option><option value="false">Unrated</option></select></label>
         <label>Time control<select id="arena-time-control">
-          <option value="60+0">1+0</option><option value="180+0" selected>3+0</option><option value="180+2">3+2</option>
-          <option value="300+0">5+0</option><option value="300+3">5+3</option><option value="600+0">10+0</option><option value="600+5">10+5</option>
+          <optgroup label="Bullet">
+            <option value="30+0">0.5+0</option>
+            <option value="60+0">1+0</option>
+            <option value="60+1">1+1</option>
+            <option value="120+0">2+0</option>
+            <option value="120+1">2+1</option>
+          </optgroup>
+          <optgroup label="Blitz">
+            <option value="180+0" selected>3+0</option>
+            <option value="180+1">3+1</option>
+            <option value="180+2">3+2</option>
+            <option value="300+0">5+0</option>
+            <option value="300+3">5+3</option>
+            <option value="300+5">5+5</option>
+          </optgroup>
+          <optgroup label="Rapid">
+            <option value="600+0">10+0</option>
+            <option value="600+5">10+5</option>
+            <option value="900+0">15+0</option>
+            <option value="900+10">15+10</option>
+            <option value="1200+0">20+0</option>
+            <option value="1800+0">30+0</option>
+          </optgroup>
+          <optgroup label="Classical">
+            <option value="1800+20">30+20</option>
+            <option value="2700+0">45+0</option>
+            <option value="2700+15">45+15</option>
+            <option value="3600+0">60+0</option>
+            <option value="3600+30">60+30</option>
+          </optgroup>
         </select></label>
         <label>Duration<select id="arena-duration"><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90" selected>1.5 hours</option><option value="120">2 hours</option></select></label>
         <label>Starts<select id="arena-start-mode"><option value="now">As soon as players join</option><option value="scheduled">Schedule time</option></select></label>
