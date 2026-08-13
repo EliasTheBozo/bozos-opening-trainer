@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.9.1.css">
+  <link rel="stylesheet" href="./styles-v4.9.3.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -537,7 +537,7 @@
           <article class="play-mode-card" id="matchmaking-card">
             <div class="eyebrow">ONLINE MATCHMAKING</div>
             <h2>Find an opponent.</h2>
-            <p>Choose a rated pool and enter the BOZO queue. Placement players are matched using their current hidden/visible estimate.</p>
+            <p>Choose a time control and BOZO searches for another queued player near your rating. If this pool has no rating yet, BOZO will ask for your starting estimate first.</p>
             <div class="play-quick-settings">
               <label>Rating pool
                 <select id="matchmaking-pool">
@@ -2236,7 +2236,7 @@
     <div class="modal-card rating-setup-card">
       <button id="close-rating-setup" class="modal-close" aria-label="Close">×</button>
       <div class="eyebrow">RATED PLAY</div>
-      <h2>Set your starting estimate.</h2>
+      <h2>Set your starting estimate.</h2><p class="rating-setup-intro">Rated matchmaking needs a starting estimate for each pool. Your first 10 rated games adjust it quickly, then it settles down.</p>
       <p class="muted">This only sets your provisional starting point. Your first 10 rated games move quickly, then normal rating changes settle down.</p>
 
       <label class="rating-pool-label">Rating pool
@@ -2267,7 +2267,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.9.1.js"></script>
+  <script src="./app-v4.9.3.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
