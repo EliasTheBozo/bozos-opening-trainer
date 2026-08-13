@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.7.4.css">
+  <link rel="stylesheet" href="./styles-v4.7.8.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1115,7 +1115,7 @@
                 <small id="profile-avatar-status" class="profile-avatar-status">No new image selected.</small>
               </div>
             </div>
-            <label>IGN<input id="profile-ign-input" maxlength="28"></label>
+            <label>IGN<input id="profile-ign-input" maxlength="20"><small class="name-rule-hint">Up to 20 characters.</small></label>
             <label>Username<input id="profile-username-input" maxlength="20"></label>
             <label>Bio<textarea id="profile-bio-input" maxlength="160"></textarea></label>
             <label>Opening personality
@@ -1504,8 +1504,8 @@
       </form>
 
       <form id="signup-form" hidden>
-        <label>IGN<input id="signup-ign" maxlength="28" required></label>
-        <label>Username<input id="signup-username" maxlength="20" required></label>
+        <label>IGN<input id="signup-ign" maxlength="20" required><small class="name-rule-hint">3–20 characters. Keep it clean.</small></label>
+        <label>Username<input id="signup-username" maxlength="20" required><small class="name-rule-hint">3–20 letters, numbers, or underscores.</small></label>
         <label>Email<input id="signup-email" type="email" required autocomplete="email"></label>
         <label>Password<input id="signup-password" type="password" minlength="8" required autocomplete="new-password"></label>
         <p class="auth-helper">You'll need to verify your email before using your BOZO account.</p>
@@ -2165,7 +2165,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.7.4.js"></script>
+  <script src="./app-v4.7.8.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
