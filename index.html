@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.9.4.css">
+  <link rel="stylesheet" href="./styles-v4.10.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1489,6 +1489,7 @@
           <button data-owner-panel="announcements"><span>📣</span><b>Announcements</b><small>Publish a bulletin</small></button>
           <button data-owner-panel="submissions"><span>📖</span><b>Opening Review</b><small>Pending community theory</small></button>
           <button data-owner-panel="reports"><span>🚩</span><b>Reports</b><small>Open moderation cases</small></button>
+          <button data-owner-panel="community"><span>♟</span><b>Community</b><small>Clubs & arenas moderation</small></button>
           <button data-owner-panel="audit"><span>🧾</span><b>Audit History</b><small>Staff and owner actions</small></button>
           <button data-owner-panel="import"><span>☁</span><b>Import Openings</b><small>Move the full library into Supabase</small></button>
         </div>
@@ -1635,6 +1636,28 @@
         <h2>You're ready to BOZO.</h2>
         <p>Your email has been verified and your account is ready.</p>
         <button id="auth-verified-continue" class="button primary" type="button">Continue to BOZO</button>
+      </section>
+
+      <section id="auth-reset-sent" class="auth-verification-state" hidden>
+        <div class="auth-verification-icon" aria-hidden="true">✉</div>
+        <div class="eyebrow">PASSWORD RECOVERY</div>
+        <h2>Check your email</h2>
+        <p>We sent a password-reset link to <strong id="auth-reset-email">your email</strong>.</p>
+        <p class="muted">Open that link on this device. BOZO will bring you back here to choose a new password.</p>
+        <button id="auth-reset-back" class="text-button" type="button">Back to sign in</button>
+      </section>
+
+      <section id="auth-new-password" class="auth-verification-state" hidden>
+        <div class="auth-verification-icon success" aria-hidden="true">🔑</div>
+        <div class="eyebrow">RESET PASSWORD</div>
+        <h2>Create a new password</h2>
+        <p class="muted">Your recovery link is valid. Choose a new BOZO password below.</p>
+        <form id="auth-new-password-form">
+          <label>New password<input id="auth-new-password-input" type="password" minlength="8" required autocomplete="new-password"></label>
+          <label>Confirm new password<input id="auth-new-password-confirm" type="password" minlength="8" required autocomplete="new-password"></label>
+          <button class="button primary" type="submit">Save new password</button>
+        </form>
+        <div id="auth-reset-message" class="auth-message"></div>
       </section>
 
       <div id="auth-message" class="auth-message"></div>
@@ -2269,7 +2292,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.9.4.js"></script>
+  <script src="./app-v4.10.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
@@ -2375,6 +2398,35 @@
       <div class="arena-score-note">Arena scoring: win 2, draw 1, loss 0. Winning streaks can double win points. Club Clash can use Top 10 or Combined club scoring.</div>
       <button id="submit-create-arena" class="button primary">Create arena</button>
       <div id="arena-create-status" class="auth-message"></div>
+    </div>
+  </div>
+
+
+  <div id="club-detail-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal community-detail-modal">
+      <button id="close-club-detail" class="modal-close" type="button">×</button>
+      <div id="club-detail-header" class="community-detail-header"></div>
+      <nav class="community-detail-tabs">
+        <button class="active" data-club-detail-tab="overview">Overview</button>
+        <button data-club-detail-tab="members">Members</button>
+        <button data-club-detail-tab="arenas">Arenas</button>
+        <button data-club-detail-tab="settings">Settings</button>
+      </nav>
+      <div id="club-detail-body" class="community-detail-body"></div>
+    </div>
+  </div>
+
+  <div id="arena-detail-modal" class="modal-backdrop" hidden>
+    <div class="auth-modal community-detail-modal arena-detail-modal">
+      <button id="close-arena-detail" class="modal-close" type="button">×</button>
+      <div id="arena-detail-header" class="community-detail-header"></div>
+      <nav class="community-detail-tabs">
+        <button class="active" data-arena-detail-tab="standings">Standings</button>
+        <button data-arena-detail-tab="clubs">Club standings</button>
+        <button data-arena-detail-tab="details">Details</button>
+      </nav>
+      <div id="arena-detail-body" class="community-detail-body"></div>
+      <div id="arena-detail-actions" class="community-detail-actions"></div>
     </div>
   </div>
 
