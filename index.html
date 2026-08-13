@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.7.9.css">
+  <link rel="stylesheet" href="./styles-v4.8.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -120,7 +120,7 @@
 
         <div class="hero-card">
           <div class="mascot-stage">
-            <img src="./assets/bozo-mascot.webp" alt="Professor Bozo">
+            <img src="./assets/bozo-scholar.png" alt="Scholar BOZO">
             <div class="speech-card">
               <span>BOZO SAYS</span>
               <b>Memorize ideas, not moves.</b>
@@ -1046,7 +1046,7 @@
           </div>
           <div>
             <div class="profile-badge-row">
-              <div id="profile-role-badge" class="role-badge">Member</div>
+              <img id="profile-role-flair" class="profile-role-flair" alt="" hidden>
               <div id="profile-supporter-badge" class="bozo-supporter-chip" hidden>
                 <img src="./assets/bozo-supporter.png" alt="">
                 <span>BOZO+</span>
@@ -1118,6 +1118,33 @@
             <label>IGN<input id="profile-ign-input" maxlength="20"><small class="name-rule-hint">Up to 20 characters.</small></label>
             <label>Username<input id="profile-username-input" maxlength="20"></label>
             <label>Bio<textarea id="profile-bio-input" maxlength="160"></textarea></label>
+            <section class="profile-identity-customization">
+              <div class="panel-heading"><div><span>IDENTITY</span><h3>Flag & flair</h3></div></div>
+              <p class="profile-repertoire-help">Represent a country or region and choose a small flair shown with your name. Country is optional.</p>
+              <label>Country / region
+                <select id="profile-country-input"><option value="">No country selected</option></select>
+              </label>
+              <label>Profile flair
+                <select id="profile-flair-input">
+                  <option value="">No flair</option>
+                  <optgroup label="Chess · Free">
+                    <option value="pawn">♟ Pawn</option>
+                    <option value="knight">♞ Knight</option>
+                    <option value="bishop">♝ Bishop</option>
+                    <option value="rook">♜ Rook</option>
+                    <option value="queen">♛ Queen</option>
+                    <option value="king">♚ King</option>
+                  </optgroup>
+                  <optgroup label="BOZO+">
+                    <option value="supporter">Supporter crest</option>
+                    <option value="scholar">Scholar BOZO</option>
+                    <option value="crown">👑 Crown</option>
+                    <option value="fire">🔥 Fire</option>
+                  </optgroup>
+                </select>
+              </label>
+              <small id="profile-flair-status" class="profile-avatar-status">Chess flairs are free. BOZO+ flairs require an active supporter membership.</small>
+            </section>
             <section class="profile-title-request-box">
               <div class="panel-heading"><div><span>VERIFICATION</span><h3>Chess title & identity</h3></div></div>
               <p class="profile-repertoire-help">Official titles only appear after BOZO staff verifies them. Pending claims are private.</p>
@@ -1911,7 +1938,7 @@
         <div class="bot-fighter">
           <div class="bot-fighter-copy">
             <span id="bot-player-role-label">YOU</span>
-            <div class="live-player-name-row"><b id="bot-player-color-label">White</b><img id="rated-my-supporter-badge" class="live-supporter-badge" src="./assets/bozo-supporter.png" alt="BOZO Supporter" hidden></div>
+            <div class="live-player-name-row"><b id="bot-player-color-label">White</b><img id="rated-my-supporter-badge" class="live-supporter-badge" src="./assets/bozo-supporter.png" alt="BOZO Supporter" hidden><span id="rated-my-identity-badges" class="live-identity-badges"></span></div>
           </div>
           <strong id="rated-my-clock" class="rated-live-clock" hidden>10:00</strong>
         </div>
@@ -1919,7 +1946,7 @@
         <div class="bot-fighter">
           <div class="bot-fighter-copy">
             <span id="bot-opponent-label">BOZO BOT</span>
-            <div class="live-player-name-row"><b id="bot-strength-label">Club</b><img id="rated-opponent-supporter-badge" class="live-supporter-badge" src="./assets/bozo-supporter.png" alt="BOZO Supporter" hidden></div>
+            <div class="live-player-name-row"><b id="bot-strength-label">Club</b><img id="rated-opponent-supporter-badge" class="live-supporter-badge" src="./assets/bozo-supporter.png" alt="BOZO Supporter" hidden><span id="rated-opponent-identity-badges" class="live-identity-badges"></span></div>
           </div>
           <strong id="rated-opponent-clock" class="rated-live-clock" hidden>10:00</strong>
         </div>
@@ -2174,7 +2201,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.7.9.js"></script>
+  <script src="./app-v4.8.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
