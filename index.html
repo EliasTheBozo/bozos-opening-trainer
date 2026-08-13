@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.8.0.css">
+  <link rel="stylesheet" href="./styles-v4.8.1.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -1122,6 +1122,7 @@
               <div class="panel-heading"><div><span>IDENTITY</span><h3>Flag & flair</h3></div></div>
               <p class="profile-repertoire-help">Represent a country or region and choose a small flair shown with your name. Country is optional.</p>
               <label>Country / region
+                <input id="profile-country-search" class="country-search-input" type="search" placeholder="Search countries or territories..." autocomplete="off">
                 <select id="profile-country-input"><option value="">No country selected</option></select>
               </label>
               <label>Profile flair
@@ -2201,7 +2202,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.8.0.js"></script>
+  <script src="./app-v4.8.1.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
