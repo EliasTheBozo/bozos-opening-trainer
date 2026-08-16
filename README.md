@@ -682,3 +682,8 @@ Features:
 ## v3.1.0 — Mission and Free-Learning Promise
 
 The homepage now states BOZO's core mission: powerful chess-learning tools should be available to every player regardless of rating or budget. A dedicated mission section and updated Support language make clear that contributions are optional and do not unlock stronger learning features. See `VISION.md` for the product principles guiding future development.
+
+## Web v4.11.1
+- Fixes BOZO puzzle generation regression (`puzzlePieceValue` missing in v4.11.0).
+- Adds Supabase-synced Rush/Survival run history, personal bests, and global leaderboards (no puzzle Elo).
+- Apply `BOZO_V4111_PUZZLE_CLOUD.sql` before expecting cloud records to load.
