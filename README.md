@@ -687,6 +687,3 @@ The homepage now states BOZO's core mission: powerful chess-learning tools shoul
 - Fixes BOZO puzzle generation regression (`puzzlePieceValue` missing in v4.11.0).
 - Adds Supabase-synced Rush/Survival run history, personal bests, and global leaderboards (no puzzle Elo).
 - Apply `BOZO_V4111_PUZZLE_CLOUD.sql` before expecting cloud records to load.
-
-## Web v4.11.2
-Puzzle Rush/Survival quality and record cleanup. Generated transition/quiet-engine puzzles are filtered more aggressively, run records use solved count as the meaningful score, and the `user_activity` schema is updated for current BOZO activity events. Run `BOZO_V4112_PUZZLE_CLOUD_ACTIVITY.sql` once in Supabase.
