@@ -11235,7 +11235,7 @@ const PUZZLE_MIN_TACTICAL_GAP = 65;
 const PUZZLE_MAX_QUIET_EVAL = 650;
 let puzzleGeneralMotif = '';
 let puzzleStats = { index:0, total:5, score:0, streak:0, bestStreak:0, userMoves:0, firstTry:0, mistakes:0, skipped:0 };
-// WEB v4.11.0 — Puzzle Rush / Survival + long-form tactical resolution
+// WEB v4.11.1 — Puzzle Rush / Survival + long-form tactical resolution
 let puzzleRunMode = 'standard';
 let puzzleRunSeconds = 0;
 let puzzleRunDeadline = 0;
@@ -11262,6 +11262,70 @@ const PUZZLE_RUN_CONFIG = {
 function isPuzzleRunMode(){ return puzzleGeneralMode && puzzleRunMode !== 'standard'; }
 function isTimedPuzzleRun(){ return ['bullet','rush3','rush5'].includes(puzzleRunMode); }
 function puzzleRunConfig(){ return PUZZLE_RUN_CONFIG[puzzleRunMode] || PUZZLE_RUN_CONFIG.standard; }
+
+let puzzleCloudMode = 'bullet';
+function puzzleCloudSignedIn(){ return Boolean(state?.session?.user?.id); }
+function puzzleModeLabel(mode){ return PUZZLE_RUN_CONFIG[mode]?.label || mode; }
+function puzzleCloudSetStatus(message='', stateName=''){
+  const root=$('puzzle-cloud-save-status'); if(!root) return;
+  root.hidden=!message; root.textContent=message; root.dataset.state=stateName||'';
+}
+function puzzleCloudDate(value){ try{return new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric'});}catch{return '';} }
+function puzzleCloudSeconds(value){ const n=Number(value||0); return n>0?`${n.toFixed(1)}s`:'—'; }
+async function loadPuzzleCloudData(mode=puzzleCloudMode){
+  if (!['bullet','rush3','rush5','survival'].includes(mode)) mode='bullet';
+  puzzleCloudMode=mode;
+  $$('[data-puzzle-cloud-mode]').forEach(btn=>btn.classList.toggle('active',btn.dataset.puzzleCloudMode===mode));
+  const leaderboard=$('puzzle-cloud-leaderboard'), history=$('puzzle-cloud-history');
+  if(leaderboard) leaderboard.innerHTML='<div class="empty-state mini"><span>Loading leaderboard…</span></div>';
+  if(history) history.innerHTML=puzzleCloudSignedIn()?'<div class="empty-state mini"><span>Loading your runs…</span></div>':'<div class="empty-state mini"><span>Sign in to save run history.</span></div>';
+  const uid=state?.session?.user?.id;
+  try{
+    const jobs=[sb.rpc('get_puzzle_leaderboard',{p_mode:mode,p_limit:10})];
+    if(uid){
+      jobs.push(sb.from('puzzle_personal_bests').select('*').eq('user_id',uid).eq('mode',mode).maybeSingle());
+      jobs.push(sb.from('puzzle_runs').select('score,accuracy,best_streak,hints_used,avg_solve_time,peak_difficulty,ended_reason,duration_seconds,created_at').eq('user_id',uid).eq('mode',mode).order('created_at',{ascending:false}).limit(6));
+    }
+    const results=await Promise.all(jobs);
+    const lbRes=results[0];
+    if(lbRes.error) throw lbRes.error;
+    const rows=lbRes.data||[];
+    if(leaderboard) leaderboard.innerHTML=rows.length?rows.map((row,i)=>`<div class="puzzle-cloud-row"><span class="puzzle-cloud-rank">#${i+1}</span><span class="puzzle-cloud-player"><b>${escapeHtml(row.ign||row.username||'BOZO player')}</b><small>@${escapeHtml(row.username||'player')} · ${Number(row.accuracy||0)}% accuracy</small></span><span class="puzzle-cloud-score">${Number(row.score||0)}<small>${puzzleCloudSeconds(row.avg_solve_time)}</small></span></div>`).join(''):'<div class="empty-state mini"><span>No cloud runs yet. Be the first.</span></div>';
+    const bestScore=$('puzzle-cloud-best-score'), bestDetail=$('puzzle-cloud-best-detail'), runCount=$('puzzle-cloud-run-count');
+    if(!uid){ if(bestScore) bestScore.textContent='—'; if(bestDetail) bestDetail.textContent='Sign in to sync records'; if(runCount) runCount.textContent='—'; return; }
+    const pbRes=results[1], histRes=results[2];
+    if(pbRes.error) throw pbRes.error; if(histRes.error) throw histRes.error;
+    const pb=pbRes.data;
+    if(bestScore) bestScore.textContent=pb?String(pb.best_score):'0';
+    if(bestDetail) bestDetail.textContent=pb?`${Number(pb.best_accuracy||0)}% best accuracy · streak ${Number(pb.best_streak||0)}`:'No synced best yet';
+    if(runCount) runCount.textContent=pb?String(pb.total_runs||0):'0';
+    const myRuns=histRes.data||[];
+    if(history) history.innerHTML=myRuns.length?myRuns.map(row=>`<div class="puzzle-cloud-row"><span class="puzzle-cloud-rank">${puzzleCloudDate(row.created_at)}</span><span class="puzzle-cloud-player"><b>${Number(row.score||0)} solved</b><small>${Number(row.accuracy||0)}% · streak ${Number(row.best_streak||0)} · ${escapeHtml(row.ended_reason||'complete')}</small></span><span class="puzzle-cloud-score">${Number(row.peak_difficulty||0)||'—'}<small>peak</small></span></div>`).join(''):'<div class="empty-state mini"><span>No runs saved for this mode yet.</span></div>';
+  }catch(error){
+    console.warn('Puzzle cloud records unavailable.',error);
+    if(leaderboard) leaderboard.innerHTML='<div class="empty-state mini"><span>Cloud records need the v4.11.1 Supabase migration.</span></div>';
+    if(history && puzzleCloudSignedIn()) history.innerHTML='<div class="empty-state mini"><span>Run history unavailable until Supabase is updated.</span></div>';
+  }
+}
+async function savePuzzleRunCloud(payload){
+  if(!puzzleCloudSignedIn() || !isPuzzleRunMode()) return null;
+  puzzleCloudSetStatus('Syncing this run to your BOZO account…');
+  const {data,error}=await sb.rpc('record_puzzle_run',{
+    p_mode:puzzleRunMode,
+    p_score:Number(payload.score||0),
+    p_accuracy:Number(payload.accuracy||0),
+    p_best_streak:Number(payload.bestStreak||0),
+    p_hints_used:Number(payload.hintsUsed||0),
+    p_avg_solve_time:Number(payload.avgSolve||0),
+    p_peak_difficulty:Number(payload.peakDifficulty||0),
+    p_ended_reason:String(payload.reason||'complete'),
+    p_duration_seconds:Number(payload.durationSeconds||0)
+  });
+  if(error){ console.warn('Could not sync puzzle run.',error); puzzleCloudSetStatus('Run finished, but cloud sync failed. Apply BOZO_V4111_PUZZLE_CLOUD.sql and try again.','error'); return null; }
+  puzzleCloudSetStatus('Run synced. Personal bests and leaderboards are updated.','ok');
+  loadPuzzleCloudData(puzzleRunMode).catch(()=>{});
+  return data;
+}
 
 
 function puzzleStorageKey() { return puzzleGeneralMode ? 'bozo_general_puzzles_v1' : 'bozo_opening_puzzles_v1'; }
@@ -11324,6 +11388,8 @@ $('train-mode-puzzles')?.addEventListener('click', () => setTrainMode('puzzles')
 $('train-mode-bozo-puzzles')?.addEventListener('click', () => setTrainMode('bozo-puzzles'));
 $('bozo-puzzle-start')?.addEventListener('click', () => startBozoPuzzles('standard'));
 $$('[data-bozo-puzzle-mode]').forEach(button => button.addEventListener('click', () => startBozoPuzzles(button.dataset.bozoPuzzleMode || 'standard')));
+$$('[data-puzzle-cloud-mode]').forEach(button => button.addEventListener('click', () => loadPuzzleCloudData(button.dataset.puzzleCloudMode || 'bullet')));
+$('puzzle-cloud-refresh')?.addEventListener('click', () => loadPuzzleCloudData(puzzleCloudMode));
 $('puzzle-search-button')?.addEventListener('click', () => searchPuzzleOpenings($('puzzle-opening-search').value));
 $('puzzle-opening-search')?.addEventListener('keydown', e => { if (e.key === 'Enter') searchPuzzleOpenings(e.currentTarget.value); });
 $('puzzle-opening-search')?.addEventListener('input', e => {
@@ -11334,7 +11400,7 @@ $('puzzle-random-button')?.addEventListener('click', startRandomOpeningPuzzles);
 $('puzzle-hint')?.addEventListener('click', showPuzzleHint);
 $('puzzle-answer')?.addEventListener('click', showPuzzleAnswer);
 $('puzzle-skip')?.addEventListener('click', skipPuzzle);
-$('puzzle-again')?.addEventListener('click', () => puzzleGeneralMode ? startBozoPuzzles() : (puzzleOpening ? startOpeningPuzzles(puzzleOpening.id) : startRandomOpeningPuzzles()));
+$('puzzle-again')?.addEventListener('click', () => puzzleGeneralMode ? startBozoPuzzles(puzzleRunMode) : (puzzleOpening ? startOpeningPuzzles(puzzleOpening.id) : startRandomOpeningPuzzles()));
 $('puzzle-new-line')?.addEventListener('click', () => { puzzleOpening = null; puzzlePool = []; puzzleGame = null; puzzleGeneralMode ? showBozoPuzzlePicker() : showPuzzlePicker(); });
 
 
@@ -11344,6 +11410,7 @@ function showBozoPuzzlePicker() {
   $('puzzle-picker').hidden = true;
   $('puzzle-session').hidden = true;
   $('puzzle-results').hidden = true;
+  loadPuzzleCloudData(puzzleCloudMode).catch(()=>{});
 }
 
 async function startBozoPuzzles(mode='standard') {
@@ -11359,6 +11426,7 @@ async function startBozoPuzzles(mode='standard') {
   puzzleUsedStarts = new Set();
   $('puzzle-picker').hidden = true; $('puzzle-results').hidden = true; $('puzzle-session').hidden = false;
   if ($('bozo-puzzle-picker')) $('bozo-puzzle-picker').hidden = true;
+  puzzleCloudSetStatus();
   configurePuzzleRunUi();
   setPuzzleFeedback('neutral','Preparing your run…', puzzleRunMode==='standard' ? 'BOZO is finding a verified tactical position.' : 'The clock starts only after the first verified puzzle is ready.');
   await startNextPuzzle();
@@ -12193,6 +12261,10 @@ function finishPuzzleSession(reason='complete') {
     const previous=JSON.parse(localStorage.getItem(key)||'{}');
     localStorage.setItem(key,JSON.stringify({sessions:(previous.sessions||0)+1,bestScore:Math.max(previous.bestScore||0,score),bestStreak:Math.max(previous.bestStreak||0,puzzleStats.bestStreak),lastAccuracy:accuracy,lastScore:score,bestDifficulty:Math.max(previous.bestDifficulty||0,puzzlePeakDifficulty||0),playedAt:new Date().toISOString()}));
   } catch {}
+  if (isPuzzleRunMode()) {
+    const durationSeconds=puzzleRunStartedAt?Math.max(0,Math.round((Date.now()-puzzleRunStartedAt)/1000)):0;
+    savePuzzleRunCloud({score,accuracy,bestStreak:puzzleStats.bestStreak,hintsUsed:puzzleRunHintsUsed,avgSolve:avg,peakDifficulty:puzzlePeakDifficulty,reason,durationSeconds}).catch(()=>{});
+  } else puzzleCloudSetStatus();
   logActivity?.('bozo_puzzles_completed',{ mode:puzzleRunMode, score, accuracy, best_streak:puzzleStats.bestStreak, hints_used:puzzleRunHintsUsed, peak_difficulty:puzzlePeakDifficulty }).catch?.(()=>{});
 }
 
