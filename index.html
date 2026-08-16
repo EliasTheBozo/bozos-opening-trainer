@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.11.3.css">
+  <link rel="stylesheet" href="./styles-v4.11.8.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -347,7 +347,7 @@
           <div class="bozo-puzzle-launch"><button id="bozo-puzzle-start" class="button primary" type="button">Start Standard Puzzles</button></div>
           <section class="puzzle-cloud-panel" aria-labelledby="puzzle-cloud-title">
             <div class="panel-heading puzzle-cloud-heading"><div><span>CLOUD RECORDS</span><h3 id="puzzle-cloud-title">Rush & Survival records</h3></div><button id="puzzle-cloud-refresh" class="button secondary small" type="button">Refresh</button></div>
-            <p class="puzzle-cloud-copy">Signed-in runs sync across devices. Global leaderboards rank score first, then accuracy and solve speed. No puzzle Elo.</p>
+            <p class="puzzle-cloud-copy">Signed-in runs sync across devices. Global leaderboards rank solved count first, then solve speed. Recent runs can be reviewed puzzle by puzzle. No puzzle Elo.</p>
             <div class="puzzle-cloud-tabs" role="tablist" aria-label="Puzzle leaderboard mode">
               <button class="active" type="button" data-puzzle-cloud-mode="bullet">1 min</button>
               <button type="button" data-puzzle-cloud-mode="rush3">3 min</button>
@@ -362,6 +362,7 @@
               <div><h4>Leaderboard</h4><div id="puzzle-cloud-leaderboard" class="puzzle-cloud-list"><div class="empty-state mini"><span>Loading…</span></div></div></div>
               <div><h4>Your recent runs</h4><div id="puzzle-cloud-history" class="puzzle-cloud-list"><div class="empty-state mini"><span>Sign in to save run history.</span></div></div></div>
             </div>
+            <div id="puzzle-cloud-review-note" class="study-tip" hidden>Choose a recent run to review its puzzles.</div>
           </section>
         </section>
 
@@ -406,7 +407,25 @@
           <div class="eyebrow">PUZZLE SESSION COMPLETE</div><h2 id="puzzle-results-title">Nice run.</h2>
           <div class="stats-grid train-result-grid puzzle-result-grid"><article><span>Score</span><b id="puzzle-result-score">0</b><small id="puzzle-result-score-label">Puzzles solved</small></article><article><span>First-try accuracy</span><b id="puzzle-result-accuracy">0%</b><small>Puzzle moves solved immediately</small></article><article><span>Best streak</span><b id="puzzle-result-streak">0</b><small>Correct moves in a row</small></article><article><span>Hints used</span><b id="puzzle-result-hints">0</b><small>Run-wide hints spent</small></article><article><span>Avg. solve</span><b id="puzzle-result-time">—</b><small>Seconds per completed puzzle</small></article><article><span>Peak difficulty</span><b id="puzzle-result-difficulty">—</b><small>Hardest puzzle reached</small></article></div>
           <div id="puzzle-cloud-save-status" class="puzzle-cloud-save-status" hidden></div>
-          <div class="train-result-actions"><button id="puzzle-again" class="button primary" type="button">Run it again</button><button id="puzzle-new-line" class="button secondary" type="button">Choose another line</button></div>
+          <div class="train-result-actions"><button id="puzzle-review-run" class="button secondary" type="button">Review run</button><button id="puzzle-again" class="button primary" type="button">Run it again</button><button id="puzzle-run-history" class="button secondary" type="button">Run history</button><button id="puzzle-new-line" class="button secondary" type="button">Choose another mode</button></div>
+          <section id="puzzle-run-review" class="puzzle-run-review" hidden>
+            <div class="panel-heading"><div><span>RUN REVIEW</span><h3 id="puzzle-run-review-title">Review this run</h3></div><button id="puzzle-run-review-close" class="button secondary small" type="button">Close</button></div>
+            <div id="puzzle-run-review-strip" class="puzzle-run-review-strip"></div>
+            <div class="puzzle-run-review-layout">
+              <div id="puzzle-run-review-board" class="web-duel-board puzzle-review-board" aria-label="Puzzle review board"></div>
+              <div class="puzzle-run-review-copy">
+                <div class="eyebrow" id="puzzle-run-review-status">PUZZLE</div>
+                <h3 id="puzzle-run-review-heading">Choose a puzzle</h3>
+                <p id="puzzle-run-review-meta"></p>
+                <div id="puzzle-run-review-line" class="puzzle-review-line"></div>
+                <div class="train-result-actions">
+                  <button id="puzzle-run-review-prev" class="button secondary" type="button">← Previous</button>
+                  <button id="puzzle-run-review-next" class="button secondary" type="button">Next →</button>
+                  <button id="puzzle-run-review-analyze" class="button primary" type="button">Analyze position</button>
+                </div>
+              </div>
+            </div>
+          </section>
         </section>
       </div>
     </section>
@@ -2325,7 +2344,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.11.7.js"></script>
+  <script src="./app-v4.11.8.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
