@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.10.0.css">
+  <link rel="stylesheet" href="./styles-v4.11.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -336,10 +336,15 @@
         <section id="bozo-puzzle-picker" class="panel train-picker puzzle-picker" hidden>
           <div class="panel-heading"><div><span>BOZO PUZZLES</span><h2>Choose your path.</h2></div></div>
           <p class="puzzle-picker-copy">These positions are generated independently of the opening library. BOZO uses Stockfish to judge the position, and more than one move can be a valid path when the chess supports it.</p>
-          <div class="bozo-puzzle-launch">
-            <div class="study-tip"><b>Not a one-answer puzzle.</b><br>Best, strong, and playable moves can all continue. Your choice determines the position BOZO gives you next.</div>
-            <button id="bozo-puzzle-start" class="button primary" type="button">Generate 5 BOZO puzzles</button>
+          <div class="study-tip"><b>BOZO puzzle philosophy.</b><br>Positions are verified by Stockfish, the opponent plays the strongest reply, and a tactic continues until the idea is actually resolved.</div>
+          <div class="puzzle-mode-grid" aria-label="BOZO puzzle modes">
+            <button class="puzzle-mode-card" type="button" data-bozo-puzzle-mode="standard"><span>🧩</span><b>Standard</b><small>Unlimited puzzles · no clock</small></button>
+            <button class="puzzle-mode-card" type="button" data-bozo-puzzle-mode="bullet"><span>⚡</span><b>Bullet Rush</b><small>1 minute · 3 strikes · 3 hints</small></button>
+            <button class="puzzle-mode-card" type="button" data-bozo-puzzle-mode="rush3"><span>🔥</span><b>Puzzle Rush</b><small>3 minutes · 3 strikes · 3 hints</small></button>
+            <button class="puzzle-mode-card" type="button" data-bozo-puzzle-mode="rush5"><span>🔥</span><b>Long Rush</b><small>5 minutes · 3 strikes · 3 hints</small></button>
+            <button class="puzzle-mode-card" type="button" data-bozo-puzzle-mode="survival"><span>🛡️</span><b>Survival</b><small>No clock · 3 strikes · 3 hints</small></button>
           </div>
+          <div class="bozo-puzzle-launch"><button id="bozo-puzzle-start" class="button primary" type="button">Start Standard Puzzles</button></div>
         </section>
 
         <section id="puzzle-picker" class="panel train-picker puzzle-picker">
@@ -355,7 +360,7 @@
         <section id="puzzle-session" class="train-session" hidden>
           <div class="train-session-topbar">
             <div><span class="eyebrow">OPENING PUZZLE <b id="puzzle-number">1/5</b></span><h2 id="puzzle-title">Find the continuation.</h2><p id="puzzle-subtitle"></p></div>
-            <div class="train-live-stats"><span>Score <b id="puzzle-score">0</b></span><span>Streak <b id="puzzle-streak">0</b></span><span>First try <b id="puzzle-accuracy">0%</b></span></div>
+            <div class="train-live-stats puzzle-run-stats"><span id="puzzle-clock-wrap" hidden>Time <b id="puzzle-clock">1:00</b></span><span>Score <b id="puzzle-score">0</b></span><span>Streak <b id="puzzle-streak">0</b></span><span id="puzzle-strikes-wrap" hidden>Strikes <b id="puzzle-strikes">●●●</b></span><span id="puzzle-hints-wrap" hidden>Hints <b id="puzzle-hints-left">3</b></span><span>First try <b id="puzzle-accuracy">0%</b></span></div>
           </div>
           <div class="train-layout">
             <div>
@@ -373,14 +378,15 @@
               <div class="train-mini-track"><span id="puzzle-track-fill"></span></div>
               <div class="puzzle-context"><span>Starting after</span><b id="puzzle-start-label">Move —</b></div>
               <div id="puzzle-move-history" class="train-move-history"></div>
-              <div class="study-tip">The position can begin anywhere in the line. Correct moves keep the streak alive; BOZO plays the book replies.</div>
+              <div id="puzzle-run-grid" class="puzzle-run-grid" hidden></div>
+              <div id="puzzle-run-tip" class="study-tip">The position can begin anywhere in the line. Correct moves keep the streak alive; BOZO plays the strongest reply.</div>
             </aside>
           </div>
         </section>
 
         <section id="puzzle-results" class="panel train-results puzzle-results" hidden>
           <div class="eyebrow">PUZZLE SESSION COMPLETE</div><h2 id="puzzle-results-title">Nice run.</h2>
-          <div class="stats-grid train-result-grid"><article><span>Score</span><b id="puzzle-result-score">0</b><small>Points earned</small></article><article><span>First-try accuracy</span><b id="puzzle-result-accuracy">0%</b><small>Puzzle moves solved immediately</small></article><article><span>Best streak</span><b id="puzzle-result-streak">0</b><small>Correct moves in a row</small></article></div>
+          <div class="stats-grid train-result-grid puzzle-result-grid"><article><span>Score</span><b id="puzzle-result-score">0</b><small id="puzzle-result-score-label">Puzzles solved</small></article><article><span>First-try accuracy</span><b id="puzzle-result-accuracy">0%</b><small>Puzzle moves solved immediately</small></article><article><span>Best streak</span><b id="puzzle-result-streak">0</b><small>Correct moves in a row</small></article><article><span>Hints used</span><b id="puzzle-result-hints">0</b><small>Run-wide hints spent</small></article><article><span>Avg. solve</span><b id="puzzle-result-time">—</b><small>Seconds per completed puzzle</small></article><article><span>Peak difficulty</span><b id="puzzle-result-difficulty">—</b><small>Hardest puzzle reached</small></article></div>
           <div class="train-result-actions"><button id="puzzle-again" class="button primary" type="button">Run it again</button><button id="puzzle-new-line" class="button secondary" type="button">Choose another line</button></div>
         </section>
       </div>
@@ -832,6 +838,14 @@
                 <div><span class="eyebrow">POSITION ANALYSIS</span><h2 id="position-eval-title">Analyzed position</h2></div>
                 <p id="position-eval-summary">Run an analysis to see the evaluation and best continuation.</p>
                 <div id="position-best-line" class="review-recommended-line"></div>
+                <div id="position-line-controls" class="position-line-controls" hidden>
+                  <button id="position-line-start" class="button secondary" type="button">⏮ Start</button>
+                  <button id="position-line-back" class="button secondary" type="button">◀ Back</button>
+                  <button id="position-line-play" class="button secondary" type="button">▶ Play line</button>
+                  <button id="position-line-next" class="button secondary" type="button">Next ▶</button>
+                  <button id="position-line-end" class="button secondary" type="button">End ⏭</button>
+                  <button id="position-line-reset" class="button secondary" type="button">↻ Reset</button>
+                </div>
                 <div class="review-move-facts"><div><span>Position</span><b id="position-description">Equal</b></div><div><span>Evaluation</span><b id="position-evaluation">0.00</b></div><div><span>Best move</span><b id="position-best-move">—</b></div><div><span>Side to move</span><b id="position-turn-label">White</b></div></div>
               </div>
               <section class="bozo-coach-panel review-coach-panel">
@@ -2292,7 +2306,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.10.0.js"></script>
+  <script src="./app-v4.11.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
