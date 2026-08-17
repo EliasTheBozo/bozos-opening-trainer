@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.11.8.css">
+  <link rel="stylesheet" href="./styles-v4.12.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -33,6 +33,7 @@
       <button data-route="home">Home</button>
       <button data-route="library">Opening Library</button>
       <button data-route="train">Train</button>
+      <button class="daily-nav-button" data-route="daily">Daily Puzzle</button>
       <button data-route="dashboard">Dashboard</button>
       <div class="nav-menu nav-play-menu">
       <button class="nav-link nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">
@@ -75,6 +76,7 @@
     <button data-route="home">Home</button>
     <button data-route="library">Opening Library</button>
     <button data-route="train">Train</button>
+    <button class="daily-nav-button" data-route="daily">Daily Puzzle</button>
     <button data-route="dashboard">Dashboard</button>
     <button data-route="play" data-mobile-play-section="quick">Play</button>
     <button class="mobile-play-sub" data-route="play" data-mobile-play-section="arenas">↳ Arenas</button>
@@ -278,6 +280,11 @@
         </div>
         <button id="train-new-line" class="button secondary" type="button">Choose another line</button>
       </div>
+
+      <section class="daily-train-card panel">
+        <div><span class="eyebrow">DAILY BOZO</span><h2>One handcrafted position. Every day.</h2><p>Staff-curated puzzles with authored continuations, progressive hints, explanations, streaks, and post-solve discussion.</p></div>
+        <button class="button primary" type="button" data-route="daily">Solve today's Daily BOZO</button>
+      </section>
 
       <div class="train-mode-switch" role="tablist" aria-label="Training mode">
         <button id="train-mode-recall" class="active" type="button" role="tab" aria-selected="true">Recall Training</button>
@@ -1518,6 +1525,35 @@
       </div>
     </section>
 
+    <section id="view-daily" class="view daily-view">
+      <div class="page-heading daily-heading">
+        <div><div class="eyebrow">DAILY BOZO</div><h1 id="daily-title">Today's handcrafted puzzle.</h1><p id="daily-subtitle">A staff-curated position with a real authored continuation.</p></div>
+        <div class="daily-heading-actions"><button id="daily-prev" class="button secondary" type="button">← Previous</button><button id="daily-today" class="button secondary" type="button">Today</button><button id="daily-next" class="button secondary" type="button">Next →</button></div>
+      </div>
+      <div id="daily-missing" class="panel empty-state" hidden><div>🧩</div><b>No Daily BOZO is scheduled for this date.</b><span>Try another day from the archive.</span></div>
+      <div id="daily-content" hidden>
+        <div class="daily-layout">
+          <section class="panel daily-board-panel">
+            <div class="daily-puzzle-meta"><span id="daily-date-label"></span><span id="daily-author-label"></span><span id="daily-theme-label"></span></div>
+            <div class="study-board-shell daily-board-shell"><div id="daily-board" class="web-duel-board daily-board"></div></div>
+            <div id="daily-feedback" class="train-feedback" data-state="neutral"><b>Your move.</b><span>Find the continuation.</span></div>
+            <div class="daily-actions"><button id="daily-hint" class="button secondary" type="button">Hint <span id="daily-hints-left">3</span></button><button id="daily-reset" class="button secondary" type="button">Reset</button><button id="daily-analyze" class="button secondary" type="button" hidden>Analyze position</button></div>
+          </section>
+          <aside class="daily-side">
+            <section class="panel daily-progress-card"><span class="eyebrow">TODAY'S RUN</span><div class="daily-streak-row"><div><b id="daily-streak">0</b><span>day streak</span></div><div><b id="daily-solved-total">0</b><span>Daily BOZOs solved</span></div></div><div id="daily-line-progress" class="daily-line-progress"></div></section>
+            <section id="daily-explanation-card" class="panel" hidden><span class="eyebrow">BOZO'S TAKE</span><h3>Why the line works</h3><p id="daily-explanation"></p><div id="daily-solution-line" class="daily-solution-line"></div><button id="daily-replay" class="button secondary" type="button">Replay solution</button></section>
+            <section class="panel daily-archive-card"><div class="panel-heading"><div><span>ARCHIVE</span><h3 id="daily-archive-month">This month</h3></div></div><div class="daily-archive-controls"><button id="daily-month-prev" type="button">←</button><button id="daily-month-next" type="button">→</button></div><div id="daily-calendar" class="daily-calendar"></div></section>
+          </aside>
+        </div>
+        <section id="daily-discussion" class="panel daily-discussion" hidden>
+          <div class="panel-heading"><div><span>DISCUSSION</span><h2>Talk about today's puzzle</h2></div><span id="daily-comment-count">0 comments</span></div>
+          <p class="daily-spoiler-note">Discussion unlocks after you solve the puzzle, so the continuation stays spoiler-free.</p>
+          <form id="daily-comment-form" class="daily-comment-form"><textarea id="daily-comment-input" maxlength="800" placeholder="What did you think of the position?"></textarea><button class="button primary" type="submit">Post comment</button></form>
+          <div id="daily-comments" class="daily-comments"></div>
+        </section>
+      </div>
+    </section>
+
     <section id="view-owner" class="view">
       <div id="owner-denied" class="auth-required">
         <div class="lock-icon">🔒</div>
@@ -1539,6 +1575,7 @@
           <button data-owner-panel="users"><span>👥</span><b>Users</b><small>Search accounts and roles</small></button>
           <button data-owner-panel="verification"><span>✓</span><b>Verification</b><small>Titles, badges & name overrides</small></button>
           <button data-owner-panel="announcements"><span>📣</span><b>Announcements</b><small>Publish a bulletin</small></button>
+          <button data-owner-panel="daily"><span>🧩</span><b>Daily Puzzle Studio</b><small>Author & schedule handcrafted puzzles</small></button>
           <button data-owner-panel="submissions"><span>📖</span><b>Opening Review</b><small>Pending community theory</small></button>
           <button data-owner-panel="reports"><span>🚩</span><b>Reports</b><small>Open moderation cases</small></button>
           <button data-owner-panel="community"><span>♟</span><b>Community</b><small>Clubs & arenas moderation</small></button>
@@ -2344,7 +2381,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.11.8.js"></script>
+  <script src="./app-v4.12.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
