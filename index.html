@@ -7,7 +7,7 @@
   <meta name="description" content="BOZO'S Opening Trainer — master chess openings while having fun.">
   <title>BOZO'S Opening Trainer</title>
   <link rel="icon" href="./assets/bozo-mascot.webp">
-  <link rel="stylesheet" href="./styles-v4.12.4.css">
+  <link rel="stylesheet" href="./styles-v4.13.0.css">
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
     .opening-family-card .opening-puzzle-button,.opening-family-card .line-puzzle-button{background:rgba(255,211,77,.065)!important;color:#ffd34d!important;border:1px solid rgba(255,211,77,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -90,6 +90,17 @@
     <button id="owner-mobile-nav" data-route="owner" hidden>Owner's Office</button>
   </div>
 
+  <div id="comms-rail" class="comms-rail" aria-label="BOZO communications">
+    <button type="button" data-comms-tab="notifications" title="Notifications"><span>●</span><b id="comms-notification-badge" hidden>0</b><small>Alerts</small></button>
+    <button type="button" data-comms-tab="messages" title="Messages"><span>✉</span><b id="comms-message-badge" hidden>0</b><small>DMs</small></button>
+    <button type="button" data-comms-tab="support" title="Ask BOZO"><span>?</span><b id="comms-support-badge" hidden>0</b><small>Ask</small></button>
+  </div>
+  <div id="comms-backdrop" class="comms-backdrop" hidden></div>
+  <aside id="comms-drawer" class="comms-drawer" hidden aria-label="BOZO communications panel">
+    <header><div><span class="eyebrow">BOZO CONNECT</span><h2 id="comms-title">Messages</h2></div><button id="comms-close" type="button" aria-label="Close">×</button></header>
+    <nav class="comms-tabs"><button data-comms-tab="notifications">Notifications</button><button data-comms-tab="messages">Messages</button><button data-comms-tab="support">Ask BOZO</button></nav>
+    <div id="comms-body" class="comms-body"></div>
+  </aside>
   <aside class="public-beta-banner" aria-label="Public beta notice">
     <div class="public-beta-copy">
       <span class="public-beta-badge">PUBLIC BETA</span>
@@ -1857,6 +1868,7 @@
 
       <div class="friend-profile-actions">
         <button id="friend-profile-spectate" class="button secondary" type="button" hidden>Spectate</button>
+        <button id="friend-profile-message" class="button secondary" type="button">Message</button>
         <button id="friend-profile-challenge" class="button primary" type="button">Challenge</button>
         <button id="friend-profile-close-button" class="button secondary" type="button">Close</button>
       </div>
@@ -2381,7 +2393,7 @@
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.12.4.js"></script>
+  <script src="./app-v4.13.0.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
