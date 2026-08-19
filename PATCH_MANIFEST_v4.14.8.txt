@@ -1,0 +1,21 @@
+BOZO'S Opening Trainer v4.14.8 — Puzzle Input + Annotation Alignment
+
+Changed files:
+- index.html
+- app-v4.14.8.js
+
+Fixes:
+1. Master Game Puzzle replay/input lock
+   - Resets puzzleCompleting when a newly sampled master puzzle is activated.
+   - Fixes the case where the first master puzzle works but a later one renders
+     normally while refusing every board click.
+
+2. Board annotation/highlight centering
+   - User highlights and arrows now measure the actual rendered data-square
+     elements instead of assuming a perfect abstract 100x100 square grid.
+   - Keeps annotations centered if board sizing, borders, zoom, or responsive
+     layout changes the rendered geometry.
+   - Puzzle annotation SVG now occupies the exact board shell rather than using
+     a hard-coded 3px inset.
+
+No database migration required.
