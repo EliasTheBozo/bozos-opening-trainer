@@ -1,12 +1,13 @@
-BOZO v4.14.9 — Source-Agnostic Master Header
+BOZO v4.14.10 — Master Library Pagination
 
-Changes:
-- Raw URL values stored in a master game's Site field are no longer displayed in the visible game header.
-- Normal non-URL site/location values (for example "Auckland NZL") still display.
-- Source/provenance data remains stored internally for future multi-source importing.
+1. Run SUPABASE_BOZO_MASTER_GAMES_V41410_PAGINATION.sql in Supabase SQL Editor.
+2. Upload/replace index.html.
+3. Upload app-v4.14.10.js.
+4. Hard refresh the site.
 
-Files to upload:
-- index.html
-- app-v4.14.9.js
-
-No database migration or re-import is required.
+What changed:
+- Master Library count now shows the true number of matching games in the database.
+- The browser loads 100 games at a time instead of trying to load the entire database.
+- Scrolling near the bottom automatically fetches the next 100.
+- Search/result/year filters get their own accurate counts and paginated result set.
+- Existing master viewer, titles, eval bar, puzzle fixes, and source-agnostic header are preserved.
