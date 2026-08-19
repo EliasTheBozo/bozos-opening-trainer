@@ -1,0 +1,29 @@
+BOZO v4.14.0 — MASTER GAMES FOUNDATION
+
+BASELINE
+- v4.13.1 full project
+- plus v4.13.2 navbar patch
+- plus v4.13.3 DM RPC patch
+- plus v4.13.4 Supabase RLS patch
+
+REPLACE
+- index.html
+
+ADD
+- app-v4.14.0.js
+- SUPABASE_BOZO_MASTER_GAMES_V4140.sql
+- BOZO_V4140_MASTER_GAMES.md
+
+OPTIONAL DELETE AFTER DEPLOY VERIFICATION
+- app-v4.13.3.js
+
+SUPABASE
+1. Run SUPABASE_BOZO_MASTER_GAMES_V4140.sql once.
+2. No changes to existing BOZO Connect tables are made.
+
+FIRST TEST
+1. Deploy index.html + app-v4.14.0.js.
+2. Open Owner's Office > Master Game Import.
+3. Paste a valid PGN and import it.
+4. Open Play > Master Games.
+5. Verify Study, Train White, Train Black, and Train Both.
