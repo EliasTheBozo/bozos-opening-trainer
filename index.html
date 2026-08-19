@@ -4814,6 +4814,78 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+<style id="bozo-master-games-v4146">
+/* v4.14.6 — make Master Games use the same board sizing language as Study Mode. */
+.master-games-view{
+  width:min(1460px,calc(100vw - 48px));
+  max-width:none;
+  margin-left:50%;
+  margin-right:0;
+  transform:translateX(-50%);
+}
+.master-layout{grid-template-columns:360px minmax(0,1fr)}
+.master-viewer{scroll-margin-top:112px}
+.master-workspace{
+  grid-template-columns:minmax(0,var(--bozo-board-max)) minmax(300px,1fr);
+  gap:22px;
+  align-items:start;
+}
+.master-board-column{
+  width:min(100%,var(--bozo-board-max));
+  max-width:var(--bozo-board-max);
+  justify-self:center;
+  min-width:0;
+}
+.master-board{
+  width:100%;
+  max-width:var(--bozo-board-max);
+  grid-template-rows:repeat(8,minmax(0,1fr));
+}
+.master-board .board-square{min-width:0;min-height:0;}
+.master-board-frame{
+  display:grid;
+  grid-template-columns:24px minmax(0,1fr);
+  gap:8px;
+  width:100%;
+  max-width:calc(var(--bozo-board-max) + 32px);
+  align-items:stretch;
+}
+.master-eval-bar{
+  position:relative;
+  min-height:100%;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:8px;
+  background:#17131b;
+  box-shadow:0 8px 20px rgba(0,0,0,.22);
+}
+.master-eval-black,.master-eval-white{position:absolute;left:0;width:100%;transition:height .22s ease}
+.master-eval-black{top:0;height:50%;background:#17131b}
+.master-eval-white{bottom:0;height:50%;background:#f5ecda}
+.master-eval-label{position:absolute;left:50%;z-index:2;font-size:7px;font-weight:900;letter-spacing:.05em;writing-mode:vertical-rl;transform:translateX(-50%);pointer-events:none}
+.master-eval-label.top{top:7px;color:#fff}.master-eval-label.bottom{bottom:7px;color:#17131b}
+.master-eval-value{position:absolute;left:50%;z-index:3;transform:translateX(-50%);font-size:8px;font-weight:900;padding:2px 3px;border-radius:4px;white-space:nowrap}
+.master-eval-value.at-top{top:28px;color:#fff;background:rgba(0,0,0,.34)}
+.master-eval-value.at-bottom{bottom:28px;color:#17131b;background:rgba(255,255,255,.45)}
+.master-title-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 5px;margin-right:5px;border-radius:6px;border:1px solid rgba(255,189,74,.45);color:#ffbd4a;font-size:11px;font-weight:1000;vertical-align:2px}
+.master-player-name{display:inline-flex;align-items:center;gap:2px}
+.master-eval-loading .master-eval-value{opacity:.62}
+
+.master-board-column>.bozo-board-size-control{margin-bottom:8px}
+.master-side-column{min-width:0}
+.master-moves-card{min-width:0}
+@media(max-width:1250px){
+  .master-games-view{width:min(100%,calc(100vw - 32px));}
+  .master-layout{grid-template-columns:330px minmax(0,1fr)}
+}
+@media(max-width:1100px){
+  .master-games-view{width:100%;margin-left:0;transform:none}
+  .master-layout{grid-template-columns:1fr}
+  .master-workspace{grid-template-columns:1fr}
+  .master-board-column{margin-inline:auto}
+}
+</style>
 </head>
 <body>
   <div class="background-glow glow-one"></div>
@@ -6046,7 +6118,16 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
             </div>
             <div class="master-workspace">
               <div class="master-board-column">
-                <div id="master-game-board" class="chess-board master-board" aria-label="Master game board"></div>
+                <div class="master-board-frame">
+                  <div id="master-eval-bar" class="master-eval-bar" role="img" aria-label="Position evaluation">
+                    <div id="master-eval-black" class="master-eval-black"></div>
+                    <div id="master-eval-white" class="master-eval-white"></div>
+                    <span id="master-eval-top" class="master-eval-label top">Black</span>
+                    <span id="master-eval-bottom" class="master-eval-label bottom">White</span>
+                    <span id="master-eval-value" class="master-eval-value at-bottom">0.00</span>
+                  </div>
+                  <div id="master-game-board" class="chess-board master-board" aria-label="Master game board"></div>
+                </div>
                 <div class="master-board-controls">
                   <button id="master-flip" class="button secondary" type="button">Flip board</button>
                   <button id="master-start" class="button secondary" type="button">|◀</button>
@@ -7307,7 +7388,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.14.5.js"></script>
+  <script src="./app-v4.14.7.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>

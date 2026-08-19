@@ -1,0 +1,4 @@
+BOZO v4.14.7 PATCH
+index.html
+app-v4.14.7.js
+README_v4.14.7.txt
