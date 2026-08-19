@@ -5045,6 +5045,17 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
 <style id="bozo-master-integrations-v4142">
 .master-context-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}.master-context-toolbar input{flex:1;min-width:220px}.master-context-list{display:grid;gap:9px;margin-top:12px}.master-context-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid rgba(180,120,255,.2);border-radius:14px;background:rgba(255,255,255,.025)}.master-context-row b,.master-context-row span{display:block}.master-context-row span{color:var(--muted);font-size:12px;margin-top:3px}.master-context-actions{display:flex;gap:7px;flex-wrap:wrap}.master-context-note{padding:10px 12px;border-radius:12px;border:1px solid rgba(121,255,226,.2);background:rgba(121,255,226,.05);color:var(--muted);margin-bottom:12px}.opening-primary-actions .opening-master-direct{color:#79ffe2;border-color:rgba(121,255,226,.32)}#train-master-puzzles-mode .panel,#review-master-mode .panel{padding:20px}.master-puzzle-status{min-height:44px;color:var(--muted);padding:10px 0}.master-puzzle-source{margin-top:10px;font-size:12px;color:#79ffe2}.master-review-list{max-height:520px;overflow:auto}.master-review-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}@media(max-width:700px){.master-context-row{grid-template-columns:1fr}.master-context-actions{width:100%}.master-context-actions .button{flex:1}.master-context-toolbar{align-items:stretch;flex-direction:column}.master-context-toolbar input{min-width:0;width:100%}}
 </style>
+<style id="bozo-opening-actions-v4143">
+/* v4.14.3: Opening Library is for discovery/study. Training and puzzles live in More. */
+.opening-primary-actions{grid-template-columns:minmax(150px,1.05fr) minmax(170px,1fr) auto!important}
+.opening-action-dock.family .opening-primary-actions{grid-template-columns:minmax(150px,1.05fr) minmax(180px,1fr) minmax(220px,1.35fr) auto!important}
+.opening-primary-actions .opening-master-direct{display:flex;align-items:center;justify-content:center;gap:9px;background:linear-gradient(135deg,rgba(20,72,68,.78),rgba(28,39,58,.96))!important;color:#93ffe8!important;border-color:rgba(121,255,226,.28)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+.opening-primary-actions .opening-master-direct:hover{background:linear-gradient(135deg,rgba(26,94,85,.9),rgba(39,52,72,.98))!important;box-shadow:inset 0 0 0 1px rgba(121,255,226,.14),0 0 18px rgba(121,255,226,.06)}
+.master-games-button-icon{font-size:15px;color:#ffd56a;line-height:1}.opening-more-popover .train-opening-button{background:rgba(56,211,159,.065)!important;border:1px solid rgba(56,211,159,.25)!important;color:#79ffe2!important}.opening-more-popover .opening-puzzle-button{background:rgba(255,211,77,.06)!important;border:1px solid rgba(255,211,77,.24)!important;color:#ffd34d!important}
+.line-action-dock{grid-template-columns:1fr 1.18fr auto!important}.line-action-dock .line-master-button{background:rgba(121,255,226,.065)!important;border:1px solid rgba(121,255,226,.25)!important;color:#79ffe2!important}.line-action-dock .opening-more-menu{min-width:88px}
+@media(max-width:1080px){.opening-primary-actions,.opening-action-dock.family .opening-primary-actions{grid-template-columns:1fr 1fr!important}.opening-primary-actions>.family-toggle{grid-column:1/-1}.opening-primary-actions>.opening-more-menu{grid-column:1/-1}.opening-primary-actions>.opening-more-menu>summary{min-height:46px}}
+@media(max-width:700px){.opening-primary-actions,.opening-action-dock.family .opening-primary-actions{grid-template-columns:1fr 1fr!important}.opening-primary-actions>.family-toggle,.opening-primary-actions>.opening-more-menu{grid-column:1/-1}.line-action-dock{grid-template-columns:1fr 1fr!important}.line-action-dock>.opening-more-menu{grid-column:1/-1}}
+</style>
 
 <section id="view-library" class="view">
       <div class="page-heading">
@@ -7296,7 +7307,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.14.2.js"></script>
+  <script src="./app-v4.14.3.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>

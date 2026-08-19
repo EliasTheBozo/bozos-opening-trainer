@@ -1,0 +1,19 @@
+BOZO v4.14.3 — Opening Library Action Cleanup
+
+REPLACE:
+- index.html
+
+ADD:
+- app-v4.14.3.js
+
+OPTIONAL DELETE AFTER DEPLOY:
+- app-v4.14.2.js
+
+SUPABASE:
+- No database changes.
+
+WHAT CHANGED:
+- Opening cards now keep Study + Master games as the main learning actions.
+- Train and Opening Puzzles moved into the More dropdown because those workflows already live under Train.
+- Master games now uses a dark BOZO-styled teal/gold button instead of the awkward light button.
+- Expanded variation rows follow the same hierarchy: Study + Master games + More.
