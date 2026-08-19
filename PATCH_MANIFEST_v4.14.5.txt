@@ -1,0 +1,13 @@
+BOZO'S Opening Trainer v4.14.5 — Master Viewer Layout Patch
+
+Replace/add these files in the site root:
+- index.html
+- app-v4.14.5.js
+
+Changes:
+- Keeps the selected Master Game header from sitting underneath the sticky site navbar when a game is chosen while the page is scrolled.
+- Adds scroll margin for the Master Game viewer so automatic reveal stops below the navbar.
+- Raises the main Master Library search request from 80 to the database RPC's existing 200-game maximum. With the current 100-game test import, all 100 games can now appear instead of only 80.
+- Uses a new app filename to avoid stale browser caching.
+
+No database migration is required for this patch.
