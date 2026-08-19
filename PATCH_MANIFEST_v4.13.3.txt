@@ -1,0 +1,16 @@
+BOZO v4.13.3 — DM RPC Fix
+
+REPLACE / UPLOAD:
+- index.html
+- app-v4.13.3.js
+
+RUN ONCE IN SUPABASE SQL EDITOR:
+- SUPABASE_BOZO_CONNECT_V4133_DM_FIX.sql
+
+OPTIONAL DELETE AFTER DEPLOY CONFIRMED:
+- app-v4.13.2.js
+
+NOTES:
+- No CSS files changed.
+- Keeps the v4.13.1 inline-style hardening.
+- DMs now resolve @username through profiles first, then create/reuse the thread using a UUID-based RPC.
