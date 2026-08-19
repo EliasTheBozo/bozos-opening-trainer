@@ -1,0 +1,5 @@
+Version: 4.14.9
+Changed files:
+- index.html
+- app-v4.14.9.js
+Purpose: hide raw source URLs from Master Game headers while preserving real site/location metadata.
