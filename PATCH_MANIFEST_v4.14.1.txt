@@ -1,0 +1,6 @@
+BOZO v4.14.1 PATCH
+Changed/additional files only:
+- index.html
+- app-v4.14.1.js
+- SUPABASE_BOZO_MASTER_GAMES_V4141.sql
+- README_v4.14.1.txt
