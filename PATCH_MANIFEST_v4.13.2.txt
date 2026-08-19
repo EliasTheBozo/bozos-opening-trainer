@@ -1,0 +1,22 @@
+BOZO v4.13.2 — NAVBAR CLEANUP PATCH
+
+REPLACE:
+- index.html
+
+ADD:
+- app-v4.13.2.js
+- BOZO_V4132_NAVBAR_CLEANUP.md
+
+OPTIONAL DELETE AFTER DEPLOY VERIFICATION:
+- app-v4.13.1.js
+
+SUPABASE:
+- No database changes.
+
+CHANGES:
+- Removed Profile, Owner, cloud status, and duplicate notification bell from desktop nav.
+- Profile/Owner/cloud status moved into the username account menu.
+- Alerts remain in BOZO Connect right rail.
+- Music remains a compact header action.
+- Mobile navigation retains Profile and Owner entries.
+- Adds more breathing room to desktop navigation.
