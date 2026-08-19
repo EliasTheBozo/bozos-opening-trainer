@@ -1,0 +1,18 @@
+BOZO v4.14.2 PATCH
+
+REPLACE:
+- index.html
+
+ADD:
+- app-v4.14.2.js
+- SUPABASE_BOZO_MASTER_GAMES_V4142.sql
+- README_v4.14.2.txt
+- PATCH_MANIFEST_v4.14.2.txt
+
+OPTIONAL DELETE AFTER DEPLOY CONFIRMED:
+- app-v4.14.1.js
+
+DEPLOY ORDER:
+1. Run SUPABASE_BOZO_MASTER_GAMES_V4142.sql in Supabase SQL Editor.
+2. Upload index.html and app-v4.14.2.js.
+3. Hard refresh.

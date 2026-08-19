@@ -5041,7 +5041,12 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
       </section>
     </section>
 
-    <section id="view-library" class="view">
+    
+<style id="bozo-master-integrations-v4142">
+.master-context-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0}.master-context-toolbar input{flex:1;min-width:220px}.master-context-list{display:grid;gap:9px;margin-top:12px}.master-context-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px;border:1px solid rgba(180,120,255,.2);border-radius:14px;background:rgba(255,255,255,.025)}.master-context-row b,.master-context-row span{display:block}.master-context-row span{color:var(--muted);font-size:12px;margin-top:3px}.master-context-actions{display:flex;gap:7px;flex-wrap:wrap}.master-context-note{padding:10px 12px;border-radius:12px;border:1px solid rgba(121,255,226,.2);background:rgba(121,255,226,.05);color:var(--muted);margin-bottom:12px}.opening-primary-actions .opening-master-direct{color:#79ffe2;border-color:rgba(121,255,226,.32)}#train-master-puzzles-mode .panel,#review-master-mode .panel{padding:20px}.master-puzzle-status{min-height:44px;color:var(--muted);padding:10px 0}.master-puzzle-source{margin-top:10px;font-size:12px;color:#79ffe2}.master-review-list{max-height:520px;overflow:auto}.master-review-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}@media(max-width:700px){.master-context-row{grid-template-columns:1fr}.master-context-actions{width:100%}.master-context-actions .button{flex:1}.master-context-toolbar{align-items:stretch;flex-direction:column}.master-context-toolbar input{min-width:0;width:100%}}
+</style>
+
+<section id="view-library" class="view">
       <div class="page-heading">
         <div>
           <div class="eyebrow">OPENING LIBRARY</div>
@@ -5106,6 +5111,20 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
         <button id="train-mode-recall" class="active" type="button" role="tab" aria-selected="true">Recall Training</button>
         <button id="train-mode-puzzles" type="button" role="tab" aria-selected="false">Opening Puzzles</button>
         <button id="train-mode-bozo-puzzles" type="button" role="tab" aria-selected="false">BOZO Puzzles</button>
+        <button id="train-mode-master-puzzles" type="button" role="tab" aria-selected="false">Master Game Puzzles</button>
+      </div>
+
+      <div id="train-master-puzzles-mode" hidden>
+        <section class="panel">
+          <div class="panel-heading"><div><span>REAL GAME TACTICS</span><h2>Puzzles from master games</h2><p>BOZO samples real positions from the Master Database, then Stockfish admits the position only when a concrete tactical idea is verified. Quiet or arbitrary positions are skipped.</p></div></div>
+          <div class="master-context-toolbar">
+            <input id="master-puzzle-search" placeholder="Optional: player, event, opening, ECO…">
+            <button id="master-puzzle-find" class="button primary" type="button">Find a tactical puzzle</button>
+            <button id="master-puzzle-random" class="button secondary" type="button">Random database tactic</button>
+          </div>
+          <div id="master-puzzle-status" class="master-puzzle-status">Choose a database filter or let BOZO search across all imported master games.</div>
+          <div id="master-puzzle-preview" class="master-context-list"></div>
+        </section>
       </div>
 
       <div id="train-recall-mode">
@@ -5584,12 +5603,25 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
       <div class="review-mode-tabs" role="tablist" aria-label="Review mode">
         <button class="active" type="button" data-review-mode="game">Review a Game</button>
         <button type="button" data-review-mode="position">Analyze a Position</button>
+        <button type="button" data-review-mode="master">Master Games</button>
       </div>
 
       <section class="master-entry-card" aria-label="Review master games">
         <div><span class="eyebrow">MASTER GAME REVIEW</span><h2>Dive into a recorded master game.</h2><p>Open the shared Master Database to replay the moves, inspect the opening, and switch directly into master-move training.</p></div>
         <div class="master-entry-actions"><button id="review-master-games" class="button secondary" type="button">Review master games</button></div>
       </section>
+      <div id="review-master-mode" hidden>
+        <section class="panel">
+          <div class="panel-heading"><div><span>MASTER DATABASE</span><h2>Send any master game into Game Review.</h2><p>Search the full imported database. Choose a game, load its PGN into BOZO Review, then run the same Stockfish + BOZO Coach analysis used for your own games.</p></div></div>
+          <div class="master-context-toolbar">
+            <input id="review-master-search" placeholder="Player, event, opening, ECO…">
+            <input id="review-master-year" inputmode="numeric" maxlength="4" placeholder="Year">
+            <button id="review-master-search-button" class="button primary" type="button">Search database</button>
+          </div>
+          <div id="review-master-list" class="master-context-list master-review-list"><div class="empty-state"><div>♟</div><b>Search the Master Database</b></div></div>
+        </section>
+      </div>
+
       <div id="review-game-mode">
       <div class="review-import-card">
         <div class="review-import-tabs">
@@ -5976,6 +6008,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
         </div>
         <button id="master-random" class="button secondary" type="button">Random game</button>
       </div>
+      <div id="master-context-note" class="master-context-note" hidden></div>
       <div class="master-search-panel panel">
         <input id="master-search" type="search" placeholder="Player, event, opening, ECO…">
         <select id="master-result-filter"><option value="">Any result</option><option value="1-0">1-0</option><option value="0-1">0-1</option><option value="1/2-1/2">Draw</option></select>
@@ -7263,7 +7296,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.14.1.js"></script>
+  <script src="./app-v4.14.2.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
