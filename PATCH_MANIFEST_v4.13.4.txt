@@ -1,0 +1,20 @@
+BOZO v4.13.4 — DM RLS recursion fix
+
+RUN IN SUPABASE SQL EDITOR:
+  SUPABASE_BOZO_CONNECT_V4134_DM_RLS_FIX.sql
+
+FRONTEND FILES:
+  None.
+
+REPLACE:
+  None.
+
+ADD TO GITHUB (optional documentation only):
+  BOZO_V4134_DM_RLS_FIX.md
+
+WHY:
+  v4.13.0's bozo_dm_participants SELECT RLS policy queried the same table from
+  inside itself. Message/thread policies that checked participant membership
+  therefore triggered PostgreSQL's "infinite recursion detected in policy"
+  error. v4.13.4 moves membership checks into SECURITY DEFINER helper functions
+  and rebuilds the affected policies without recursion.
