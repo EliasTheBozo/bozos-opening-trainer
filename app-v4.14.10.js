@@ -5505,19 +5505,33 @@ async function getWebBotMoveEngine() {
 
 function whiteReviewMate(result, turn) {
   if (result?.mate == null) return null;
-  // UCI scores are from the side-to-move perspective. Normalize mate signs
-  // exactly like centipawn scores so every Review consumer uses White's
-  // perspective: positive = White mates, negative = Black mates.
-  return turn === 'w' ? Number(result.mate) : -Number(result.mate);
+
+  const mate = Number(result.mate);
+
+  // mate 0 means the side to move is already checkmated.
+  // Preserve the winner explicitly because numeric zero has no usable sign.
+  if (mate === 0) {
+    return turn === 'w' ? -REVIEW_MATE_SCORE : REVIEW_MATE_SCORE;
+  }
+
+  // Normalize to White's perspective:
+  // positive = White is mating, negative = Black is mating.
+  return turn === 'w' ? mate : -mate;
 }
 
 function whiteReviewEval(result, turn) {
   const whiteMate = whiteReviewMate(result, turn);
+
   if (whiteMate != null) {
+    if (Math.abs(whiteMate) === REVIEW_MATE_SCORE) {
+      return whiteMate;
+    }
+
     return whiteMate > 0
       ? REVIEW_MATE_SCORE - Math.abs(whiteMate)
       : -REVIEW_MATE_SCORE + Math.abs(whiteMate);
   }
+
   const cp = Number(result?.cp) || 0;
   return turn === 'w' ? cp : -cp;
 }
