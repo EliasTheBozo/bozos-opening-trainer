@@ -13701,7 +13701,13 @@ function paintMasterEvaluationBar(cp=0,mate=null,loading=false){
   const top=$('master-eval-top'),bottom=$('master-eval-bottom');
   if(top)top.textContent=whiteAtBottom?'Black':'White';if(bottom)bottom.textContent=whiteAtBottom?'White':'Black';
   const value=$('master-eval-value');if(value){
-    value.textContent=loading?'…':mate!=null?`M${Math.abs(mate)}`:`${cp>=0?'+':''}${((Number(cp)||0)/100).toFixed(2)}`;
+   value.textContent = loading
+  ? '…'
+  : mate !== null
+    ? Math.abs(mate) === REVIEW_MATE_SCORE
+      ? '#'
+      : `M${Math.abs(mate)}`
+    : `${cp >= 0 ? '+' : ''}${((Number(cp) || 0) / 100).toFixed(2)}`;
     const whiteFavored=mate!=null?mate>0:(Number(cp)||0)>=0;
     const favoredAtBottom=whiteAtBottom?whiteFavored:!whiteFavored;
     value.classList.toggle('at-bottom',favoredAtBottom);value.classList.toggle('at-top',!favoredAtBottom);
