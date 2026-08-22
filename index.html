@@ -5130,22 +5130,15 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
 @media(max-width:700px){.opening-primary-actions,.opening-action-dock.family .opening-primary-actions{grid-template-columns:1fr 1fr!important}.opening-primary-actions>.family-toggle,.opening-primary-actions>.opening-more-menu{grid-column:1/-1}.line-action-dock{grid-template-columns:1fr 1fr!important}.line-action-dock>.opening-more-menu{grid-column:1/-1}}
 
 /* ============================================================
-   BOZO v4.14.12 — Opening action dock + BOZO Connect polish
+   BOZO v4.14.12+ — Opening action dock + BOZO Connect polish
    ============================================================ */
-
-/* Opening cards live in a two-column grid on desktop, so viewport media
-   queries alone are not enough. Keep all four family actions inside the card. */
 .opening-action-dock.family .opening-primary-actions{
   grid-template-columns:minmax(118px,1fr) minmax(142px,1.08fr) minmax(185px,1.36fr) minmax(88px,.58fr) !important;
 }
 .opening-primary-actions > button,
-.opening-primary-actions > .opening-more-menu{
-  min-width:0;
-}
+.opening-primary-actions > .opening-more-menu{min-width:0}
 .opening-primary-actions > button,
-.opening-primary-actions > .opening-more-menu > summary{
-  overflow:hidden;
-}
+.opening-primary-actions > .opening-more-menu > summary{overflow:hidden}
 .opening-primary-actions .family-toggle-label,
 .opening-primary-actions .opening-master-direct span:last-child{
   white-space:normal;
@@ -5161,36 +5154,17 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
   }
 }
 
-/* BOZO Connect */
 .comms-drawer{
   width:min(430px,100vw);
   padding:24px 22px 28px;
 }
-.comms-tabs{
-  gap:8px;
-  margin:18px 0 14px;
-}
-.comms-tabs button{
-  min-width:0;
-  line-height:1.15;
-}
-.comms-body{
-  gap:9px;
-}
-.comms-compose{
-  padding:2px 0 5px;
-}
-.comms-thread{
-  padding:14px 15px;
-}
-.comms-thread-head b{
-  min-width:0;
-  overflow-wrap:anywhere;
-}
-.comms-thread-head small{
-  flex:0 0 auto;
-  white-space:nowrap;
-}
+.comms-tabs{gap:8px;margin:18px 0 14px}
+.comms-tabs button{min-width:0;line-height:1.15}
+.comms-body{gap:9px}
+.comms-compose{padding:2px 0 5px}
+.comms-thread{padding:14px 15px}
+.comms-thread-head b{min-width:0;overflow-wrap:anywhere}
+.comms-thread-head small{flex:0 0 auto;white-space:nowrap}
 .comms-notice-toolbar{
   display:flex;
   justify-content:flex-end;
@@ -5220,10 +5194,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
   border-color:#ff7f2a;
   color:#ff7f2a;
 }
-.comms-notice-toolbar button:disabled{
-  opacity:.38;
-  cursor:default;
-}
+.comms-notice-toolbar button:disabled{opacity:.38;cursor:default}
 .comms-notice.unread{
   border-color:rgba(121,255,226,.34);
   box-shadow:inset 3px 0 0 #79ffe2;
@@ -7496,7 +7467,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.14.12.js"></script>
+  <script src="./app-v4.14.13.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
