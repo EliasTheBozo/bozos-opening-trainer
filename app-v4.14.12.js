@@ -347,6 +347,7 @@ function route(name) {
 }
 
 $$('[data-route]').forEach(el => el.addEventListener('click', () => route(el.dataset.route)));
+$$('[data-legal-route]').forEach(el => el.addEventListener('click', () => { closeAuth(); route(el.dataset.legalRoute); }));
 $('mobile-menu-button').addEventListener('click', () => $('mobile-nav').hidden = !$('mobile-nav').hidden);
 
 
@@ -13599,60 +13600,7 @@ function commsEmpty(title,body){return `<div class="comms-empty"><img src="./ass
 function closeComms(){const d=$('comms-drawer'),b=$('comms-backdrop');if(d)d.hidden=true;if(b)b.hidden=true;bozoCommsThread=null;if(bozoCommsTimer){clearInterval(bozoCommsTimer);bozoCommsTimer=null;}}
 async function openComms(tab='messages'){if(!commsSignedIn())return;bozoCommsTab=tab;const d=$('comms-drawer'),b=$('comms-backdrop');if(d)d.hidden=false;if(b)b.hidden=false;$$('[data-comms-tab]').forEach(x=>x.classList.toggle('active',x.dataset.commsTab===tab));$('comms-title').textContent=tab==='support'?'Ask BOZO':tab==='notifications'?'Notifications':'Messages';await renderComms();if(bozoCommsTimer)clearInterval(bozoCommsTimer);bozoCommsTimer=setInterval(()=>{if(!$('comms-drawer')?.hidden)renderComms(false)},15000);}
 async function renderComms(showLoading=true){const body=$('comms-body');if(!body)return;if(showLoading)body.innerHTML='<div class="empty-state mini"><span>Loading…</span></div>';if(bozoCommsTab==='notifications')return renderCommsNotifications();if(bozoCommsThread)return renderCommsThread(bozoCommsThread);return bozoCommsTab==='support'?renderSupportThreads():renderDmThreads();}
-async function renderCommsNotifications(){
-  const body=$('comms-body');
-  await loadBozoNotifications();
-
-  const q=await sb.from('bozo_notifications')
-    .select('*')
-    .eq('user_id',state.session.user.id)
-    .order('created_at',{ascending:false})
-    .limit(40);
-
-  if(q.error){
-    body.innerHTML=commsEmpty('Notifications','Run the BOZO Connect Supabase migration to enable communication alerts.');
-    return;
-  }
-
-  const notices=q.data||[];
-  const hasUnread=notices.some(n=>!n.read_at);
-
-  body.innerHTML=`
-    <div class="comms-notice-toolbar">
-      <button id="comms-mark-all-read" type="button" ${hasUnread?'':'disabled'}>Mark all read</button>
-      <button id="comms-clear-notifications" class="danger" type="button" ${notices.length?'':'disabled'}>Clear all</button>
-    </div>
-    ${notices.length
-      ? notices.map(n=>`<button class="comms-thread comms-notice${n.read_at?'':' unread'}" data-comms-notice="${n.id}">
-          <div class="comms-thread-head"><b>${escapeHtml(n.title||'Notification')}</b><small>${noticeTime(n.created_at)}</small></div>
-          <p>${escapeHtml(n.body||'')}</p>
-        </button>`).join('')
-      : commsEmpty('All caught up','Replies, messages, challenges, and other BOZO activity will appear here.')
-    }`;
-
-  $('comms-mark-all-read')?.addEventListener('click',async()=>{
-    const {error}=await sb.rpc('bozo_mark_all_notifications_read');
-    if(error)return toast(readableError(error));
-    await refreshCommsBadges();
-    renderCommsNotifications();
-  });
-
-  $('comms-clear-notifications')?.addEventListener('click',async()=>{
-    if(!confirm('Clear all notifications?'))return;
-    const {error}=await sb.rpc('bozo_clear_notifications');
-    if(error)return toast(readableError(error));
-    await refreshCommsBadges();
-    renderCommsNotifications();
-  });
-
-  body.querySelectorAll('[data-comms-notice]').forEach(x=>x.onclick=async()=>{
-    await sb.from('bozo_notifications')
-      .update({read_at:new Date().toISOString()})
-      .eq('id',x.dataset.commsNotice);
-    await refreshCommsBadges();
-    renderCommsNotifications();
-  });
-}
+async function renderCommsNotifications(){const body=$('comms-body');await loadBozoNotifications();let q=await sb.from('bozo_notifications').select('*').eq('user_id',state.session.user.id).order('created_at',{ascending:false}).limit(40);if(q.error){body.innerHTML=commsEmpty('Notifications','Run the BOZO Connect Supabase migration to enable communication alerts.');return;}body.innerHTML=q.data?.length?q.data.map(n=>`<button class="comms-thread" data-comms-notice="${n.id}"><div class="comms-thread-head"><b>${escapeHtml(n.title||'Notification')}</b><small>${noticeTime(n.created_at)}</small></div><p>${escapeHtml(n.body||'')}</p></button>`).join(''):commsEmpty('All caught up','Replies, messages, challenges, and other BOZO activity will appear here.');body.querySelectorAll('[data-comms-notice]').forEach(x=>x.onclick=async()=>{await sb.from('bozo_notifications').update({read_at:new Date().toISOString()}).eq('id',x.dataset.commsNotice);await refreshCommsBadges();renderCommsNotifications();});}
 async function renderDmThreads(){const body=$('comms-body');const {data,error}=await sb.rpc('bozo_my_dm_threads');if(error){body.innerHTML=commsEmpty('Messages are almost ready','Run SUPABASE_BOZO_CONNECT_V413.sql, then DMs will live here.');return;}body.innerHTML=`<div class="comms-compose"><input id="comms-new-user" placeholder="@username"><button id="comms-new-dm" class="button primary" type="button">New message</button></div>`+(data?.length?data.map(t=>`<button class="comms-thread" data-dm-thread="${t.thread_id}"><div class="comms-thread-head"><b>@${escapeHtml(t.other_username||'player')}</b><small>${noticeTime(t.last_message_at)}</small></div><p>${escapeHtml(t.last_message||'Start a conversation')}</p></button>`).join(''):commsEmpty('No messages yet','Message another BOZO player from their profile, or start one above.'));$('comms-new-dm')?.addEventListener('click',async()=>{const u=($('comms-new-user')?.value||'').trim().replace(/^@/,'');if(!u)return;const prof=await sb.from('profiles').select('id,username').ilike('username',u).limit(1).maybeSingle();if(prof.error)return toast(readableError(prof.error));if(!prof.data?.id)return toast('Player not found');const r=await sb.rpc('bozo_get_or_create_dm_by_user',{p_target_user:prof.data.id});if(r.error)return toast(readableError(r.error));bozoCommsThread={id:r.data,type:'dm',title:'@'+(prof.data.username||u)};renderComms();});body.querySelectorAll('[data-dm-thread]').forEach(x=>x.onclick=()=>{const row=data.find(t=>String(t.thread_id)===x.dataset.dmThread);bozoCommsThread={id:x.dataset.dmThread,type:'dm',title:'@'+(row?.other_username||'player')};renderComms();});}
 async function renderSupportThreads(){const body=$('comms-body');const isStaff=['owner','administrator','senior_moderator','moderator'].includes(state.role);const q=isStaff?await sb.from('bozo_support_threads').select('*').order('updated_at',{ascending:false}).limit(60):await sb.from('bozo_support_threads').select('*').eq('user_id',state.session.user.id).order('updated_at',{ascending:false});if(q.error){body.innerHTML=commsEmpty('Ask BOZO is almost ready','Run SUPABASE_BOZO_CONNECT_V413.sql to enable support conversations.');return;}body.innerHTML=`<div class="comms-compose"><button id="comms-new-support" class="button primary" type="button">Ask a new question</button></div>`+(q.data?.length?q.data.map(t=>`<button class="comms-thread" data-support-thread="${t.id}"><div class="comms-thread-head"><b>${escapeHtml(t.subject||'Question for BOZO')}</b><small>${noticeTime(t.updated_at)}</small></div><p>${escapeHtml(t.status||'open')}${isStaff&&t.username?' · @'+escapeHtml(t.username):''}</p></button>`).join(''):commsEmpty('Ask BOZO','Ask about a position, feature, opening, or anything else on the site. We will reply here when we can.'));$('comms-new-support')?.addEventListener('click',()=>renderNewSupport());body.querySelectorAll('[data-support-thread]').forEach(x=>x.onclick=()=>{const row=q.data.find(t=>String(t.id)===x.dataset.supportThread);bozoCommsThread={id:x.dataset.supportThread,type:'support',title:row?.subject||'Ask BOZO'};renderComms();});}
 function renderNewSupport(){const body=$('comms-body');body.innerHTML=`<button class="comms-thread" id="comms-back-support">← Back</button><div class="comms-compose"><input id="support-subject" maxlength="120" placeholder="What do you need help with?"><textarea id="support-message" rows="7" maxlength="4000" placeholder="Ask BOZO…"></textarea><small>Page context: ${escapeHtml(location.hash||'#home')}</small><button id="support-send" class="button primary">Send question</button></div>`;$('comms-back-support').onclick=renderSupportThreads;$('support-send').onclick=async()=>{const subject=$('support-subject').value.trim(),message=$('support-message').value.trim();if(!subject||!message)return toast('Add a subject and question');const {data,error}=await sb.rpc('bozo_create_support_thread',{p_subject:subject,p_message:message,p_context:{route:location.hash||'#home'}});if(error)return toast(readableError(error));bozoCommsThread={id:data,type:'support',title:subject};renderComms();};}
@@ -13697,7 +13645,6 @@ async function openMasterGamesForOpening(openingId,name=''){
 }
 window.openMasterGamesForOpening=openMasterGamesForOpening;
 
-// BOZO v4.14.12 — Correct opening-position RPC + true counts + notification controls
 // BOZO v4.14.11 — Clear stale opening-position context on normal Master Library searches
 // BOZO v4.14.10 — Scalable Master Library pagination + true result counts
 // BOZO v4.14.9 — Source-agnostic master header (hide raw source URLs)
@@ -13901,35 +13848,10 @@ async function importMasterPgnFromOwner(){
 async function loadMasterGamesByPosition(fenKey,label='Opening'){
   const list=$('master-game-list'); if(!list)return;
   list.innerHTML='<div class="empty-state"><div>♟</div><b>Finding games that reached this position…</b></div>';
-
-  // v4.14.12: the position RPC now reads the compact opening-position table.
-  // Fetch a page of games and the true total independently so the UI does not
-  // mistake the 120-row display limit for the number of games that matched.
-  const [gamesResult,countResult]=await Promise.all([
-    sb.rpc('master_games_reaching_position',{p_fen_key:fenKey,p_limit:120}),
-    sb.rpc('count_master_games_reaching_position',{p_fen_key:fenKey})
-  ]);
-
-  if(gamesResult.error){
-    list.innerHTML=`<div class="empty-state"><div>⚠</div><b>Could not match this opening</b><span>${escapeHtml(readableError(gamesResult.error))}</span></div>`;
-    return;
-  }
-
-  masterState.games=gamesResult.data||[];
-  masterState.current=null;
-
-  const trueCount=countResult.error
-    ? masterState.games.length
-    : Number(countResult.data||0);
-
-  $('master-count').textContent=String(trueCount);
-  renderMasterGameList();
-
-  const note=$('master-context-note');
-  if(note){
-    note.hidden=false;
-    note.textContent=`${trueCount} game${trueCount===1?'':'s'} reached the ${label} position. Position matching includes transpositions even when the PGN opening label differs.`;
-  }
+  const {data,error}=await sb.rpc('master_games_reaching_position',{p_fen_key:fenKey,p_limit:120});
+  if(error){list.innerHTML=`<div class="empty-state"><div>⚠</div><b>Could not match this opening</b><span>${escapeHtml(readableError(error))}</span></div>`;return;}
+  masterState.games=data||[]; masterState.current=null; $('master-count').textContent=String(masterState.games.length); renderMasterGameList();
+  const note=$('master-context-note'); if(note){note.hidden=false;note.textContent=`${masterState.games.length} game${masterState.games.length===1?'':'s'} reached the ${label} position. Position matching includes transpositions even when the PGN opening label differs.`;}
 }
 
 function masterReviewRow(g){
