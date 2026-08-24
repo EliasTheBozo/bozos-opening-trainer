@@ -4801,6 +4801,52 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
 @media (max-width:1260px) and (min-width:981px){.site-header .desktop-nav button{padding-left:6px;padding-right:6px;font-size:11px}.account-menu-trigger{max-width:128px}.spotify-header-button b{display:none}}
 @media (max-width:980px){.account-menu-popover{display:none!important}}
 
+
+/* BOZO v4.14.13 — Help & Contact */
+.contact-view{padding-top:34px}
+.contact-shell{width:min(1120px,calc(100% - 36px));margin:0 auto 64px}
+.contact-hero{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:stretch}
+.contact-intro,.contact-form-card,.contact-info-card{border:1px solid var(--border);background:linear-gradient(145deg,rgba(40,17,53,.92),rgba(16,7,22,.97));border-radius:26px;box-shadow:var(--shadow)}
+.contact-intro{padding:38px}
+.contact-intro h1{font-size:clamp(2.5rem,5vw,4.4rem);line-height:.98;margin:.65rem 0 1.1rem}
+.contact-intro p{color:var(--muted);font-size:1.05rem;line-height:1.7;max-width:720px}
+.contact-purpose-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:24px}
+.contact-purpose{padding:15px;border:1px solid rgba(255,255,255,.075);border-radius:16px;background:rgba(255,255,255,.025)}
+.contact-purpose b,.contact-purpose small{display:block}
+.contact-purpose small{color:var(--muted);margin-top:5px;line-height:1.45}
+.contact-form-card{padding:30px}
+.contact-form-card h2{margin:.35rem 0 1rem;font-size:1.7rem}
+.contact-form{display:grid;gap:13px}
+.contact-form label{display:grid;gap:6px;color:var(--muted);font-size:.85rem;font-weight:750}
+.contact-form input,.contact-form select,.contact-form textarea{width:100%;border:1px solid var(--border);border-radius:12px;background:rgba(5,2,8,.72);color:var(--text);padding:12px 13px;outline:none}
+.contact-form textarea{resize:vertical;min-height:155px}
+.contact-form input:focus,.contact-form select:focus,.contact-form textarea:focus{border-color:rgba(121,255,226,.55);box-shadow:0 0 0 3px rgba(121,255,226,.08)}
+.contact-form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.contact-form-note{color:var(--muted);font-size:.76rem;line-height:1.5;margin:0}
+.contact-honeypot{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}
+.contact-success{padding:18px;border:1px solid rgba(85,227,157,.3);border-radius:16px;background:rgba(85,227,157,.08);margin-top:14px}
+.contact-success b,.contact-success span{display:block}
+.contact-success span{color:var(--muted);margin-top:5px}
+.contact-info-card{margin-top:22px;padding:24px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.contact-info-card article{padding:16px;border:1px solid rgba(255,255,255,.065);border-radius:16px;background:rgba(255,255,255,.02)}
+.contact-info-card b,.contact-info-card small{display:block}
+.contact-info-card small{color:var(--muted);margin-top:6px;line-height:1.45}
+.contact-urgent{color:#ffd69a!important}
+.owner-contact-list{display:grid;gap:12px}
+.owner-contact-card{display:grid;grid-template-columns:1fr auto;gap:18px;padding:17px;border:1px solid rgba(255,255,255,.075);border-radius:16px;background:rgba(255,255,255,.022)}
+.owner-contact-card h3{margin:3px 0 8px}
+.owner-contact-meta{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px}
+.owner-contact-meta span{font-size:.72rem;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.1);color:var(--muted)}
+.owner-contact-message{white-space:pre-wrap;color:var(--text);line-height:1.55}
+.owner-contact-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+.owner-contact-details span{padding:10px;border-radius:11px;background:rgba(0,0,0,.16);color:var(--muted);overflow-wrap:anywhere}
+.owner-contact-details b{display:block;color:var(--text);font-size:.72rem;margin-bottom:3px}
+.owner-contact-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.owner-contact-actions button,.owner-contact-actions a{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.035);color:var(--text);border-radius:9px;padding:8px 10px;font:inherit;font-size:.75rem;font-weight:800;cursor:pointer;text-decoration:none}
+.owner-contact-notes{width:100%;margin-top:10px;min-height:75px;border:1px solid var(--border);border-radius:10px;background:rgba(0,0,0,.22);color:var(--text);padding:10px}
+@media(max-width:850px){.contact-hero{grid-template-columns:1fr}.contact-info-card{grid-template-columns:1fr}.owner-contact-card{grid-template-columns:1fr}.owner-contact-details{grid-template-columns:1fr}}
+@media(max-width:600px){.contact-form-row,.contact-purpose-grid{grid-template-columns:1fr}.contact-intro,.contact-form-card{padding:22px}}
+
 </style>
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -6558,6 +6604,74 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
     </section>
 
 
+
+    <section id="view-contact" class="view contact-view">
+      <div class="contact-shell">
+        <div class="contact-hero">
+          <section class="contact-intro">
+            <div class="eyebrow">HELP & CONTACT</div>
+            <h1>Need something handled?</h1>
+            <p>This is BOZO's official contact channel for account problems, privacy and data requests, billing questions, moderation appeals, fair-play disputes, legal questions, technical problems, and other concerns.</p>
+            <div class="contact-purpose-grid">
+              <article class="contact-purpose"><b>Account & access</b><small>Sign-in trouble, account recovery, identity or profile concerns.</small></article>
+              <article class="contact-purpose"><b>Privacy & data</b><small>Access, correction, deletion, or other applicable privacy requests.</small></article>
+              <article class="contact-purpose"><b>Disputes & appeals</b><small>Moderation decisions, rated-game issues, fair-play concerns, or account action appeals.</small></article>
+              <article class="contact-purpose"><b>Billing & legal</b><small>BOZO+, payment questions, Terms, policy questions, or formal concerns.</small></article>
+            </div>
+          </section>
+
+          <section class="contact-form-card">
+            <div class="eyebrow">SUBMIT A REQUEST</div>
+            <h2>Contact BOZO</h2>
+            <form id="contact-request-form" class="contact-form">
+              <div class="contact-form-row">
+                <label>Email
+                  <input id="contact-email" type="email" maxlength="320" required autocomplete="email" placeholder="you@example.com">
+                </label>
+                <label>Username (optional)
+                  <input id="contact-username" maxlength="40" autocomplete="username" placeholder="@username">
+                </label>
+              </div>
+              <label>What is this about?
+                <select id="contact-category" required>
+                  <option value="account">Account or access</option>
+                  <option value="privacy">Privacy or data request</option>
+                  <option value="billing">Billing / BOZO+</option>
+                  <option value="moderation">Moderation decision or appeal</option>
+                  <option value="fair_play">Fair play / rated game dispute</option>
+                  <option value="legal">Terms / legal question</option>
+                  <option value="technical">Technical problem</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label>Subject
+                <input id="contact-subject" maxlength="160" minlength="3" required placeholder="Briefly describe the issue">
+              </label>
+              <label>Details
+                <textarea id="contact-message" maxlength="6000" minlength="10" required placeholder="Give us the information needed to understand and review your request."></textarea>
+              </label>
+              <label class="contact-honeypot" aria-hidden="true">Website
+                <input id="contact-website" tabindex="-1" autocomplete="off">
+              </label>
+              <p class="contact-form-note">We use the information you submit to review and respond to your request. Do not include passwords, authentication tokens, or payment card numbers.</p>
+              <button id="contact-submit" class="button primary" type="submit">Submit request</button>
+              <div id="contact-success" class="contact-success" hidden>
+                <b>Request received.</b>
+                <span id="contact-case-number"></span>
+              </div>
+              <p id="contact-message-status" class="auth-message"></p>
+            </form>
+          </section>
+        </div>
+
+        <section class="contact-info-card">
+          <article><b>Bug or feature issue?</b><small>Use <button class="legal-inline-button" id="contact-report-issue" type="button">Report an issue</button> when you are reporting a website bug rather than an account or policy matter.</small></article>
+          <article><b>Already signed in?</b><small>You can also use the in-app <strong>Ask BOZO</strong> drawer for ordinary support conversations.</small></article>
+          <article><b class="contact-urgent">Security concern?</b><small>Use this form and choose <strong>Technical problem</strong>. Describe the issue without publishing exploit details elsewhere first.</small></article>
+        </section>
+      </div>
+    </section>
+
     <section id="view-terms" class="view legal-view">
       <div class="legal-shell">
         <header class="legal-hero">
@@ -6612,7 +6726,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
           <p>We may update these Terms as BOZO changes. The effective date at the top will be updated when the Terms materially change. Continued use after updated Terms become effective means you accept the revised Terms, except where applicable law requires another form of notice or consent.</p>
 
           <h2>14. Contact</h2>
-          <p>Questions about these Terms can be sent through BOZO's <button class="legal-inline-button" type="button" data-route="support">Support</button> page or the in-app Ask BOZO support feature.</p>
+          <p>Questions about these Terms can be sent through BOZO's <button class="legal-inline-button" type="button" data-route="contact">Help & Contact</button> page or the in-app Ask BOZO support feature.</p>
           <div class="legal-actions"><button class="button secondary" type="button" data-route="home">Back to BOZO</button><button class="button secondary" type="button" data-route="privacy">Read Privacy Policy</button></div>
         </article>
       </div>
@@ -6683,7 +6797,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
 
           <h2>10. Your privacy choices and rights</h2>
           <p>You can edit many profile details and preferences directly in BOZO. Depending on where you live, you may also have legal rights to request access to, correction of, deletion of, portability of, or restrictions or objections concerning certain personal information. You may also have a right to complain to an appropriate privacy regulator.</p>
-          <p>To make a privacy request, use BOZO's <button class="legal-inline-button" type="button" data-route="support">Support</button> page or Ask BOZO support feature. We may need to verify that the request relates to your account before acting on it.</p>
+          <p>To make a privacy request, use BOZO's <button class="legal-inline-button" type="button" data-route="contact">Help & Contact</button> page or Ask BOZO support feature. We may need to verify that the request relates to your account before acting on it.</p>
 
           <h2>11. Children</h2>
           <p>BOZO is not directed to children under 13. If you are below the age at which you can legally consent to the processing required to use BOZO in your country, use the Service only with the involvement and permission of a parent or legal guardian as required by applicable law. If we learn that personal information was collected from a child in circumstances where required consent was not obtained, we will take reasonable steps to address it.</p>
@@ -6695,7 +6809,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
           <p>We may update this Privacy Policy as BOZO, its providers, or applicable requirements change. We will update the effective date when material changes are published and provide additional notice when required by law.</p>
 
           <h2>14. Contact</h2>
-          <p>Questions, privacy requests, or concerns can be submitted through BOZO's <button class="legal-inline-button" type="button" data-route="support">Support</button> page or Ask BOZO support feature.</p>
+          <p>Questions, privacy requests, or concerns can be submitted through BOZO's <button class="legal-inline-button" type="button" data-route="contact">Help & Contact</button> page or Ask BOZO support feature.</p>
           <div class="legal-actions"><button class="button secondary" type="button" data-route="home">Back to BOZO</button><button class="button secondary" type="button" data-route="terms">Read Terms of Service</button></div>
         </article>
       </div>
@@ -6755,6 +6869,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
           <button data-owner-panel="mastergames"><span>♜</span><b>Master Game Import</b><small>Import public PGNs into BOZO</small></button>
           <button data-owner-panel="submissions"><span>📖</span><b>Opening Review</b><small>Pending community theory</small></button>
           <button data-owner-panel="reports"><span>🚩</span><b>Reports</b><small>Open moderation cases</small></button>
+          <button data-owner-panel="contact"><span>✉</span><b>Help & Contact</b><small>Disputes, privacy, billing & legal requests</small></button>
           <button data-owner-panel="community"><span>♟</span><b>Community</b><small>Clubs & arenas moderation</small></button>
           <button data-owner-panel="audit"><span>🧾</span><b>Audit History</b><small>Staff and owner actions</small></button>
           <button data-owner-panel="import"><span>☁</span><b>Import Openings</b><small>Move the full library into Supabase</small></button>
@@ -6776,6 +6891,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
       <button data-route="home">Home</button>
       <button data-route="library">Opening Library</button>
       <button data-route="support">Support</button>
+      <button data-route="contact">Help & Contact</button>
       <button id="footer-report-issue" type="button">Report an issue</button>
       <button data-route="terms">Terms</button>
       <button data-route="privacy">Privacy</button>

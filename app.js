@@ -342,6 +342,7 @@ function route(name) {
   if (name === 'review') prepareReviewPage();
   if (name === 'studies') renderStudies();
   if (name === 'profile') renderProfile();
+  if (name === 'contact') prepareContactPage();
   if (name === 'bozoplus') renderBozoPlusPage();
   if (name === 'owner') renderOwnerGate();
 }
@@ -2593,6 +2594,63 @@ $('community-feedback-form').addEventListener('submit', async event => {
   toast(mode === 'suggestion' ? 'Suggestion sent for review. Thank you!' : 'Report submitted. Thank you!');
 });
 
+
+function prepareContactPage() {
+  const email = $('contact-email');
+  const username = $('contact-username');
+  if (email && !email.value && state.session?.user?.email) email.value = state.session.user.email;
+  if (username && !username.value && state.profile?.username) username.value = state.profile.username;
+}
+
+$('contact-report-issue')?.addEventListener('click', () => openCommunityFeedback('report'));
+
+$('contact-request-form')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit = $('contact-submit');
+  const status = $('contact-message-status');
+  const success = $('contact-success');
+  if (!submit) return;
+
+  submit.disabled = true;
+  submit.textContent = 'Submitting…';
+  if (status) status.textContent = '';
+  if (success) success.hidden = true;
+
+  const payload = {
+    p_email: ($('contact-email')?.value || '').trim(),
+    p_username: ($('contact-username')?.value || '').trim().replace(/^@/, ''),
+    p_category: $('contact-category')?.value || 'other',
+    p_subject: ($('contact-subject')?.value || '').trim(),
+    p_message: ($('contact-message')?.value || '').trim(),
+    p_page_url: location.href,
+    p_route: location.hash || '#contact',
+    p_user_agent: navigator.userAgent,
+    p_website: ($('contact-website')?.value || '').trim()
+  };
+
+  const { data, error } = await sb.rpc('bozo_submit_contact_request', payload);
+  submit.disabled = false;
+  submit.textContent = 'Submit request';
+
+  if (error) {
+    if (status) {
+      status.textContent = readableError(error);
+      status.classList.add('error');
+    }
+    return;
+  }
+
+  if (status) {
+    status.textContent = '';
+    status.classList.remove('error');
+  }
+  if (success) success.hidden = false;
+  if ($('contact-case-number')) $('contact-case-number').textContent = `Reference: ${String(data || '').toUpperCase()}`;
+  $('contact-subject').value = '';
+  $('contact-message').value = '';
+  $('contact-website').value = '';
+});
+
 function renderOwnerGate() {
   const allowed = Boolean(state.session && state.role === 'owner');
   $('owner-denied').hidden = allowed;
@@ -2880,6 +2938,56 @@ async function loadOwnerPanel(panel) {
     return;
   }
 
+
+  if (panel === 'contact') {
+    const { data, error } = await sb.from('bozo_contact_requests').select('*').order('created_at',{ascending:false}).limit(100);
+    if (error) return ownerError(error);
+    const rows = data || [];
+    const openCount = rows.filter(x => ['open','in_review','waiting_user'].includes(x.status)).length;
+    const privacyCount = rows.filter(x => x.category === 'privacy' && !['resolved','closed'].includes(x.status)).length;
+    const disputeCount = rows.filter(x => ['moderation','fair_play','billing','legal'].includes(x.category) && !['resolved','closed'].includes(x.status)).length;
+    target.innerHTML = `
+      <div class="panel-heading">
+        <div><span>OWNER INBOX</span><h2>Help & Contact</h2></div>
+      </div>
+      <div class="analytics-grid" style="margin-bottom:16px">
+        ${analyticsStat(rows.length,'Recent requests')}
+        ${analyticsStat(openCount,'Needs attention')}
+        ${analyticsStat(privacyCount,'Open privacy')}
+        ${analyticsStat(disputeCount,'Open disputes')}
+      </div>
+      <div class="owner-contact-list">
+        ${rows.map(ownerContactMarkup).join('') || '<div class="empty-state"><div>✓</div><b>No contact requests yet</b><span>Account, dispute, privacy, billing, and legal requests will appear here.</span></div>'}
+      </div>`;
+
+    target.querySelectorAll('[data-contact-status]').forEach(button => {
+      button.addEventListener('click', async () => {
+        const id = button.dataset.contactId;
+        const status = button.dataset.contactStatus;
+        const card = button.closest('[data-contact-card]');
+        const notes = card?.querySelector('[data-contact-notes]')?.value || '';
+        const patch = { status, owner_notes: notes || null, updated_at: new Date().toISOString() };
+        if (status === 'resolved' || status === 'closed') patch.resolved_at = new Date().toISOString();
+        else patch.resolved_at = null;
+        const { error } = await sb.from('bozo_contact_requests').update(patch).eq('id', id);
+        if (error) return toast(readableError(error));
+        toast(`Contact request marked ${status.replace('_',' ')}.`);
+        loadOwnerPanel('contact');
+      });
+    });
+    target.querySelectorAll('[data-copy-contact-email]').forEach(button => {
+      button.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(button.dataset.copyContactEmail || '');
+          toast('Email copied.');
+        } catch (_) {
+          toast(button.dataset.copyContactEmail || 'Could not copy email');
+        }
+      });
+    });
+    return;
+  }
+
   if (panel === 'import') {
     target.innerHTML = `
       <div class="panel-heading">
@@ -2961,6 +3069,50 @@ async function loadOwnerPanel(panel) {
       panel
     ));
   });
+}
+
+
+function ownerContactMarkup(item) {
+  const categoryLabels = {
+    account:'Account / access',
+    privacy:'Privacy / data',
+    billing:'Billing / BOZO+',
+    moderation:'Moderation appeal',
+    fair_play:'Fair play dispute',
+    legal:'Terms / legal',
+    technical:'Technical',
+    other:'Other'
+  };
+  const email = String(item.email || '');
+  const username = item.username ? '@' + item.username : '—';
+  const created = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+  return `<article class="owner-contact-card" data-contact-card="${escapeHtml(String(item.id || ''))}">
+    <div>
+      <div class="owner-contact-meta">
+        <span>${escapeHtml(categoryLabels[item.category] || item.category || 'Other')}</span>
+        <span>${escapeHtml(item.status || 'open')}</span>
+        <span>${escapeHtml(created)}</span>
+      </div>
+      <h3>${escapeHtml(item.subject || 'Contact request')}</h3>
+      <div class="owner-contact-message">${escapeHtml(item.message || '')}</div>
+      <div class="owner-contact-details">
+        <span><b>Email</b>${escapeHtml(email)}</span>
+        <span><b>Username</b>${escapeHtml(username)}</span>
+        <span><b>User ID</b>${escapeHtml(item.user_id || 'Guest / not signed in')}</span>
+        <span><b>Page</b>${escapeHtml(item.page_url || item.route || '—')}</span>
+      </div>
+      <textarea class="owner-contact-notes" data-contact-notes placeholder="Private owner notes / resolution notes">${escapeHtml(item.owner_notes || '')}</textarea>
+      <div class="owner-contact-actions">
+        <button data-contact-id="${escapeHtml(String(item.id || ''))}" data-contact-status="in_review">Reviewing</button>
+        <button data-contact-id="${escapeHtml(String(item.id || ''))}" data-contact-status="waiting_user">Waiting on user</button>
+        <button data-contact-id="${escapeHtml(String(item.id || ''))}" data-contact-status="resolved">Resolved</button>
+        <button data-contact-id="${escapeHtml(String(item.id || ''))}" data-contact-status="closed">Close</button>
+        <button data-copy-contact-email="${escapeHtml(email)}">Copy email</button>
+        <a href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent('BOZO request ' + String(item.id || ''))}">Email user</a>
+      </div>
+    </div>
+    <small>${escapeHtml(String(item.id || ''))}</small>
+  </article>`;
 }
 
 function ownerCaseMarkup(panel, item) {
