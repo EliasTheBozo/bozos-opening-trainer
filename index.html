@@ -4887,6 +4887,32 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
   .master-board-column{margin-inline:auto}
 }
 </style>
+
+<style id="bozo-legal-v41412">
+.legal-view{padding-bottom:28px}
+.legal-shell{width:min(980px,calc(100% - 32px));margin:0 auto;padding:42px 0 20px}
+.legal-hero{margin-bottom:24px}
+.legal-hero h1{font-size:clamp(2.35rem,6vw,4.2rem);line-height:.98;margin:.35rem 0 1rem;letter-spacing:-.045em}
+.legal-hero p{max-width:760px;color:var(--muted);line-height:1.65;margin:.5rem 0}
+.legal-effective{display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:8px 11px;border:1px solid var(--border);border-radius:999px;background:rgba(255,255,255,.035);color:#e9dff0;font-size:.78rem;font-weight:800}
+.legal-card{padding:clamp(22px,4vw,38px);border-radius:24px}
+.legal-card h2{font-size:1.32rem;margin:2rem 0 .65rem}
+.legal-card h2:first-child{margin-top:0}
+.legal-card h3{font-size:1rem;margin:1.35rem 0 .45rem}
+.legal-card p,.legal-card li{color:#d4c6d7;line-height:1.72;font-size:.96rem}
+.legal-card ul{margin:.55rem 0 1rem;padding-left:1.2rem}
+.legal-card li+li{margin-top:.42rem}
+.legal-card strong{color:var(--text)}
+.legal-card a,.legal-inline-button{color:#79ffe2;text-decoration:underline;text-underline-offset:3px}
+.legal-inline-button{border:0;background:none;padding:0;font:inherit;cursor:pointer}
+.legal-callout{margin:1.35rem 0;padding:16px 18px;border:1px solid rgba(121,255,226,.22);border-radius:16px;background:rgba(121,255,226,.055)}
+.legal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
+.auth-legal{margin:10px 0 0;text-align:center;color:var(--muted);font-size:.76rem;line-height:1.5}
+.auth-legal button{border:0;background:none;color:#bda2ff;padding:0;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.auth-legal button:hover{color:#fff}
+@media(max-width:650px){.legal-shell{width:min(100% - 22px,980px);padding-top:28px}.legal-card{border-radius:19px}.legal-hero h1{font-size:2.65rem}}
+</style>
+
 </head>
 <body>
   <div class="background-glow glow-one"></div>
@@ -5128,84 +5154,6 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
 .line-action-dock{grid-template-columns:1fr 1.18fr auto!important}.line-action-dock .line-master-button{background:rgba(121,255,226,.065)!important;border:1px solid rgba(121,255,226,.25)!important;color:#79ffe2!important}.line-action-dock .opening-more-menu{min-width:88px}
 @media(max-width:1080px){.opening-primary-actions,.opening-action-dock.family .opening-primary-actions{grid-template-columns:1fr 1fr!important}.opening-primary-actions>.family-toggle{grid-column:1/-1}.opening-primary-actions>.opening-more-menu{grid-column:1/-1}.opening-primary-actions>.opening-more-menu>summary{min-height:46px}}
 @media(max-width:700px){.opening-primary-actions,.opening-action-dock.family .opening-primary-actions{grid-template-columns:1fr 1fr!important}.opening-primary-actions>.family-toggle,.opening-primary-actions>.opening-more-menu{grid-column:1/-1}.line-action-dock{grid-template-columns:1fr 1fr!important}.line-action-dock>.opening-more-menu{grid-column:1/-1}}
-
-/* ============================================================
-   BOZO v4.14.12+ — Opening action dock + BOZO Connect polish
-   ============================================================ */
-.opening-action-dock.family .opening-primary-actions{
-  grid-template-columns:minmax(118px,1fr) minmax(142px,1.08fr) minmax(185px,1.36fr) minmax(88px,.58fr) !important;
-}
-.opening-primary-actions > button,
-.opening-primary-actions > .opening-more-menu{min-width:0}
-.opening-primary-actions > button,
-.opening-primary-actions > .opening-more-menu > summary{overflow:hidden}
-.opening-primary-actions .family-toggle-label,
-.opening-primary-actions .opening-master-direct span:last-child{
-  white-space:normal;
-  line-height:1.15;
-}
-@media(max-width:1450px){
-  .opening-action-dock.family .opening-primary-actions{
-    grid-template-columns:1fr 1fr !important;
-  }
-  .opening-action-dock.family .opening-primary-actions>.family-toggle,
-  .opening-action-dock.family .opening-primary-actions>.opening-more-menu{
-    grid-column:auto !important;
-  }
-}
-
-.comms-drawer{
-  width:min(430px,100vw);
-  padding:24px 22px 28px;
-}
-.comms-tabs{gap:8px;margin:18px 0 14px}
-.comms-tabs button{min-width:0;line-height:1.15}
-.comms-body{gap:9px}
-.comms-compose{padding:2px 0 5px}
-.comms-thread{padding:14px 15px}
-.comms-thread-head b{min-width:0;overflow-wrap:anywhere}
-.comms-thread-head small{flex:0 0 auto;white-space:nowrap}
-.comms-notice-toolbar{
-  display:flex;
-  justify-content:flex-end;
-  gap:8px;
-  padding:2px 0 4px;
-}
-.comms-notice-toolbar button{
-  border:1px solid rgba(121,255,226,.22);
-  border-radius:10px;
-  background:#21102d;
-  color:#d9cce0;
-  padding:8px 10px;
-  font:inherit;
-  font-size:11px;
-  font-weight:800;
-  cursor:pointer;
-}
-.comms-notice-toolbar button:hover:not(:disabled){
-  border-color:#79ffe2;
-  color:#79ffe2;
-}
-.comms-notice-toolbar button.danger{
-  border-color:rgba(255,127,42,.28);
-  color:#ffb07a;
-}
-.comms-notice-toolbar button.danger:hover:not(:disabled){
-  border-color:#ff7f2a;
-  color:#ff7f2a;
-}
-.comms-notice-toolbar button:disabled{opacity:.38;cursor:default}
-.comms-notice.unread{
-  border-color:rgba(121,255,226,.34);
-  box-shadow:inset 3px 0 0 #79ffe2;
-}
-@media(max-width:520px){
-  .comms-drawer{padding:18px 14px 22px}
-  .comms-tabs{grid-template-columns:1fr;gap:6px}
-  .comms-notice-toolbar{justify-content:stretch}
-  .comms-notice-toolbar button{flex:1}
-}
-
 </style>
 
 <section id="view-library" class="view">
@@ -6609,6 +6557,150 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
       </div>
     </section>
 
+
+    <section id="view-terms" class="view legal-view">
+      <div class="legal-shell">
+        <header class="legal-hero">
+          <div class="eyebrow">BOZO LEGAL</div>
+          <h1>Terms of Service</h1>
+          <p>These Terms govern your use of BOZO'S Opening Trainer, including its chess training, rated play, social, study, support, and account features.</p>
+          <span class="legal-effective">Effective August 23, 2026</span>
+        </header>
+        <article class="panel legal-card">
+          <h2>1. Acceptance of these Terms</h2>
+          <p>By accessing or using BOZO'S Opening Trainer ("BOZO," "we," "us," or "the Service"), you agree to these Terms of Service and our Privacy Policy. If you do not agree, do not use the Service. If local law requires a parent or guardian to consent to your use of an online service, you may use BOZO only with that required permission.</p>
+
+          <h2>2. Accounts</h2>
+          <p>Some features can be explored without an account, but account-based features such as rated matchmaking, saved cloud progress, social tools, and certain community features require you to sign in. You agree to provide accurate account information, keep your credentials secure, and not share or transfer your account in a way that compromises the Service.</p>
+          <p>You are responsible for activity performed through your account unless caused by a security failure within BOZO's systems. Tell us through Support if you believe your account has been compromised.</p>
+
+          <h2>3. Fair play and rated chess</h2>
+          <p>Rated games are intended to reflect your own chess play. You may not use chess engines, outside assistance, automation, another person, unauthorized software, account sharing, rating manipulation, intentional result fixing, or other methods that create an unfair advantage during rated play.</p>
+          <p>BOZO may investigate suspicious activity, invalidate results, adjust or reset ratings, restrict matchmaking, suspend accounts, or take other reasonable action to protect fair play. Ratings, provisional ratings, leaderboards, achievements, badges, and other in-service statistics are features of BOZO and are not official federation ratings or titles unless explicitly stated otherwise.</p>
+
+          <h2>4. Community and social features</h2>
+          <p>When using profiles, direct messages, comments, clubs, studies, support threads, reports, or other community features, you may not harass others, threaten violence, impersonate another person, spam, distribute malware, evade blocks or moderation, post unlawful material, expose private information without permission, or use BOZO to facilitate fraud or abuse.</p>
+          <p>Content may be moderated, hidden, removed, or preserved for review when reasonably necessary to enforce these Terms, protect users, respond to reports, comply with law, or maintain the Service.</p>
+
+          <h2>5. User content</h2>
+          <p>You retain ownership of content you create and submit, such as profile text, comments, messages, opening submissions, studies, reports, and other original material. You give BOZO a non-exclusive, worldwide, royalty-free license to host, store, reproduce, display, process, and transmit that content only as reasonably needed to operate, secure, moderate, improve, and provide the Service.</p>
+          <p>You must have the rights necessary to submit content to BOZO. Do not upload material that infringes another person's intellectual property or privacy rights.</p>
+
+          <h2>6. Chess data and educational material</h2>
+          <p>BOZO may display chess positions, moves, opening names, statistics, analysis, evaluations, public historical game records, and community-reviewed educational content. Chess moves and positions may come from multiple sources, and analysis can contain errors. BOZO is a training and entertainment service, not an official chess authority.</p>
+
+          <h2>7. BOZO+, support, and payments</h2>
+          <p>BOZO's core chess-learning tools are intended to remain available without a learning paywall. Optional BOZO+ or supporter features may provide cosmetic, profile, or supporter benefits. Payments may be processed by third-party payment providers such as PayPal and are also subject to that provider's terms.</p>
+          <p>Subscription cancellation and billing controls may be handled through the payment provider. Except where required by law or expressly stated at purchase, payments already completed are not automatically refundable merely because you stop using BOZO. Nothing in these Terms limits refund or cancellation rights that cannot legally be waived where you live.</p>
+
+          <h2>8. Service availability and beta features</h2>
+          <p>BOZO is actively developed and may include beta or experimental features. Features may change, malfunction, be temporarily unavailable, or be discontinued. We may perform maintenance, change limits, alter ratings or training systems, and update content when reasonably necessary. We do not promise uninterrupted or error-free availability.</p>
+
+          <h2>9. Intellectual property</h2>
+          <p>BOZO's branding, mascot, original interface, original written training material, site code, graphics, and other original materials are protected by applicable intellectual-property laws. These Terms do not give you ownership of BOZO's intellectual property. You may use the Service for its intended personal and educational purposes, but may not copy or redistribute substantial proprietary portions of the Service as your own product without permission.</p>
+
+          <h2>10. Suspension and termination</h2>
+          <p>We may restrict, suspend, or terminate access when we reasonably believe an account violates these Terms, threatens users or the Service, abuses rated play, evades enforcement, or creates legal or security risk. Where practical, the response may be proportionate to the issue. You may stop using BOZO at any time and may request account deletion through Support.</p>
+
+          <h2>11. Disclaimers</h2>
+          <p>To the maximum extent permitted by applicable law, BOZO is provided on an "as is" and "as available" basis. We do not guarantee that chess analysis, opening statistics, coaching responses, ratings, or other information will always be complete, accurate, current, or suitable for a particular purpose.</p>
+
+          <h2>12. Limitation of liability</h2>
+          <p>To the maximum extent permitted by applicable law, BOZO and its operators will not be liable for indirect, incidental, special, consequential, or punitive damages arising from your use of the Service. Nothing in these Terms excludes liability or consumer rights that applicable law does not allow us to exclude.</p>
+
+          <h2>13. Changes to these Terms</h2>
+          <p>We may update these Terms as BOZO changes. The effective date at the top will be updated when the Terms materially change. Continued use after updated Terms become effective means you accept the revised Terms, except where applicable law requires another form of notice or consent.</p>
+
+          <h2>14. Contact</h2>
+          <p>Questions about these Terms can be sent through BOZO's <button class="legal-inline-button" type="button" data-route="support">Support</button> page or the in-app Ask BOZO support feature.</p>
+          <div class="legal-actions"><button class="button secondary" type="button" data-route="home">Back to BOZO</button><button class="button secondary" type="button" data-route="privacy">Read Privacy Policy</button></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="view-privacy" class="view legal-view">
+      <div class="legal-shell">
+        <header class="legal-hero">
+          <div class="eyebrow">BOZO LEGAL</div>
+          <h1>Privacy Policy</h1>
+          <p>This worldwide Privacy Policy explains what BOZO'S Opening Trainer collects, why we use it, when it may be shared, and the choices available to you.</p>
+          <span class="legal-effective">Effective August 23, 2026</span>
+        </header>
+        <article class="panel legal-card">
+          <div class="legal-callout"><strong>Short version:</strong> BOZO uses personal information to operate accounts, chess progress, rated play, social features, support, moderation, and optional payments. BOZO does not sell personal information for money or operate a third-party advertising business.</div>
+
+          <h2>1. Scope</h2>
+          <p>This Privacy Policy applies to users of BOZO worldwide. Privacy rights differ by location, and additional rights may apply to you under the laws where you live.</p>
+
+          <h2>2. Information we collect</h2>
+          <h3>Account and authentication information</h3>
+          <p>When you create an account, authentication services may process information such as your email address, encrypted authentication credentials, account identifiers, verification status, sign-in timestamps, and security/session information.</p>
+
+          <h3>Profile information</h3>
+          <p>Depending on what you choose to provide or use, BOZO may store your username, in-game name, biography, avatar, profile background, country code, favorite openings, opening preferences, profile visibility, chess or BOZO titles, flair, supporter status, and related profile settings.</p>
+
+          <h3>Chess activity and progress</h3>
+          <p>BOZO may store opening progress, mastery, XP, streaks, achievements, puzzle activity, training activity, game-review activity, ratings, rating history, rated-game results, opponents, time controls, PGNs, positions, and other information needed to provide chess features.</p>
+
+          <h3>Community, support, and moderation content</h3>
+          <p>If you use social or community features, we may process friend relationships and requests, direct messages, comments, studies, support messages, reports, blocks, moderation records, and content you voluntarily submit. Issue reports may include page or route information, browser information, viewport size, screenshots, chess positions, PGNs, or other context you choose to include.</p>
+
+          <h3>Payment and supporter information</h3>
+          <p>If you use paid supporter features, BOZO may receive or store information provided by the payment processor, such as a subscription identifier, status, plan, payer email, transaction-related metadata, and timestamps. BOZO does not need to store your full payment-card details when payment processing is handled by the external payment provider.</p>
+
+          <h3>Device, session, and local-storage information</h3>
+          <p>BOZO may use browser storage, cookies or equivalent session technologies, and device/browser information as needed for authentication, security, preferences, local progress, feature state, and reliable operation. BOZO does not currently operate third-party behavioral advertising trackers.</p>
+
+          <h2>3. Information we do not currently collect as a dedicated analytics system</h2>
+          <p>BOZO does not currently maintain its own anonymous visitor-count or IP-address analytics table solely to count everyone who opens the site. This may change if BOZO later adds privacy-conscious site analytics; if it does, this Policy will be updated as appropriate.</p>
+
+          <h2>4. How we use information</h2>
+          <ul>
+            <li>Provide, authenticate, personalize, and secure BOZO accounts.</li>
+            <li>Save chess progress, ratings, games, studies, puzzles, and preferences.</li>
+            <li>Operate rated matchmaking, fair-play systems, leaderboards, social features, messages, and support.</li>
+            <li>Investigate reports, enforce rules, prevent abuse, and protect users and the Service.</li>
+            <li>Provide optional supporter or subscription features and maintain payment status.</li>
+            <li>Diagnose bugs, improve performance and features, and understand how BOZO is functioning.</li>
+            <li>Comply with legal obligations and respond to valid legal requests.</li>
+          </ul>
+
+          <h2>5. When information may be shared</h2>
+          <p>We may share information with service providers that process data on BOZO's behalf to provide infrastructure, authentication, database hosting, storage, payments, communications, security, or other requested technical features. For example, BOZO currently uses Supabase for backend infrastructure and authentication and may use PayPal for optional payments.</p>
+          <p>We may also disclose information when reasonably necessary to comply with law, protect users or the Service, investigate fraud or abuse, enforce our Terms, or respond to a valid legal process. We do not sell personal information for money.</p>
+
+          <h2>6. Public information</h2>
+          <p>Information you make public through BOZO may be visible to other users. Depending on your settings and features used, this can include your username, in-game name, avatar, bio, country, titles, flair, public chess statistics, ratings, achievements, game information, public studies, or comments. Do not place sensitive information in public profile fields or public posts.</p>
+
+          <h2>7. Data retention</h2>
+          <p>We retain information for as long as reasonably needed to provide BOZO, maintain account and chess history, protect the Service, resolve disputes, satisfy legal obligations, and enforce agreements. Different records may have different retention periods. Some security, moderation, transaction, or game-integrity records may be retained after account deletion where reasonably necessary or legally required.</p>
+
+          <h2>8. Security</h2>
+          <p>BOZO uses reasonable technical and organizational safeguards appropriate to the Service, including authenticated access and database authorization controls. No internet service can guarantee absolute security, so you should use a unique password and protect your account credentials.</p>
+
+          <h2>9. International use and data transfers</h2>
+          <p>BOZO is available to users in multiple countries. Service providers and infrastructure may process information in countries other than the one where you live. Where required, we will handle cross-border processing in accordance with applicable law.</p>
+
+          <h2>10. Your privacy choices and rights</h2>
+          <p>You can edit many profile details and preferences directly in BOZO. Depending on where you live, you may also have legal rights to request access to, correction of, deletion of, portability of, or restrictions or objections concerning certain personal information. You may also have a right to complain to an appropriate privacy regulator.</p>
+          <p>To make a privacy request, use BOZO's <button class="legal-inline-button" type="button" data-route="support">Support</button> page or Ask BOZO support feature. We may need to verify that the request relates to your account before acting on it.</p>
+
+          <h2>11. Children</h2>
+          <p>BOZO is not directed to children under 13. If you are below the age at which you can legally consent to the processing required to use BOZO in your country, use the Service only with the involvement and permission of a parent or legal guardian as required by applicable law. If we learn that personal information was collected from a child in circumstances where required consent was not obtained, we will take reasonable steps to address it.</p>
+
+          <h2>12. Third-party services and links</h2>
+          <p>BOZO may link to or integrate third-party services such as payment, music, hosting, or other technical providers. Their privacy practices are governed by their own policies. Leaving BOZO or interacting directly with a third party may cause that provider to collect information independently.</p>
+
+          <h2>13. Changes to this Policy</h2>
+          <p>We may update this Privacy Policy as BOZO, its providers, or applicable requirements change. We will update the effective date when material changes are published and provide additional notice when required by law.</p>
+
+          <h2>14. Contact</h2>
+          <p>Questions, privacy requests, or concerns can be submitted through BOZO's <button class="legal-inline-button" type="button" data-route="support">Support</button> page or Ask BOZO support feature.</p>
+          <div class="legal-actions"><button class="button secondary" type="button" data-route="home">Back to BOZO</button><button class="button secondary" type="button" data-route="terms">Read Terms of Service</button></div>
+        </article>
+      </div>
+    </section>
+
     <section id="view-daily" class="view daily-view">
       <div class="page-heading daily-heading">
         <div><div class="eyebrow">DAILY BOZO</div><h1 id="daily-title">Today's handcrafted puzzle.</h1><p id="daily-subtitle">A staff-curated position with a real authored continuation.</p></div>
@@ -6685,6 +6777,8 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
       <button data-route="library">Opening Library</button>
       <button data-route="support">Support</button>
       <button id="footer-report-issue" type="button">Report an issue</button>
+      <button data-route="terms">Terms</button>
+      <button data-route="privacy">Privacy</button>
     </div>
     <p>Independent, ad-free chess learning. © 2026 BOZO.</p>
   </footer>
@@ -6789,6 +6883,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
         <label>Password<input id="signup-password" type="password" minlength="8" required autocomplete="new-password"></label>
         <p class="auth-helper">You'll need to verify your email before using your BOZO account.</p>
         <button class="button primary" type="submit">Create account</button>
+        <p class="auth-legal">By creating an account, you agree to the <button type="button" data-legal-route="terms">Terms of Service</button> and acknowledge the <button type="button" data-legal-route="privacy">Privacy Policy</button>.</p>
       </form>
 
       <section id="auth-check-email" class="auth-verification-state" hidden>
@@ -7467,7 +7562,7 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
   </div>
 
   <script src="./mastery.js?v=2.6.3"></script>
-  <script src="./app-v4.14.16.js"></script>
+  <script src="./app.js"></script>
   <script src="./bozo-music-controller.js?v=2.10.0"></script>
   <script src="./spotify.js?v=2.4.0"></script>
   <script src="./youtube.js?v=2.4.0"></script>
