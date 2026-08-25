@@ -12297,12 +12297,26 @@ function detectPuzzleTacticalMotif(fen, line, maxPlies=16) {
   const piecesHit=valuable.filter(x=>x.p.type!=='k');
 
   const offeredImmediate = pv.moves[1]?.to===firstUci.slice(2,4) && pv.moves[1]?.capturedValue===movedValue;
+
+  // Do not call a normal forcing exchange a sacrifice.
+  // Example: Be6+ Nxe6 dxe6. The bishop is "offered", but White immediately
+  // recaptures the knight and restores the material balance. That is a trade,
+  // not a sacrifice.
+  const immediateRootRecapture = Boolean(
+    offeredImmediate &&
+    pv.moves[2] &&
+    pv.moves[2].to===firstUci.slice(2,4) &&
+    pv.moves[2].capturedValue>0 &&
+    pv.moves[2].balanceAfter>=pv.startBalance-0.5
+  );
+
   const meaningfulInvestment = pv.materialInvestment>=PUZZLE_SACRIFICE_MIN_INVESTMENT;
   const recoveredInvestment = pv.materialRecovery>=PUZZLE_SACRIFICE_MIN_RECOVERY;
   const finishesAhead = pv.endBalance>=pv.startBalance+1;
   const forcingCompensation = pv.checks>=2 || pv.captures>=3;
+  const sacrificeInvestmentPersists = meaningfulInvestment && !immediateRootRecapture;
 
-  if (meaningfulInvestment && (recoveredInvestment || finishesAhead || forcingCompensation)) {
+  if (sacrificeInvestmentPersists && (recoveredInvestment || finishesAhead || forcingCompensation)) {
     const firstThree=pv.moves.slice(0,3);
     const rookOffered=(movingPiece?.type==='r' && offeredImmediate);
     const rookLost=firstThree.some((m,idx)=>idx%2===1 && m.captured==='r');
@@ -12314,7 +12328,7 @@ function detectPuzzleTacticalMotif(fen, line, maxPlies=16) {
     return {key:'sacrifice',subtype:'material',label:'Material sacrifice',confidence:'verified'};
   }
 
-  if (capturedPiece && movedValue>capturedValue+1 && pv.captures>=3 &&
+  if (!immediateRootRecapture && capturedPiece && movedValue>capturedValue+1 && pv.captures>=3 &&
       (pv.materialSwing>=-1 || pv.checks>=2 || recoveredInvestment))
     return {key:'sacrifice',subtype:'material',label:'Material sacrifice',confidence:'verified'};
 
@@ -12559,7 +12573,7 @@ async function startNextPuzzle() {
     puzzleCurrentDifficulty = 0; puzzlePeakDifficulty=0; puzzleResolutionEvals=[]; puzzleFailedCurrent=false; puzzleCurrentStartedAt=Date.now();
     puzzleAttemptsForPly = 0; puzzleHintUsed = false; puzzleAnswerUsed = false;
     puzzleCandidateFen = spec.fen; puzzleCandidateMoves = spec.candidates || [];
-    puzzleGeneralMotif = spec.motif?.label || 'Tactical decision';
+    puzzleGeneralMotif = spec.motif?.label || 'Tactical sequence';
     puzzleCurrentReviewItem={fen:spec.fen,side:puzzleUserSide,motif:puzzleGeneralMotif,solutionPv:[...(spec.solutionPv||[])],result:'pending',attemptedMove:null,attempts:[],playedLine:[],hintUsed:false};
     puzzleCurrentOpening = null;
     $('puzzle-title').textContent = 'What would you play?';
@@ -14069,7 +14083,7 @@ function activateMasterTacticalPuzzle(row,spec){
   puzzleRunStrikes=3;puzzleRunHints=3;puzzleRunHintsUsed=0;puzzleRunSolved=0;puzzleRunReviewItems=[];puzzleCurrentReviewItem=null;puzzleResolutionEvals=[];puzzleFailedCurrent=false;
   $('train-master-puzzles-mode').hidden=true;$('train-puzzle-mode').hidden=false;$('puzzle-picker').hidden=true;if($('bozo-puzzle-picker'))$('bozo-puzzle-picker').hidden=true;$('puzzle-results').hidden=true;$('puzzle-session').hidden=false;
   configurePuzzleRunUi();
-  puzzleGame=new Chess(spec.fen);puzzleGeneralFen=spec.fen;puzzleGeneralHistory=[];puzzleUserSide=spec.userSide;puzzleMoves=[];puzzleStartPly=0;puzzlePly=0;puzzleTargetUserMoves=spec.targetUserMoves||4;puzzleSolvedInCurrent=0;puzzleSelectedSquare=null;puzzleCurrentDifficulty=0;puzzlePeakDifficulty=0;puzzleCurrentStartedAt=Date.now();puzzleAttemptsForPly=0;puzzleHintUsed=false;puzzleAnswerUsed=false;puzzleCandidateFen=spec.fen;puzzleCandidateMoves=spec.candidates||[];puzzleGeneralMotif=spec.motif?.label||'Master-game tactic';
+  puzzleGame=new Chess(spec.fen);puzzleGeneralFen=spec.fen;puzzleGeneralHistory=[];puzzleUserSide=spec.userSide;puzzleMoves=[];puzzleStartPly=0;puzzlePly=0;puzzleTargetUserMoves=spec.targetUserMoves||4;puzzleSolvedInCurrent=0;puzzleSelectedSquare=null;puzzleCurrentDifficulty=0;puzzlePeakDifficulty=0;puzzleCurrentStartedAt=Date.now();puzzleAttemptsForPly=0;puzzleHintUsed=false;puzzleAnswerUsed=false;puzzleCandidateFen=spec.fen;puzzleCandidateMoves=spec.candidates||[];puzzleGeneralMotif=spec.motif?.label||'Tactical sequence';
   puzzleCurrentReviewItem={fen:spec.fen,side:puzzleUserSide,motif:puzzleGeneralMotif,solutionPv:[...(spec.solutionPv||[])],result:'pending',attemptedMove:null,attempts:[],playedLine:[],hintUsed:false};
   $('puzzle-title').textContent='What would you play?';$('puzzle-subtitle').textContent=`${puzzleUserSide[0].toUpperCase()+puzzleUserSide.slice(1)} to move · from ${row.white||'White'} vs ${row.black||'Black'}`;$('puzzle-number').textContent='Master Game Puzzle';$('puzzle-start-label').textContent=`real game · move ${Math.floor(Number(row.ply||0)/2)+1}`;
   setPuzzleFeedback('neutral','Find the tactical idea.','This position came directly from a recorded master game and passed BOZO\'s Stockfish tactical gate.');paintPuzzleBoard();updatePuzzleUI();
