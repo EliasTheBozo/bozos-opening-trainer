@@ -348,7 +348,6 @@ function route(name) {
 }
 
 $$('[data-route]').forEach(el => el.addEventListener('click', () => route(el.dataset.route)));
-$$('[data-legal-route]').forEach(el => el.addEventListener('click', () => { closeAuth(); route(el.dataset.legalRoute); }));
 $('mobile-menu-button').addEventListener('click', () => $('mobile-nav').hidden = !$('mobile-nav').hidden);
 
 
@@ -1485,10 +1484,10 @@ function ratingGridMarkup(ratings=[]) {
     const row = byPool.get(pool);
     if (!row) {
       return `<article class="profile-rating-card">
-        <span>${prettyPool(pool)}</span><b>—</b><small>Not initialized</small>
+        <span>${prettyPool(pool)}</span><b> - </b><small>Not initialized</small>
       </article>`;
     }
-    const display = row.display_rating ?? (row.rating != null ? Math.round(Number(row.rating)) : '—');
+    const display = row.display_rating ?? (row.rating != null ? Math.round(Number(row.rating)) : ' - ');
     const detail = row.is_established
       ? `${Number(row.wins || 0)}W ${Number(row.losses || 0)}L ${Number(row.draws || 0)}D`
       : `Placement ${Number(row.placement_games || 0)}/10`;
@@ -2164,7 +2163,7 @@ function renderOpeningFamily(family) {
       <div class="family-card-header">
         <div>
           <span class="family-meta">
-            ${escapeHtml(visibleEcos || 'ECO —')}${extraEcos}
+            ${escapeHtml(visibleEcos || 'ECO  - ')}${extraEcos}
             · ${single ? 'OPENING LINE' : 'OPENING FAMILY'}
           </span>
           <h3>${escapeHtml(family.name)}</h3>
@@ -2218,7 +2217,7 @@ function renderOpeningFamily(family) {
                 <div class="line-content">
                   <div class="line-heading">
                     <b>${escapeHtml(line.displayVariation)}</b>
-                    <span>${escapeHtml(line.eco || 'ECO —')} · ${escapeHtml(line.source_type || 'official')}</span>
+                    <span>${escapeHtml(line.eco || 'ECO  - ')} · ${escapeHtml(line.source_type || 'official')}</span>
                   </div>
                   <div class="line-mastery-inline" data-mastery-opening="${line.id}" data-mastery-name="${escapeHtml(lineChallengeName)}">
                     ${window.BozoMastery ? window.BozoMastery.compactMarkup(line.id) : ''}
@@ -2658,7 +2657,7 @@ function renderOwnerGate() {
 }
 
 
-// WEB v4.12.0 — Daily BOZO handcrafted puzzle system
+// WEB v4.12.0: Daily BOZO handcrafted puzzle system
 const DAILY_TZ='America/Los_Angeles';
 let dailySelectedDate=null, dailyPuzzle=null, dailyGame=null, dailyLine=[], dailyLineIndex=0, dailyHintsUsed=0, dailySolved=false, dailySelectedSquare=null, dailyArchiveMonth=null;
 function dailyDateString(date=new Date()){ return new Intl.DateTimeFormat('en-CA',{timeZone:DAILY_TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(date); }
@@ -2828,7 +2827,7 @@ async function saveDailyEditorPuzzle(preview=false){
   try{new Chess($('daily-editor-fen').value.trim())}catch{return $('daily-editor-message').textContent='Starting FEN is invalid.';}
   const alt=$('daily-editor-alternates').value.split(/\n+/).map(x=>x.trim().split(/\s+/).filter(Boolean)).filter(x=>x.length); const payload={p_puzzle_date:$('daily-editor-date').value,p_title:$('daily-editor-title').value.trim()||'Daily BOZO',p_fen:$('daily-editor-fen').value.trim(),p_theme:$('daily-editor-theme').value.trim(),p_main_line_uci:dailyEditorMoves,p_accepted_lines:alt,p_hint1:$('daily-editor-hint1').value.trim(),p_hint2:$('daily-editor-hint2').value.trim(),p_hint3:$('daily-editor-hint3').value.trim(),p_explanation:$('daily-editor-explanation').value.trim(),p_status:preview?'scheduled':$('daily-editor-status').value}; const {error}=await sb.rpc('save_daily_puzzle',payload); if(error){$('daily-editor-message').textContent=readableError(error);return false;} dailyStudioSelectedDate=payload.p_puzzle_date;$('daily-editor-message').textContent=preview?'Saved for preview.':'Daily puzzle saved.';await paintDailyStudioCalendar();return true;
 }
-async function paintDailyStudioCalendar(){ if(!$('daily-studio-calendar'))return; $('daily-studio-month-label').textContent=new Date(dailyStudioMonth+'-15T12:00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'}); const {data}=await sb.rpc('list_daily_puzzles_editor',{p_month:dailyStudioMonth+'-01'});const rows=data||[],map=new Map(rows.map(r=>[r.puzzle_date,r]));const [y,m]=dailyStudioMonth.split('-').map(Number),days=new Date(y,m,0).getDate(),first=new Date(y,m-1,1).getDay();let html='';for(let i=0;i<first;i++)html+='<span class="blank"></span>';for(let d=1;d<=days;d++){const iso=`${dailyStudioMonth}-${String(d).padStart(2,'0')}`,r=map.get(iso),active=iso===dailyStudioSelectedDate;html+=`<button type="button" data-studio-date="${iso}" class="${r?'filled '+r.status:'missing'}${active?' active':''}" title="${r?escapeHtml(r.title||'Scheduled puzzle'):'Empty day — click to create'}">${d}<small>${r?r.status:'＋'}</small></button>`}$('daily-studio-calendar').innerHTML=html;$('daily-studio-calendar').querySelectorAll('[data-studio-date]').forEach(b=>b.addEventListener('click',()=>loadDailyStudioDate(b.dataset.studioDate))); }
+async function paintDailyStudioCalendar(){ if(!$('daily-studio-calendar'))return; $('daily-studio-month-label').textContent=new Date(dailyStudioMonth+'-15T12:00:00').toLocaleDateString(undefined,{month:'long',year:'numeric'}); const {data}=await sb.rpc('list_daily_puzzles_editor',{p_month:dailyStudioMonth+'-01'});const rows=data||[],map=new Map(rows.map(r=>[r.puzzle_date,r]));const [y,m]=dailyStudioMonth.split('-').map(Number),days=new Date(y,m,0).getDate(),first=new Date(y,m-1,1).getDay();let html='';for(let i=0;i<first;i++)html+='<span class="blank"></span>';for(let d=1;d<=days;d++){const iso=`${dailyStudioMonth}-${String(d).padStart(2,'0')}`,r=map.get(iso),active=iso===dailyStudioSelectedDate;html+=`<button type="button" data-studio-date="${iso}" class="${r?'filled '+r.status:'missing'}${active?' active':''}" title="${r?escapeHtml(r.title||'Scheduled puzzle'):'Empty day: click to create'}">${d}<small>${r?r.status:'＋'}</small></button>`}$('daily-studio-calendar').innerHTML=html;$('daily-studio-calendar').querySelectorAll('[data-studio-date]').forEach(b=>b.addEventListener('click',()=>loadDailyStudioDate(b.dataset.studioDate))); }
 function shiftDailyStudioMonth(delta){const d=new Date(dailyStudioMonth+'-15T12:00:00');d.setMonth(d.getMonth()+delta);dailyStudioMonth=dailyDateString(d).slice(0,7);paintDailyStudioCalendar();}
 async function loadDailyStudioDate(date){
   dailyStudioSelectedDate=date; dailyStudioMonth=date.slice(0,7); const msg=$('daily-editor-message'); if(msg)msg.textContent='Loading puzzle…';
@@ -3084,7 +3083,7 @@ function ownerContactMarkup(item) {
     other:'Other'
   };
   const email = String(item.email || '');
-  const username = item.username ? '@' + item.username : '—';
+  const username = item.username ? '@' + item.username : ' - ';
   const created = item.created_at ? new Date(item.created_at).toLocaleString() : '';
   return `<article class="owner-contact-card" data-contact-card="${escapeHtml(String(item.id || ''))}">
     <div>
@@ -3099,7 +3098,7 @@ function ownerContactMarkup(item) {
         <span><b>Email</b>${escapeHtml(email)}</span>
         <span><b>Username</b>${escapeHtml(username)}</span>
         <span><b>User ID</b>${escapeHtml(item.user_id || 'Guest / not signed in')}</span>
-        <span><b>Page</b>${escapeHtml(item.page_url || item.route || '—')}</span>
+        <span><b>Page</b>${escapeHtml(item.page_url || item.route || ' - ')}</span>
       </div>
       <textarea class="owner-contact-notes" data-contact-notes placeholder="Private owner notes / resolution notes">${escapeHtml(item.owner_notes || '')}</textarea>
       <div class="owner-contact-actions">
@@ -3133,7 +3132,7 @@ function ownerCaseMarkup(panel, item) {
       <b>${escapeHtml(heading)}</b>
       <div class="community-case-meta"><span>${escapeHtml(type || 'other')}</span><span>${escapeHtml(item.status || '')}</span>${!suggestion && item.severity ? `<span>${escapeHtml(item.severity)}</span>` : ''}</div>
       ${details ? `<p>${escapeHtml(details)}</p>` : ''}
-      ${!suggestion && item.page_url ? `<div class="report-context-grid"><span><b>Page</b>${escapeHtml(item.page_url)}</span><span><b>Viewport</b>${escapeHtml(item.viewport || '—')}</span><span><b>Opening</b>${escapeHtml(item.opening_name || item.target_id || '—')}</span><span><b>Move</b>${escapeHtml(String(item.move_number || '—'))}</span></div>` : ''}
+      ${!suggestion && item.page_url ? `<div class="report-context-grid"><span><b>Page</b>${escapeHtml(item.page_url)}</span><span><b>Viewport</b>${escapeHtml(item.viewport || ' - ')}</span><span><b>Opening</b>${escapeHtml(item.opening_name || item.target_id || ' - ')}</span><span><b>Move</b>${escapeHtml(String(item.move_number || ' - '))}</span></div>` : ''}
       ${!suggestion && item.fen ? `<code>FEN: ${escapeHtml(item.fen)}</code>` : ''}
       ${!suggestion && item.pgn ? `<details class="report-pgn"><summary>View attached PGN</summary><code>${escapeHtml(item.pgn)}</code></details>` : ''}
       ${screenshotUrl ? `<a class="report-screenshot-link" href="${escapeHtml(screenshotUrl)}" target="_blank" rel="noopener"><img src="${escapeHtml(screenshotUrl)}" alt="Attached issue screenshot"><span>Open full screenshot ↗</span></a>` : ''}
@@ -3979,10 +3978,10 @@ async function openFriendProfile(username) {
   $('friend-profile-black-e4-opening').textContent = 'Loading…';
   $('friend-profile-black-d4-opening').textContent = 'Loading…';
   $('friend-profile-challenge').dataset.username = friend.username || '';
-  $('friend-profile-openings-studied').textContent = '—';
-  $('friend-profile-reviews').textContent = '—';
-  $('friend-profile-suggestions').textContent = '—';
-  $('friend-profile-member-since').textContent = '—';
+  $('friend-profile-openings-studied').textContent = ' - ';
+  $('friend-profile-reviews').textContent = ' - ';
+  $('friend-profile-suggestions').textContent = ' - ';
+  $('friend-profile-member-since').textContent = ' - ';
   $('friend-profile-activity').innerHTML = '<div class="empty-state mini"><span>Loading activity…</span></div>';
   $('friend-profile-rating-grid').innerHTML = '<div class="empty-state mini"><span>Loading ratings…</span></div>';
   $('friend-profile-game-history').innerHTML = '<div class="empty-state mini"><span>Loading games…</span></div>';
@@ -4029,7 +4028,7 @@ async function openFriendProfile(username) {
     const memberSinceDate = memberSinceValue ? new Date(memberSinceValue) : null;
     $('friend-profile-member-since').textContent = memberSinceDate && !Number.isNaN(memberSinceDate.getTime())
       ? memberSinceDate.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
-      : '—';
+      : ' - ';
     $('friend-profile-activity').innerHTML = activityMarkup(social?.recent_activity || [], 'This player has not shared any recent BOZO activity.');
   }
 
@@ -4253,7 +4252,7 @@ async function openStudyOpening(openingId, options = {}) {
     ? String(options.orientation).toLowerCase()
     : (studySideOverride || 'white');
   $('study-title').textContent = data.name;
-  $('study-subtitle').textContent = `${data.variation || 'Main Line'} · ${data.eco || 'ECO —'}`;
+  $('study-subtitle').textContent = `${data.variation || 'Main Line'} · ${data.eco || 'ECO  - '}`;
   $('study-pgn').textContent = data.pgn;
   $('study-modal').hidden = false;
   clearCoach();
@@ -5200,7 +5199,7 @@ const FriendDuelClock = (() => {
 
 
 /* ============================================================
-   GAME REVIEW — STOCKFISH + BOZO COACH
+   GAME REVIEW: STOCKFISH + BOZO COACH
    ============================================================ */
 
 const REVIEW_STOCKFISH_JS = './assets/stockfish-18-lite-single.js';
@@ -5696,7 +5695,7 @@ function classifyReviewLoss(loss, isBook) {
 }
 
 function reviewUciToSan(fen, uci) {
-  if (!uci || uci === '(none)') return '—';
+  if (!uci || uci === '(none)') return ' - ';
   const game = new Chess(fen);
   const move = game.move({
     from: uci.slice(0, 2),
@@ -5727,7 +5726,7 @@ function reviewPvToSan(fen, uciMoves = [], maximumMoves = 6) {
 }
 
 function reviewBestMovePosition(fen, bestMoveSan) {
-  if (!fen || !bestMoveSan || bestMoveSan === '—') return '';
+  if (!fen || !bestMoveSan || bestMoveSan === ' - ') return '';
   const game = new Chess(fen);
   const move = game.move(bestMoveSan, { sloppy: true });
   return move ? game.fen() : '';
@@ -5822,7 +5821,7 @@ function reviewPhaseLabel(phase = '') {
 }
 
 function reviewMoveNotation(row) {
-  if (!row) return '—';
+  if (!row) return ' - ';
   return `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
 }
 
@@ -5925,7 +5924,7 @@ function reviewBuildEvents(rows, openingMatch, phasePlan) {
 
   critical.forEach((row, index) => {
     const isTurningPoint = index === 0 && row.rawEngineLoss >= 180;
-    const better = row.engineBest && row.engineBest !== '—'
+    const better = row.engineBest && row.engineBest !== ' - '
       ? ` Better was ${row.engineBest}.`
       : '';
     events.push({
@@ -6138,7 +6137,7 @@ async function computeWebsiteReview(sans, depth, bookDepth, onProgress) {
     });
 
     evalBefore = evalAfter;
-    engineBestBefore = isTerminal ? '—' : reviewUciToSan(fen, analysis.bestMove);
+    engineBestBefore = isTerminal ? ' - ' : reviewUciToSan(fen, analysis.bestMove);
     pvBefore = isTerminal ? [] : (analysis.pv || []);
     onProgress?.(index + 1, plies.length);
   }
@@ -6331,8 +6330,8 @@ function renderReviewSummary() {
     return `<article class="review-phase-card ${phaseRows.length ? '' : 'muted'}">
       <span>${reviewPhaseLabel(phase)}</span>
       <div class="review-phase-accuracy-pair">
-        <div><small>${escapeHtml(reviewSideDisplayLabel('w'))}</small><strong>${whiteRows.length && whiteAccuracy != null ? `${whiteAccuracy}%` : '—'}</strong></div>
-        <div><small>${escapeHtml(reviewSideDisplayLabel('b'))}</small><strong>${blackRows.length && blackAccuracy != null ? `${blackAccuracy}%` : '—'}</strong></div>
+        <div><small>${escapeHtml(reviewSideDisplayLabel('w'))}</small><strong>${whiteRows.length && whiteAccuracy != null ? `${whiteAccuracy}%` : ' - '}</strong></div>
+        <div><small>${escapeHtml(reviewSideDisplayLabel('b'))}</small><strong>${blackRows.length && blackAccuracy != null ? `${blackAccuracy}%` : ' - '}</strong></div>
       </div>
       <small class="review-phase-range">${escapeHtml(range)}</small>
       <div class="review-phase-errors">
@@ -6537,7 +6536,7 @@ function reviewSelectedVerdict(row) {
     return `${phaseLabel}: this was the most precise move in the position.`;
   }
 
-  const betterMove = row.engineBest && row.engineBest !== '—' ? row.engineBest : 'another move';
+  const betterMove = row.engineBest && row.engineBest !== ' - ' ? row.engineBest : 'another move';
   const cost = reviewEvaluationCostLabel(row.rawEngineLoss);
   const position = reviewPositionDescription(row.whiteCp, row.mate).toLowerCase();
   return `${phaseLabel}: ${row.san} was playable, but ${betterMove} was more precise. The difference was ${cost}, and the resulting position is ${position}.`;
@@ -6585,14 +6584,14 @@ function updateReviewSelectedMove() {
 
   if (!row) {
     $('review-selected-move').textContent = 'Starting position';
-    $('review-classification').textContent = '—';
+    $('review-classification').textContent = ' - ';
     $('review-classification').className = 'review-classification';
     $('review-selected-summary').textContent =
       'Choose a move to inspect its evaluation and alternatives.';
     $('review-move-eval').textContent = 'Equal';
-    $('review-move-accuracy').textContent = '—';
-    $('review-move-loss').textContent = '—';
-    $('review-engine-best').textContent = '—';
+    $('review-move-accuracy').textContent = ' - ';
+    $('review-move-loss').textContent = ' - ';
+    $('review-engine-best').textContent = ' - ';
     $('review-recommended-line').hidden = true;
     $('review-recommended-line').textContent = '';
     $('review-coach-move-label').textContent = 'Choose a move';
@@ -6613,7 +6612,7 @@ function updateReviewSelectedMove() {
     : reviewPositionDescription(row.whiteCp, row.mate);
   $('review-move-accuracy').textContent = `${Math.round(row.accuracy * 10) / 10}%`;
   $('review-move-loss').textContent = row.terminal?.type === 'checkmate' ? 'none' : (row.isBook ? 'Book' : reviewEvaluationCostLabel(row.rawEngineLoss));
-  $('review-engine-best').textContent = row.wasTop ? row.san : (row.engineBest || '—');
+  $('review-engine-best').textContent = row.wasTop ? row.san : (row.engineBest || ' - ');
   $('review-coach-move-label').textContent = moveLabel;
   updateReviewCoachIdleState(row);
 }
@@ -6954,7 +6953,7 @@ function drawReviewCoachAnnotations(arrows = [], highlights = []) {
 
 
 /* ============================================================
-   BOZO v4.1 — RATINGS + MATCHMAKING
+   BOZO v4.1: RATINGS + MATCHMAKING
    ============================================================ */
 
 let bozoRatings = [];
@@ -7005,7 +7004,7 @@ function paintPlayRatings() {
   const pools = ['bullet','blitz','rapid','classical'];
   grid.innerHTML = pools.map(pool => {
     const row = ratingRow(pool);
-    const display = row?.display_rating || '—';
+    const display = row?.display_rating || ' - ';
     return `<button class="play-rating-chip" data-rating-pool="${pool}">
       <span>${formatPoolName(pool)}</span>
       <b>${escapeHtml(display)}</b>
@@ -7017,7 +7016,7 @@ function paintPlayRatings() {
   const primary = $('play-primary-rating');
   if (primary) primary.textContent = rapid
     ? `Rapid ${rapid.display_rating} · ${placementText(rapid)}`
-    : 'Rapid — · Set up rated play';
+    : 'Rapid: · Set up rated play';
 }
 
 function openRatingSetup(pool='rapid') {
@@ -8166,7 +8165,7 @@ function updateRatedOnlineStatus(){
 
 
 /* ============================================================
-   BOZO v4.0 — FREE PLAY
+   BOZO v4.0: FREE PLAY
    Uses the same BOZO Bot board/game implementation as Opening
    Duels, but starts from the standard initial position with no
    required book moves.
@@ -8569,7 +8568,7 @@ function startBozoFreePlay() {
 }
 
 /* ============================================================
-   BOZO BOT — OPENING-LOCKED PRACTICE + STOCKFISH FREE PLAY
+   BOZO BOT: OPENING-LOCKED PRACTICE + STOCKFISH FREE PLAY
    ============================================================ */
 
 const BOT_STRENGTHS = {
@@ -8715,7 +8714,7 @@ async function startWebBotGameFromSetup() {
     $('bot-game-title').textContent =
       `${opening.name}${opening.variation ? ': ' + opening.variation : ''}`;
     $('bot-game-subtitle').textContent =
-      `${opening.eco || 'ECO —'} · ${Math.ceil(requiredBookPlies / 2)} required book moves`;
+      `${opening.eco || 'ECO  - '} · ${Math.ceil(requiredBookPlies / 2)} required book moves`;
     $('bot-book-name').textContent =
       `${opening.name}${opening.variation ? ': ' + opening.variation : ''}`;
     $('bot-book-pgn').textContent = opening.pgn || '';
@@ -9569,7 +9568,7 @@ async function searchDuelOpenings() {
   $('duel-opening-results').innerHTML = (data || []).map(o => `
     <button data-duel-opening-id="${o.id}">
       <b>${escapeHtml(o.name)}</b>
-      <span>${escapeHtml(o.variation || 'Main Line')} · ${escapeHtml(o.eco || 'ECO —')}</span>
+      <span>${escapeHtml(o.variation || 'Main Line')} · ${escapeHtml(o.eco || 'ECO  - ')}</span>
       <code>${escapeHtml((o.pgn || '').slice(0,120))}</code>
     </button>`).join('');
   $('duel-opening-results').querySelectorAll('button').forEach((button, i) => {
@@ -10367,7 +10366,7 @@ document.addEventListener('visibilitychange', () => {
 
 
 /* ============================================================
-   BOZO STUDIES — BRANCHING MOVE TREES
+   BOZO STUDIES: BRANCHING MOVE TREES
    ============================================================ */
 
 let studyList = [];
@@ -11295,7 +11294,7 @@ $('save-coach-as-note')?.addEventListener('click', saveCoachAsStudyNote);
 
 
 /* ============================================================
-   BOZO BOARD DISPLAY — CONSISTENT PIECES + RESPONSIVE SIZING
+   BOZO BOARD DISPLAY: CONSISTENT PIECES + RESPONSIVE SIZING
    ============================================================ */
 const BOZO_BOARD_SIZES = ['compact', 'medium', 'large'];
 
@@ -11399,7 +11398,7 @@ setTimeout(async () => {
 })();
 
 
-// BOZO v2.7.6 — public beta notice
+// BOZO v2.7.6: public beta notice
 function openPublicBetaModal() { $('public-beta-modal').hidden = false; }
 function closePublicBetaModal() { $('public-beta-modal').hidden = true; }
 $('public-beta-learn-more').addEventListener('click', openPublicBetaModal);
@@ -11416,7 +11415,7 @@ $('public-beta-report').addEventListener('click', openBetaIssueReport);
 $('public-beta-modal-report').addEventListener('click', openBetaIssueReport);
 
 
-// WEB v3.0.0 — Recall Training + Opening Puzzles + Phase-Aware Review
+// WEB v3.0.0: Recall Training + Opening Puzzles + Phase-Aware Review
 let trainOpening = null;
 let trainGame = null;
 let trainMoves = [];
@@ -11464,7 +11463,7 @@ async function searchTrainOpenings(query = '') {
   if (!rows.length) { root.innerHTML = '<div class="empty-state"><div>♟</div><b>No matching lines</b><span>Try a broader opening name.</span></div>'; return; }
   root.innerHTML = rows.slice(0, 40).map(row => {
     const side = inferOpeningSide(row);
-    return `<button class="train-opening-result" type="button" data-train-opening="${row.id}"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.variation || 'Main Line')} · ${escapeHtml(row.eco || 'ECO —')}</small></span><em>${side === 'neutral' ? 'Choose side' : `Train ${side}`}</em></button>`;
+    return `<button class="train-opening-result" type="button" data-train-opening="${row.id}"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.variation || 'Main Line')} · ${escapeHtml(row.eco || 'ECO  - ')}</small></span><em>${side === 'neutral' ? 'Choose side' : `Train ${side}`}</em></button>`;
   }).join('');
   root.querySelectorAll('[data-train-opening]').forEach(button => button.addEventListener('click', () => startTrainingOpening(button.dataset.trainOpening)));
 }
@@ -11494,7 +11493,7 @@ function beginTrainSession() {
   $('train-results').hidden = true;
   $('train-session').hidden = false;
   $('train-title').textContent = trainOpening.name;
-  $('train-subtitle').textContent = `${trainOpening.variation || 'Main Line'} · ${trainOpening.eco || 'ECO —'} · training as ${trainUserSide}`;
+  $('train-subtitle').textContent = `${trainOpening.variation || 'Main Line'} · ${trainOpening.eco || 'ECO  - '} · training as ${trainUserSide}`;
   setTrainFeedback('neutral', 'Your move.', 'Find the repertoire move from memory.');
   advanceTrainOpponentMoves();
   paintTrainBoard();
@@ -11614,7 +11613,7 @@ function finishTrainSession() {
 }
 
 
-// WEB v2.9.0 — Opening Puzzle Engine
+// WEB v2.9.0: Opening Puzzle Engine
 let trainMode = 'recall';
 let puzzleOpening = null;
 let puzzlePool = [];
@@ -11657,7 +11656,7 @@ const PUZZLE_SACRIFICE_MIN_RECOVERY = 2;
 let puzzleGeneralMotif = '';
 let puzzleMotifHistory = [];
 let puzzleStats = { index:0, total:5, score:0, streak:0, bestStreak:0, userMoves:0, firstTry:0, mistakes:0, skipped:0 };
-// WEB v4.11.3 — Loose-major puzzle quality hardening
+// WEB v4.11.3: Loose-major puzzle quality hardening
 let puzzleRunMode = 'standard';
 let puzzleRunSeconds = 0;
 let puzzleRunDeadline = 0;
@@ -11698,7 +11697,7 @@ function puzzleCloudSetStatus(message='', stateName=''){
   root.hidden=!message; root.textContent=message; root.dataset.state=stateName||'';
 }
 function puzzleCloudDate(value){ try{return new Date(value).toLocaleDateString(undefined,{month:'short',day:'numeric'});}catch{return '';} }
-function puzzleCloudSeconds(value){ const n=Number(value||0); return n>0?`${n.toFixed(1)}s`:'—'; }
+function puzzleCloudSeconds(value){ const n=Number(value||0); return n>0?`${n.toFixed(1)}s`:' - '; }
 async function loadPuzzleCloudData(mode=puzzleCloudMode){
   if (!['bullet','rush3','rush5','survival'].includes(mode)) mode='bullet';
   puzzleCloudMode=mode;
@@ -11719,7 +11718,7 @@ async function loadPuzzleCloudData(mode=puzzleCloudMode){
     const rows=lbRes.data||[];
     if(leaderboard) leaderboard.innerHTML=rows.length?rows.map((row,i)=>`<div class="puzzle-cloud-row"><span class="puzzle-cloud-rank">#${i+1}</span><span class="puzzle-cloud-player"><b>${escapeHtml(row.ign||row.username||'BOZO player')}</b><small>@${escapeHtml(row.username||'player')}</small></span><span class="puzzle-cloud-score">${Number(row.score||0)}<small>${puzzleCloudSeconds(row.avg_solve_time)}</small></span></div>`).join(''):'<div class="empty-state mini"><span>No cloud runs yet. Be the first.</span></div>';
     const bestScore=$('puzzle-cloud-best-score'), bestDetail=$('puzzle-cloud-best-detail'), runCount=$('puzzle-cloud-run-count');
-    if(!uid){ if(bestScore) bestScore.textContent='—'; if(bestDetail) bestDetail.textContent='Sign in to sync records'; if(runCount) runCount.textContent='—'; return; }
+    if(!uid){ if(bestScore) bestScore.textContent=' - '; if(bestDetail) bestDetail.textContent='Sign in to sync records'; if(runCount) runCount.textContent=' - '; return; }
     const pbRes=results[1], histRes=results[2];
     if(pbRes.error) throw pbRes.error; if(histRes.error) throw histRes.error;
     const pb=pbRes.data;
@@ -11728,7 +11727,7 @@ async function loadPuzzleCloudData(mode=puzzleCloudMode){
     if(runCount) runCount.textContent=pb?String(pb.total_runs||0):'0';
     const myRuns=histRes.data||[];
     if(history) {
-      history.innerHTML=myRuns.length?myRuns.map(row=>`<button type="button" class="puzzle-cloud-row puzzle-cloud-run-button" data-puzzle-cloud-run="${escapeHtml(row.id)}"><span class="puzzle-cloud-rank">${puzzleCloudDate(row.created_at)}</span><span class="puzzle-cloud-player"><b>${Number(row.score||0)} solved</b><small>${escapeHtml(row.ended_reason||'complete')} · ${Number(row.hints_used||0)} hint${Number(row.hints_used||0)===1?'':'s'} used</small></span><span class="puzzle-cloud-score">${Number(row.avg_solve_time||0)>0?Number(row.avg_solve_time).toFixed(1)+'s':'—'}<small>Review →</small></span></button>`).join(''):'<div class="empty-state mini"><span>No runs saved for this mode yet.</span></div>';
+      history.innerHTML=myRuns.length?myRuns.map(row=>`<button type="button" class="puzzle-cloud-row puzzle-cloud-run-button" data-puzzle-cloud-run="${escapeHtml(row.id)}"><span class="puzzle-cloud-rank">${puzzleCloudDate(row.created_at)}</span><span class="puzzle-cloud-player"><b>${Number(row.score||0)} solved</b><small>${escapeHtml(row.ended_reason||'complete')} · ${Number(row.hints_used||0)} hint${Number(row.hints_used||0)===1?'':'s'} used</small></span><span class="puzzle-cloud-score">${Number(row.avg_solve_time||0)>0?Number(row.avg_solve_time).toFixed(1)+'s':' - '}<small>Review →</small></span></button>`).join(''):'<div class="empty-state mini"><span>No runs saved for this mode yet.</span></div>';
       history.querySelectorAll('[data-puzzle-cloud-run]').forEach(button=>button.addEventListener('click',()=>loadCloudPuzzleRunReview(button.dataset.puzzleCloudRun)));
     }
   }catch(error){
@@ -11793,20 +11792,20 @@ function setTrainMode(mode = 'recall') {
     const eyebrow = heading.querySelector('.eyebrow'), title = heading.querySelector('h1'), copy = heading.querySelector('p');
     if (masterPuzzles) {
       if (eyebrow) eyebrow.textContent = 'MASTER GAME PUZZLES';
-      if (title) title.textContent = 'Real positions. Verified tactics.';
-      if (copy) copy.textContent = 'BOZO samples imported master games and only serves positions where Stockfish verifies a concrete tactical idea.';
+      if (title) title.textContent = 'Real positions. Real tactics.';
+      if (copy) copy.textContent = 'Stockfish-verified tactics from imported master games.';
     } else if (puzzleGeneralMode) {
       if (eyebrow) eyebrow.textContent = 'BOZO PUZZLES';
-      if (title) title.textContent = 'Good chess has more than one answer.';
-      if (copy) copy.textContent = 'Play the position your way. BOZO accepts every engine-approved path and follows the branch you choose.';
+      if (title) title.textContent = 'More than one move can work.';
+      if (copy) copy.textContent = 'BOZO accepts every engine-approved line.';
     } else if (trainMode === 'puzzles') {
       if (eyebrow) eyebrow.textContent = 'OPENING PUZZLES';
-      if (title) title.textContent = 'Choose the continuation, not a scripted answer.';
-      if (copy) copy.textContent = 'Practice positions from published openings. Strong alternative moves can branch away from the book line.';
+      if (title) title.textContent = 'Find a good continuation.';
+      if (copy) copy.textContent = 'Train published openings. Strong alternatives can branch from the book.';
     } else {
       if (eyebrow) eyebrow.textContent = 'RECALL TRAINING';
-      if (title) title.textContent = 'Train the moves, not the Next button.';
-      if (copy) copy.textContent = 'Choose a published opening, then play your repertoire moves from memory. BOZO handles the opponent replies automatically.';
+      if (title) title.textContent = 'Play it from memory.';
+      if (copy) copy.textContent = 'Choose an opening. BOZO plays the replies.';
     }
   }
   if(masterPuzzles){
@@ -12091,7 +12090,7 @@ function generateBozoPosition(targetMotif='any') {
     const whiteNonPawns = whitePieces.filter(p=>p.type!=='p').length;
     const blackNonPawns = blackPieces.filter(p=>p.type!=='p').length;
 
-    // v4.11.7 — generated-position sanity gate. The previous ±8 material
+    // v4.11.7: generated-position sanity gate. The previous ±8 material
     // allowance let random playouts drift into already-lost, puzzle-like-looking
     // positions. Tactical puzzles should BEGIN from a credible competitive
     // position; the tactic itself may create a large swing afterwards.
@@ -12455,7 +12454,7 @@ async function searchPuzzleOpenings(query = '') {
   if (!rows.length) { root.innerHTML = '<div class="empty-state"><div>🧩</div><b>No puzzle-ready lines</b><span>Try a broader opening name.</span></div>'; return; }
   root.innerHTML = rows.slice(0,40).map(row => {
     const side = inferOpeningSide(row);
-    return `<button class="train-opening-result puzzle-opening-result" type="button" data-puzzle-opening="${row.id}"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.variation || 'Main Line')} · ${escapeHtml(row.eco || 'ECO —')}</small></span><em>5 puzzles · ${side === 'neutral' ? 'White' : side}</em></button>`;
+    return `<button class="train-opening-result puzzle-opening-result" type="button" data-puzzle-opening="${row.id}"><span><b>${escapeHtml(row.name)}</b><small>${escapeHtml(row.variation || 'Main Line')} · ${escapeHtml(row.eco || 'ECO  - ')}</small></span><em>5 puzzles · ${side === 'neutral' ? 'White' : side}</em></button>`;
   }).join('');
   root.querySelectorAll('[data-puzzle-opening]').forEach(button => button.addEventListener('click', () => startOpeningPuzzles(button.dataset.puzzleOpening)));
 }
@@ -12586,7 +12585,7 @@ async function startNextPuzzle() {
   if (!puzzleGeneralMode) puzzleCurrentReviewItem={fen:puzzleGame.fen(),side:puzzleUserSide,motif:'Opening puzzle',solutionPv:[],result:'pending',attemptedMove:null,attempts:[],playedLine:[],hintUsed:false};
   puzzleCurrentOpening = spec.opening;
   $('puzzle-title').textContent = 'Choose your path.';
-  $('puzzle-subtitle').textContent = `${spec.opening.name}${spec.opening.variation ? ' · '+spec.opening.variation : ''} · ${spec.opening.eco || 'ECO —'}`;
+  $('puzzle-subtitle').textContent = `${spec.opening.name}${spec.opening.variation ? ' · '+spec.opening.variation : ''} · ${spec.opening.eco || 'ECO  - '}`;
   $('puzzle-number').textContent = `${puzzleStats.index+1}/${puzzleStats.total}`;
   $('puzzle-start-label').textContent = puzzleStartPly ? `move ${Math.floor(puzzleStartPly/2)+1}` : 'the opening position';
   setPuzzleFeedback('neutral','Your move.', puzzleTargetUserMoves === 1 ? 'Find a strong continuation. More than one move may be right.' : `Find ${puzzleTargetUserMoves} strong continuation moves. Your choices can branch.`);
@@ -12931,9 +12930,9 @@ function finishPuzzleSession(reason='complete') {
   if(accCard) accCard.hidden=isPuzzleRunMode();
   $('puzzle-result-accuracy').textContent=`${accuracy}%`;
   $('puzzle-result-streak').textContent=puzzleStats.bestStreak;
-  if ($('puzzle-result-hints')) $('puzzle-result-hints').textContent=isPuzzleRunMode()?`${puzzleRunHintsUsed}/3`:'—';
-  if ($('puzzle-result-time')) $('puzzle-result-time').textContent=avg?`${avg.toFixed(1)}s`:'—';
-  if ($('puzzle-result-difficulty')) $('puzzle-result-difficulty').textContent='—';
+  if ($('puzzle-result-hints')) $('puzzle-result-hints').textContent=isPuzzleRunMode()?`${puzzleRunHintsUsed}/3`:' - ';
+  if ($('puzzle-result-time')) $('puzzle-result-time').textContent=avg?`${avg.toFixed(1)}s`:' - ';
+  if ($('puzzle-result-difficulty')) $('puzzle-result-difficulty').textContent=' - ';
   const cfg=puzzleRunConfig();
   $('puzzle-results-title').textContent=isPuzzleRunMode()
     ? reason==='time'?`${cfg.label}: time!`:reason==='strikes'?`${cfg.label}: three strikes.`:`${cfg.label} complete.`
@@ -13023,7 +13022,7 @@ $('puzzle-run-review-analyze')?.addEventListener('click',analyzeReviewedPuzzle);
 $('puzzle-run-history')?.addEventListener('click',()=>{ const mode=puzzleRunMode; showBozoPuzzlePicker(); loadPuzzleCloudData(mode).catch(()=>{}); setTimeout(()=>document.querySelector('.puzzle-cloud-panel')?.scrollIntoView({behavior:'smooth',block:'start'}),80); });
 
 
-// BOZO board coordinates — chess.com-style edge labels on every 8x8 board.
+// BOZO board coordinates: chess.com-style edge labels on every 8x8 board.
 function bozoSquareFromCell(cell){
   if(!cell) return '';
   const direct=cell.getAttribute?.('aria-label');
@@ -13210,7 +13209,7 @@ async function analyzePosition() {
     const depth = Number($('position-depth').value || 14);
     const result = await engine.analyze(fen, depth);
     const cp = whiteReviewEval(result, game.turn());
-    const bestSan = reviewUciToSan(fen, result.bestMove) || result.bestMove || '—';
+    const bestSan = reviewUciToSan(fen, result.bestMove) || result.bestMove || ' - ';
     const pvSan = reviewPvToSan(fen, result.pv || [], 8);
     const mate = whiteReviewMate(result, game.turn());
     positionAnalysis = { fen, cp, mate, bestMove: bestSan, bestMoveUci: result.bestMove, pv: result.pv || [], pvSan };
@@ -13221,7 +13220,7 @@ async function analyzePosition() {
     $('position-evaluation').textContent = formatReviewEval(cp, mate);
     $('position-best-move').textContent = bestSan;
     $('position-turn-label').textContent = game.turn() === 'w' ? 'White' : 'Black';
-    $('position-eval-summary').textContent = `${reviewPositionDescription(cp, mate)}. ${game.turn()==='w'?'White':'Black'} to move${bestSan !== '—' ? `, with ${bestSan} as the strongest continuation.` : '.'}`;
+    $('position-eval-summary').textContent = `${reviewPositionDescription(cp, mate)}. ${game.turn()==='w'?'White':'Black'} to move${bestSan !== ' - ' ? `, with ${bestSan} as the strongest continuation.` : '.'}`;
     renderPositionVariationLine();
     if ($('position-line-controls')) $('position-line-controls').hidden = !pvSan.length;
     $('position-coach-answer').textContent = 'Position analyzed. Choose a question below or ask your own.';
@@ -13391,7 +13390,7 @@ $('bozo-paypal-initialize')?.addEventListener('click',initializeBozoPayPalSandbo
 
 
 /* ============================================================
-   BOZO v4.6.1 — PayPal Sandbox checkout + verified activation
+   BOZO v4.6.1: PayPal Sandbox checkout + verified activation
    ============================================================ */
 let bozoPayPalConfig = null;
 let bozoPayPalSdkPromise = null;
@@ -13534,7 +13533,7 @@ $('bozo-paypal-initialize')?.addEventListener('click',initializeBozoPayPalSandbo
 
 
 /* ============================================================
-   BOZO v4.7.0 — post-game loop, notifications, BOZO+ management
+   BOZO v4.7.0: post-game loop, notifications, BOZO+ management
    ============================================================ */
 const bozoNoticeSeen = new Set(JSON.parse(localStorage.getItem('bozo_notice_seen') || '[]'));
 function rememberBozoNotice(key){ bozoNoticeSeen.add(key); localStorage.setItem('bozo_notice_seen', JSON.stringify([...bozoNoticeSeen].slice(-100))); }
@@ -13567,10 +13566,10 @@ async function loadDashboardGameLoop(){
   try{
     const profile=await loadChessProfile(null); const games=profile?.games||[], ratings=profile?.ratings||[];
     const rapid=ratings.find(r=>r.pool==='rapid')||ratings.find(r=>r.is_established)||ratings[0];
-    $('dashboard-current-rating').textContent=rapid?(rapid.display_rating??Math.round(Number(rapid.rating||0))):'—'; $('dashboard-current-pool').textContent=rapid?prettyPool(rapid.pool):'No rating';
+    $('dashboard-current-rating').textContent=rapid?(rapid.display_rating??Math.round(Number(rapid.rating||0))):' - '; $('dashboard-current-pool').textContent=rapid?prettyPool(rapid.pool):'No rating';
     const five=games.slice(0,5); let w=0,d=0,l=0; five.forEach(g=>{const r=resultForPerspective(g);if(r.tone==='win')w++;else if(r.tone==='draw')d++;else l++;});
-    $('dashboard-last-five').textContent=five.length?`${w}W ${d}D ${l}L`:'—'; $('dashboard-last-five-label').textContent=five.length?`${five.length} recent rated games`:'No rated games yet';
-    const recent=games[0]; $('dashboard-recent-opponent').textContent=recent?(recent.opponent_ign||recent.opponent_username||'Opponent'):'—'; $('dashboard-recent-result').textContent=recent?`${resultForPerspective(recent).label} · ${prettyPool(recent.pool)}`:'No rated games yet';
+    $('dashboard-last-five').textContent=five.length?`${w}W ${d}D ${l}L`:' - '; $('dashboard-last-five-label').textContent=five.length?`${five.length} recent rated games`:'No rated games yet';
+    const recent=games[0]; $('dashboard-recent-opponent').textContent=recent?(recent.opponent_ign||recent.opponent_username||'Opponent'):' - '; $('dashboard-recent-result').textContent=recent?`${resultForPerspective(recent).label} · ${prettyPool(recent.pool)}`:'No rated games yet';
     $('dashboard-recent-games').innerHTML=gameHistoryMarkup(games,5,'No rated games yet.');
   }catch(error){ $('dashboard-recent-games').innerHTML=`<div class="empty-state mini"><span>${escapeHtml(readableError(error))}</span></div>`; }
 }
@@ -13579,8 +13578,8 @@ $('dashboard-view-games')?.addEventListener('click',()=>{route('profile');setTim
 async function loadBozoPlusManage(){
   const box=$('bozo-plus-manage-status'); if(!box||!state.session?.user)return;
   try{ const {data,error}=await sb.functions.invoke('paypal-bozo-subscription',{body:{action:'config'}}); if(error)throw error; const sub=data?.subscription;
-    box.innerHTML=`<div><span>Status</span><b>${escapeHtml(sub?.status|| (isBozoSupporter()?'Active (manual/supporter)':'Not subscribed'))}</b></div><div><span>Plan</span><b>${escapeHtml(sub?.plan_key?bozoPlanLabel(sub.plan_key):'—')}</b></div><div><span>Subscription</span><b>${escapeHtml(sub?.paypal_subscription_id||'—')}</b></div>`;
-  }catch(error){box.innerHTML=`<div><span>Status</span><b>Could not load PayPal status</b></div><div><span>Plan</span><b>—</b></div><div><span>Subscription</span><b>—</b></div>`;}
+    box.innerHTML=`<div><span>Status</span><b>${escapeHtml(sub?.status|| (isBozoSupporter()?'Active (manual/supporter)':'Not subscribed'))}</b></div><div><span>Plan</span><b>${escapeHtml(sub?.plan_key?bozoPlanLabel(sub.plan_key):' - ')}</b></div><div><span>Subscription</span><b>${escapeHtml(sub?.paypal_subscription_id||' - ')}</b></div>`;
+  }catch(error){box.innerHTML=`<div><span>Status</span><b>Could not load PayPal status</b></div><div><span>Plan</span><b> - </b></div><div><span>Subscription</span><b> - </b></div>`;}
 }
 $('bozo-plus-refresh-status')?.addEventListener('click',loadBozoPlusManage);
 
@@ -13611,12 +13610,12 @@ async function showRatedPostGameSummary(session){
   const myWhite=session.myColor==='w'; const won=(session.result==='1-0'&&myWhite)||(session.result==='0-1'&&!myWhite); const draw=session.result==='1/2-1/2';
   const label=perspective?.label||(draw?'Draw':won?'Win':'Loss');
   $('postgame-title').textContent=label==='Win'?'You won.':label==='Draw'?'Game drawn.':'Game over.'; $('postgame-subtitle').textContent=`${prettyPool(session.pool||latest?.pool||'rated')} · ${session.opponent_username||latest?.opponent_username||'Opponent'}`;
-  $('postgame-result').textContent=label; $('postgame-rating').textContent=latest?.rating_after!=null?Math.round(Number(latest.rating_after)):(session.my_display_rating||'—');
-  const delta=latest?.rating_change; $('postgame-delta').textContent=delta==null?'—':`${Number(delta)>=0?'+':''}${Number(delta)}`;
+  $('postgame-result').textContent=label; $('postgame-rating').textContent=latest?.rating_after!=null?Math.round(Number(latest.rating_after)):(session.my_display_rating||' - ');
+  const delta=latest?.rating_change; $('postgame-delta').textContent=delta==null?' - ':`${Number(delta)>=0?'+':''}${Number(delta)}`;
   $('postgame-opening').textContent=latest?.opening_name||'Review to identify'; $('postgame-review').dataset.gameId=latest?.id||session.rated_game_id||''; $('postgame-rematch').hidden=false; $('postgame-modal').hidden=false;
 }
 
-/* BOZO v4.7.2 — delegated post-game controls
+/* BOZO v4.7.2: delegated post-game controls
    The modal markup is after app.js in index.html, so direct listeners attached at
    startup could silently miss these elements. Delegation works regardless of DOM order. */
 document.addEventListener('click', async (event) => {
@@ -13744,7 +13743,7 @@ document.addEventListener('keydown', event => {
 });
 
 /* ============================================================
-   BOZO v4.13.0 — Connect: DMs, Ask BOZO, unified notifications
+   BOZO v4.13.0: Connect: DMs, Ask BOZO, unified notifications
    ============================================================ */
 let bozoCommsTab='messages', bozoCommsThread=null, bozoCommsTimer=null;
 function commsSignedIn(){if(state.session?.user)return true;openAuth();toast('Sign in to use BOZO Connect');return false;}
@@ -13765,7 +13764,7 @@ $('friend-profile-message')?.addEventListener('click',async()=>{const u=$('frien
 setTimeout(refreshCommsBadges,1800);setInterval(refreshCommsBadges,60000);
 
 
-// BOZO v4.14.1 — Master Database integrations
+// BOZO v4.14.1: Master Database integrations
 function openMasterGames(options={}){
   const q=String(options.query||'').trim();
   const contextNote=$('master-context-note'); if(contextNote){contextNote.hidden=true;contextNote.textContent='';}
@@ -13797,14 +13796,14 @@ async function openMasterGamesForOpening(openingId,name=''){
 }
 window.openMasterGamesForOpening=openMasterGamesForOpening;
 
-// BOZO v4.14.11 — Clear stale opening-position context on normal Master Library searches
-// BOZO v4.14.10 — Scalable Master Library pagination + true result counts
-// BOZO v4.14.9 — Source-agnostic master header (hide raw source URLs)
-// BOZO v4.14.7 — Master board row lock + eval bar + PGN titles
-// BOZO v4.14.6 — Master board sizing + reliable sticky-header reveal
-// BOZO v4.14.5 — Master viewer viewport fix + full initial import visibility
-// BOZO v4.14.3 — Opening Library action hierarchy + Master Games polish
-// BOZO v4.14.0 — Master Games study + training foundation
+// BOZO v4.14.11: Clear stale opening-position context on normal Master Library searches
+// BOZO v4.14.10: Scalable Master Library pagination + true result counts
+// BOZO v4.14.9: Source-agnostic master header (hide raw source URLs)
+// BOZO v4.14.7: Master board row lock + eval bar + PGN titles
+// BOZO v4.14.6: Master board sizing + reliable sticky-header reveal
+// BOZO v4.14.5: Master viewer viewport fix + full initial import visibility
+// BOZO v4.14.3: Opening Library action hierarchy + Master Games polish
+// BOZO v4.14.0: Master Games study + training foundation
 const MASTER_START_FEN='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const masterState={games:[],current:null,orientation:'white',ply:0,mode:'study',game:null,selected:null,exact:0,different:0,decisions:[],startedAt:null,locked:false,total:0,offset:0,pageSize:100,loading:false,hasMore:true,queryKey:''};
 function masterPieceMarkup(piece){if(!piece)return '';return webPiece(piece.color==='w'?piece.type.toUpperCase():piece.type.toLowerCase());}
@@ -13862,7 +13861,7 @@ async function loadMasterGames(options={}){
   const list=$('master-game-list'); if(!list)return;
   const append=!!options.append;
 
-  // BOZO v4.14.11 — normal Master Library searches must not keep
+  // BOZO v4.14.11: normal Master Library searches must not keep
   // stale opening-position context from a previous exact-position lookup.
   if(!append){
     const contextNote=$('master-context-note');
