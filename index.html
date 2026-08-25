@@ -5209,6 +5209,54 @@ footer a,footer button,.footer-brand{color:#fff!important}
 */
 </style>
 
+
+<style id="bozo-wide-layout-fix">
+/*
+  Wide-screen breathing-room fix.
+  Layout only. Chessboards, pieces, board sizing variables, move logic,
+  evaluation bars, arrows, clocks, and game behavior are untouched.
+*/
+@media (min-width:1280px){
+  main{
+    width:min(1500px,calc(100% - 48px))!important;
+  }
+
+  .site-header{
+    padding-left:max(24px,calc((100vw - 1500px)/2))!important;
+    padding-right:max(24px,calc((100vw - 1500px)/2))!important;
+  }
+
+  #view-library .opening-grid{
+    gap:18px!important;
+  }
+
+  #view-library .opening-family-card{
+    min-width:0;
+  }
+
+  /* Let the four main library actions use the extra width instead of
+     forcing the last controls outside the card. */
+  #view-library .opening-action-dock.family .opening-primary-actions{
+    grid-template-columns:
+      minmax(145px,1fr)
+      minmax(165px,1fr)
+      minmax(185px,1.15fr)
+      minmax(90px,.6fr)!important;
+  }
+}
+
+@media (min-width:1600px){
+  main{
+    width:min(1600px,calc(100% - 56px))!important;
+  }
+
+  .site-header{
+    padding-left:max(28px,calc((100vw - 1600px)/2))!important;
+    padding-right:max(28px,calc((100vw - 1600px)/2))!important;
+  }
+}
+</style>
+
 </head>
 <body>
   <div class="background-glow glow-one"></div>
