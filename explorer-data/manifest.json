@@ -1,0 +1,1563 @@
+{
+  "format": "bozo_opening_explorer_static_v1",
+  "shards": 256,
+  "hash": "sha256_first_byte",
+  "positions": 1162480,
+  "moves": 1731183,
+  "compressed_bytes": 46294731,
+  "fields": {
+    "f": "fen_key",
+    "m": [
+      "move_uci",
+      "move_san",
+      "games",
+      "white_wins",
+      "draws",
+      "black_wins",
+      "white_elo_sum",
+      "white_elo_count",
+      "black_elo_sum",
+      "black_elo_count",
+      "min_year",
+      "max_year"
+    ]
+  },
+  "files": [
+    {
+      "file": "00.ndjson.gz",
+      "positions": 4565,
+      "moves": 6883,
+      "bytes": 183701
+    },
+    {
+      "file": "01.ndjson.gz",
+      "positions": 4509,
+      "moves": 6830,
+      "bytes": 181182
+    },
+    {
+      "file": "02.ndjson.gz",
+      "positions": 4544,
+      "moves": 6687,
+      "bytes": 179694
+    },
+    {
+      "file": "03.ndjson.gz",
+      "positions": 4624,
+      "moves": 6854,
+      "bytes": 183339
+    },
+    {
+      "file": "04.ndjson.gz",
+      "positions": 4521,
+      "moves": 6885,
+      "bytes": 182656
+    },
+    {
+      "file": "05.ndjson.gz",
+      "positions": 4514,
+      "moves": 6783,
+      "bytes": 181063
+    },
+    {
+      "file": "06.ndjson.gz",
+      "positions": 4482,
+      "moves": 6637,
+      "bytes": 177681
+    },
+    {
+      "file": "07.ndjson.gz",
+      "positions": 4587,
+      "moves": 6864,
+      "bytes": 183961
+    },
+    {
+      "file": "08.ndjson.gz",
+      "positions": 4574,
+      "moves": 6912,
+      "bytes": 184588
+    },
+    {
+      "file": "09.ndjson.gz",
+      "positions": 4527,
+      "moves": 6941,
+      "bytes": 184389
+    },
+    {
+      "file": "0a.ndjson.gz",
+      "positions": 4503,
+      "moves": 6618,
+      "bytes": 176924
+    },
+    {
+      "file": "0b.ndjson.gz",
+      "positions": 4631,
+      "moves": 6955,
+      "bytes": 185751
+    },
+    {
+      "file": "0c.ndjson.gz",
+      "positions": 4538,
+      "moves": 6787,
+      "bytes": 181333
+    },
+    {
+      "file": "0d.ndjson.gz",
+      "positions": 4448,
+      "moves": 6601,
+      "bytes": 176703
+    },
+    {
+      "file": "0e.ndjson.gz",
+      "positions": 4466,
+      "moves": 6690,
+      "bytes": 178588
+    },
+    {
+      "file": "0f.ndjson.gz",
+      "positions": 4552,
+      "moves": 6756,
+      "bytes": 181343
+    },
+    {
+      "file": "10.ndjson.gz",
+      "positions": 4546,
+      "moves": 6834,
+      "bytes": 181705
+    },
+    {
+      "file": "11.ndjson.gz",
+      "positions": 4493,
+      "moves": 6723,
+      "bytes": 179143
+    },
+    {
+      "file": "12.ndjson.gz",
+      "positions": 4496,
+      "moves": 6659,
+      "bytes": 179202
+    },
+    {
+      "file": "13.ndjson.gz",
+      "positions": 4669,
+      "moves": 6903,
+      "bytes": 184594
+    },
+    {
+      "file": "14.ndjson.gz",
+      "positions": 4610,
+      "moves": 6924,
+      "bytes": 184450
+    },
+    {
+      "file": "15.ndjson.gz",
+      "positions": 4491,
+      "moves": 6636,
+      "bytes": 177236
+    },
+    {
+      "file": "16.ndjson.gz",
+      "positions": 4474,
+      "moves": 6643,
+      "bytes": 177889
+    },
+    {
+      "file": "17.ndjson.gz",
+      "positions": 4603,
+      "moves": 6845,
+      "bytes": 183436
+    },
+    {
+      "file": "18.ndjson.gz",
+      "positions": 4554,
+      "moves": 6715,
+      "bytes": 179048
+    },
+    {
+      "file": "19.ndjson.gz",
+      "positions": 4582,
+      "moves": 6847,
+      "bytes": 183433
+    },
+    {
+      "file": "1a.ndjson.gz",
+      "positions": 4529,
+      "moves": 6664,
+      "bytes": 178043
+    },
+    {
+      "file": "1b.ndjson.gz",
+      "positions": 4541,
+      "moves": 6793,
+      "bytes": 181809
+    },
+    {
+      "file": "1c.ndjson.gz",
+      "positions": 4574,
+      "moves": 6836,
+      "bytes": 182181
+    },
+    {
+      "file": "1d.ndjson.gz",
+      "positions": 4633,
+      "moves": 6943,
+      "bytes": 186101
+    },
+    {
+      "file": "1e.ndjson.gz",
+      "positions": 4601,
+      "moves": 6732,
+      "bytes": 180489
+    },
+    {
+      "file": "1f.ndjson.gz",
+      "positions": 4504,
+      "moves": 6728,
+      "bytes": 180169
+    },
+    {
+      "file": "20.ndjson.gz",
+      "positions": 4614,
+      "moves": 6861,
+      "bytes": 183653
+    },
+    {
+      "file": "21.ndjson.gz",
+      "positions": 4509,
+      "moves": 6653,
+      "bytes": 178949
+    },
+    {
+      "file": "22.ndjson.gz",
+      "positions": 4560,
+      "moves": 6699,
+      "bytes": 179588
+    },
+    {
+      "file": "23.ndjson.gz",
+      "positions": 4532,
+      "moves": 6692,
+      "bytes": 179736
+    },
+    {
+      "file": "24.ndjson.gz",
+      "positions": 4561,
+      "moves": 6905,
+      "bytes": 183570
+    },
+    {
+      "file": "25.ndjson.gz",
+      "positions": 4640,
+      "moves": 6921,
+      "bytes": 184766
+    },
+    {
+      "file": "26.ndjson.gz",
+      "positions": 4508,
+      "moves": 6759,
+      "bytes": 180968
+    },
+    {
+      "file": "27.ndjson.gz",
+      "positions": 4472,
+      "moves": 6600,
+      "bytes": 176693
+    },
+    {
+      "file": "28.ndjson.gz",
+      "positions": 4555,
+      "moves": 6826,
+      "bytes": 182479
+    },
+    {
+      "file": "29.ndjson.gz",
+      "positions": 4421,
+      "moves": 6628,
+      "bytes": 177191
+    },
+    {
+      "file": "2a.ndjson.gz",
+      "positions": 4463,
+      "moves": 6584,
+      "bytes": 176968
+    },
+    {
+      "file": "2b.ndjson.gz",
+      "positions": 4530,
+      "moves": 6645,
+      "bytes": 177692
+    },
+    {
+      "file": "2c.ndjson.gz",
+      "positions": 4426,
+      "moves": 6701,
+      "bytes": 178292
+    },
+    {
+      "file": "2d.ndjson.gz",
+      "positions": 4506,
+      "moves": 6744,
+      "bytes": 180274
+    },
+    {
+      "file": "2e.ndjson.gz",
+      "positions": 4585,
+      "moves": 6702,
+      "bytes": 179982
+    },
+    {
+      "file": "2f.ndjson.gz",
+      "positions": 4547,
+      "moves": 6928,
+      "bytes": 184119
+    },
+    {
+      "file": "30.ndjson.gz",
+      "positions": 4536,
+      "moves": 6877,
+      "bytes": 183506
+    },
+    {
+      "file": "31.ndjson.gz",
+      "positions": 4367,
+      "moves": 6597,
+      "bytes": 176703
+    },
+    {
+      "file": "32.ndjson.gz",
+      "positions": 4553,
+      "moves": 6864,
+      "bytes": 182793
+    },
+    {
+      "file": "33.ndjson.gz",
+      "positions": 4548,
+      "moves": 6736,
+      "bytes": 180808
+    },
+    {
+      "file": "34.ndjson.gz",
+      "positions": 4575,
+      "moves": 6878,
+      "bytes": 182914
+    },
+    {
+      "file": "35.ndjson.gz",
+      "positions": 4501,
+      "moves": 6647,
+      "bytes": 178730
+    },
+    {
+      "file": "36.ndjson.gz",
+      "positions": 4531,
+      "moves": 6691,
+      "bytes": 178859
+    },
+    {
+      "file": "37.ndjson.gz",
+      "positions": 4585,
+      "moves": 6774,
+      "bytes": 181833
+    },
+    {
+      "file": "38.ndjson.gz",
+      "positions": 4565,
+      "moves": 6809,
+      "bytes": 181449
+    },
+    {
+      "file": "39.ndjson.gz",
+      "positions": 4658,
+      "moves": 6905,
+      "bytes": 184321
+    },
+    {
+      "file": "3a.ndjson.gz",
+      "positions": 4559,
+      "moves": 6614,
+      "bytes": 177926
+    },
+    {
+      "file": "3b.ndjson.gz",
+      "positions": 4462,
+      "moves": 6650,
+      "bytes": 177755
+    },
+    {
+      "file": "3c.ndjson.gz",
+      "positions": 4522,
+      "moves": 6622,
+      "bytes": 178439
+    },
+    {
+      "file": "3d.ndjson.gz",
+      "positions": 4588,
+      "moves": 6769,
+      "bytes": 182041
+    },
+    {
+      "file": "3e.ndjson.gz",
+      "positions": 4541,
+      "moves": 6754,
+      "bytes": 181159
+    },
+    {
+      "file": "3f.ndjson.gz",
+      "positions": 4627,
+      "moves": 6854,
+      "bytes": 183731
+    },
+    {
+      "file": "40.ndjson.gz",
+      "positions": 4562,
+      "moves": 6893,
+      "bytes": 183387
+    },
+    {
+      "file": "41.ndjson.gz",
+      "positions": 4513,
+      "moves": 6766,
+      "bytes": 181145
+    },
+    {
+      "file": "42.ndjson.gz",
+      "positions": 4513,
+      "moves": 6632,
+      "bytes": 178092
+    },
+    {
+      "file": "43.ndjson.gz",
+      "positions": 4516,
+      "moves": 6687,
+      "bytes": 178630
+    },
+    {
+      "file": "44.ndjson.gz",
+      "positions": 4563,
+      "moves": 6726,
+      "bytes": 180796
+    },
+    {
+      "file": "45.ndjson.gz",
+      "positions": 4478,
+      "moves": 6573,
+      "bytes": 176572
+    },
+    {
+      "file": "46.ndjson.gz",
+      "positions": 4625,
+      "moves": 6951,
+      "bytes": 184993
+    },
+    {
+      "file": "47.ndjson.gz",
+      "positions": 4605,
+      "moves": 6980,
+      "bytes": 185837
+    },
+    {
+      "file": "48.ndjson.gz",
+      "positions": 4650,
+      "moves": 6964,
+      "bytes": 185698
+    },
+    {
+      "file": "49.ndjson.gz",
+      "positions": 4520,
+      "moves": 6636,
+      "bytes": 178126
+    },
+    {
+      "file": "4a.ndjson.gz",
+      "positions": 4622,
+      "moves": 7018,
+      "bytes": 187446
+    },
+    {
+      "file": "4b.ndjson.gz",
+      "positions": 4493,
+      "moves": 6621,
+      "bytes": 177114
+    },
+    {
+      "file": "4c.ndjson.gz",
+      "positions": 4529,
+      "moves": 6717,
+      "bytes": 180391
+    },
+    {
+      "file": "4d.ndjson.gz",
+      "positions": 4553,
+      "moves": 6775,
+      "bytes": 181551
+    },
+    {
+      "file": "4e.ndjson.gz",
+      "positions": 4516,
+      "moves": 6733,
+      "bytes": 179890
+    },
+    {
+      "file": "4f.ndjson.gz",
+      "positions": 4546,
+      "moves": 6826,
+      "bytes": 181750
+    },
+    {
+      "file": "50.ndjson.gz",
+      "positions": 4539,
+      "moves": 6816,
+      "bytes": 181657
+    },
+    {
+      "file": "51.ndjson.gz",
+      "positions": 4483,
+      "moves": 6686,
+      "bytes": 179048
+    },
+    {
+      "file": "52.ndjson.gz",
+      "positions": 4517,
+      "moves": 6769,
+      "bytes": 181061
+    },
+    {
+      "file": "53.ndjson.gz",
+      "positions": 4456,
+      "moves": 6593,
+      "bytes": 176714
+    },
+    {
+      "file": "54.ndjson.gz",
+      "positions": 4576,
+      "moves": 6849,
+      "bytes": 182929
+    },
+    {
+      "file": "55.ndjson.gz",
+      "positions": 4424,
+      "moves": 6614,
+      "bytes": 176354
+    },
+    {
+      "file": "56.ndjson.gz",
+      "positions": 4551,
+      "moves": 6715,
+      "bytes": 179649
+    },
+    {
+      "file": "57.ndjson.gz",
+      "positions": 4505,
+      "moves": 6677,
+      "bytes": 178630
+    },
+    {
+      "file": "58.ndjson.gz",
+      "positions": 4661,
+      "moves": 6914,
+      "bytes": 185254
+    },
+    {
+      "file": "59.ndjson.gz",
+      "positions": 4562,
+      "moves": 6825,
+      "bytes": 182187
+    },
+    {
+      "file": "5a.ndjson.gz",
+      "positions": 4572,
+      "moves": 6816,
+      "bytes": 181724
+    },
+    {
+      "file": "5b.ndjson.gz",
+      "positions": 4587,
+      "moves": 6765,
+      "bytes": 180671
+    },
+    {
+      "file": "5c.ndjson.gz",
+      "positions": 4583,
+      "moves": 6785,
+      "bytes": 180643
+    },
+    {
+      "file": "5d.ndjson.gz",
+      "positions": 4426,
+      "moves": 6699,
+      "bytes": 178589
+    },
+    {
+      "file": "5e.ndjson.gz",
+      "positions": 4691,
+      "moves": 7042,
+      "bytes": 188028
+    },
+    {
+      "file": "5f.ndjson.gz",
+      "positions": 4515,
+      "moves": 6664,
+      "bytes": 178847
+    },
+    {
+      "file": "60.ndjson.gz",
+      "positions": 4617,
+      "moves": 6847,
+      "bytes": 182774
+    },
+    {
+      "file": "61.ndjson.gz",
+      "positions": 4522,
+      "moves": 6701,
+      "bytes": 179737
+    },
+    {
+      "file": "62.ndjson.gz",
+      "positions": 4476,
+      "moves": 6623,
+      "bytes": 177844
+    },
+    {
+      "file": "63.ndjson.gz",
+      "positions": 4468,
+      "moves": 6716,
+      "bytes": 179195
+    },
+    {
+      "file": "64.ndjson.gz",
+      "positions": 4471,
+      "moves": 6692,
+      "bytes": 178850
+    },
+    {
+      "file": "65.ndjson.gz",
+      "positions": 4471,
+      "moves": 6654,
+      "bytes": 178144
+    },
+    {
+      "file": "66.ndjson.gz",
+      "positions": 4491,
+      "moves": 6665,
+      "bytes": 178148
+    },
+    {
+      "file": "67.ndjson.gz",
+      "positions": 4442,
+      "moves": 6550,
+      "bytes": 175405
+    },
+    {
+      "file": "68.ndjson.gz",
+      "positions": 4587,
+      "moves": 6857,
+      "bytes": 182760
+    },
+    {
+      "file": "69.ndjson.gz",
+      "positions": 4574,
+      "moves": 6795,
+      "bytes": 181819
+    },
+    {
+      "file": "6a.ndjson.gz",
+      "positions": 4482,
+      "moves": 6593,
+      "bytes": 177538
+    },
+    {
+      "file": "6b.ndjson.gz",
+      "positions": 4467,
+      "moves": 6653,
+      "bytes": 178122
+    },
+    {
+      "file": "6c.ndjson.gz",
+      "positions": 4550,
+      "moves": 6855,
+      "bytes": 182724
+    },
+    {
+      "file": "6d.ndjson.gz",
+      "positions": 4559,
+      "moves": 6828,
+      "bytes": 182129
+    },
+    {
+      "file": "6e.ndjson.gz",
+      "positions": 4596,
+      "moves": 6864,
+      "bytes": 182599
+    },
+    {
+      "file": "6f.ndjson.gz",
+      "positions": 4441,
+      "moves": 6649,
+      "bytes": 177627
+    },
+    {
+      "file": "70.ndjson.gz",
+      "positions": 4528,
+      "moves": 6777,
+      "bytes": 181681
+    },
+    {
+      "file": "71.ndjson.gz",
+      "positions": 4641,
+      "moves": 6888,
+      "bytes": 184518
+    },
+    {
+      "file": "72.ndjson.gz",
+      "positions": 4563,
+      "moves": 6809,
+      "bytes": 181413
+    },
+    {
+      "file": "73.ndjson.gz",
+      "positions": 4542,
+      "moves": 6813,
+      "bytes": 182298
+    },
+    {
+      "file": "74.ndjson.gz",
+      "positions": 4560,
+      "moves": 6763,
+      "bytes": 179862
+    },
+    {
+      "file": "75.ndjson.gz",
+      "positions": 4624,
+      "moves": 6873,
+      "bytes": 183157
+    },
+    {
+      "file": "76.ndjson.gz",
+      "positions": 4563,
+      "moves": 6808,
+      "bytes": 183361
+    },
+    {
+      "file": "77.ndjson.gz",
+      "positions": 4513,
+      "moves": 6710,
+      "bytes": 178889
+    },
+    {
+      "file": "78.ndjson.gz",
+      "positions": 4516,
+      "moves": 6698,
+      "bytes": 179551
+    },
+    {
+      "file": "79.ndjson.gz",
+      "positions": 4408,
+      "moves": 6551,
+      "bytes": 175139
+    },
+    {
+      "file": "7a.ndjson.gz",
+      "positions": 4574,
+      "moves": 6817,
+      "bytes": 181504
+    },
+    {
+      "file": "7b.ndjson.gz",
+      "positions": 4500,
+      "moves": 6715,
+      "bytes": 178894
+    },
+    {
+      "file": "7c.ndjson.gz",
+      "positions": 4614,
+      "moves": 6880,
+      "bytes": 183800
+    },
+    {
+      "file": "7d.ndjson.gz",
+      "positions": 4570,
+      "moves": 6805,
+      "bytes": 181705
+    },
+    {
+      "file": "7e.ndjson.gz",
+      "positions": 4603,
+      "moves": 6877,
+      "bytes": 183648
+    },
+    {
+      "file": "7f.ndjson.gz",
+      "positions": 4528,
+      "moves": 6660,
+      "bytes": 178463
+    },
+    {
+      "file": "80.ndjson.gz",
+      "positions": 4511,
+      "moves": 6657,
+      "bytes": 179106
+    },
+    {
+      "file": "81.ndjson.gz",
+      "positions": 4559,
+      "moves": 6866,
+      "bytes": 182474
+    },
+    {
+      "file": "82.ndjson.gz",
+      "positions": 4485,
+      "moves": 6658,
+      "bytes": 178585
+    },
+    {
+      "file": "83.ndjson.gz",
+      "positions": 4503,
+      "moves": 6521,
+      "bytes": 175435
+    },
+    {
+      "file": "84.ndjson.gz",
+      "positions": 4557,
+      "moves": 6792,
+      "bytes": 181663
+    },
+    {
+      "file": "85.ndjson.gz",
+      "positions": 4504,
+      "moves": 6625,
+      "bytes": 177501
+    },
+    {
+      "file": "86.ndjson.gz",
+      "positions": 4646,
+      "moves": 6906,
+      "bytes": 184971
+    },
+    {
+      "file": "87.ndjson.gz",
+      "positions": 4518,
+      "moves": 6617,
+      "bytes": 177568
+    },
+    {
+      "file": "88.ndjson.gz",
+      "positions": 4453,
+      "moves": 6694,
+      "bytes": 179034
+    },
+    {
+      "file": "89.ndjson.gz",
+      "positions": 4520,
+      "moves": 6760,
+      "bytes": 181437
+    },
+    {
+      "file": "8a.ndjson.gz",
+      "positions": 4507,
+      "moves": 6718,
+      "bytes": 179406
+    },
+    {
+      "file": "8b.ndjson.gz",
+      "positions": 4584,
+      "moves": 6820,
+      "bytes": 182202
+    },
+    {
+      "file": "8c.ndjson.gz",
+      "positions": 4594,
+      "moves": 6876,
+      "bytes": 183504
+    },
+    {
+      "file": "8d.ndjson.gz",
+      "positions": 4551,
+      "moves": 6735,
+      "bytes": 180156
+    },
+    {
+      "file": "8e.ndjson.gz",
+      "positions": 4564,
+      "moves": 6807,
+      "bytes": 182339
+    },
+    {
+      "file": "8f.ndjson.gz",
+      "positions": 4627,
+      "moves": 6925,
+      "bytes": 184557
+    },
+    {
+      "file": "90.ndjson.gz",
+      "positions": 4661,
+      "moves": 7043,
+      "bytes": 188390
+    },
+    {
+      "file": "91.ndjson.gz",
+      "positions": 4499,
+      "moves": 6731,
+      "bytes": 179744
+    },
+    {
+      "file": "92.ndjson.gz",
+      "positions": 4647,
+      "moves": 6826,
+      "bytes": 182728
+    },
+    {
+      "file": "93.ndjson.gz",
+      "positions": 4533,
+      "moves": 6723,
+      "bytes": 179483
+    },
+    {
+      "file": "94.ndjson.gz",
+      "positions": 4483,
+      "moves": 6710,
+      "bytes": 178718
+    },
+    {
+      "file": "95.ndjson.gz",
+      "positions": 4501,
+      "moves": 6623,
+      "bytes": 178045
+    },
+    {
+      "file": "96.ndjson.gz",
+      "positions": 4591,
+      "moves": 6894,
+      "bytes": 184097
+    },
+    {
+      "file": "97.ndjson.gz",
+      "positions": 4582,
+      "moves": 6706,
+      "bytes": 180472
+    },
+    {
+      "file": "98.ndjson.gz",
+      "positions": 4457,
+      "moves": 6585,
+      "bytes": 176648
+    },
+    {
+      "file": "99.ndjson.gz",
+      "positions": 4492,
+      "moves": 6730,
+      "bytes": 179328
+    },
+    {
+      "file": "9a.ndjson.gz",
+      "positions": 4542,
+      "moves": 6875,
+      "bytes": 183137
+    },
+    {
+      "file": "9b.ndjson.gz",
+      "positions": 4580,
+      "moves": 6872,
+      "bytes": 184279
+    },
+    {
+      "file": "9c.ndjson.gz",
+      "positions": 4471,
+      "moves": 6769,
+      "bytes": 180736
+    },
+    {
+      "file": "9d.ndjson.gz",
+      "positions": 4555,
+      "moves": 6793,
+      "bytes": 181281
+    },
+    {
+      "file": "9e.ndjson.gz",
+      "positions": 4570,
+      "moves": 6834,
+      "bytes": 182706
+    },
+    {
+      "file": "9f.ndjson.gz",
+      "positions": 4517,
+      "moves": 6612,
+      "bytes": 178264
+    },
+    {
+      "file": "a0.ndjson.gz",
+      "positions": 4626,
+      "moves": 6796,
+      "bytes": 181760
+    },
+    {
+      "file": "a1.ndjson.gz",
+      "positions": 4587,
+      "moves": 6907,
+      "bytes": 184132
+    },
+    {
+      "file": "a2.ndjson.gz",
+      "positions": 4510,
+      "moves": 6686,
+      "bytes": 179507
+    },
+    {
+      "file": "a3.ndjson.gz",
+      "positions": 4527,
+      "moves": 6786,
+      "bytes": 181980
+    },
+    {
+      "file": "a4.ndjson.gz",
+      "positions": 4517,
+      "moves": 6662,
+      "bytes": 178504
+    },
+    {
+      "file": "a5.ndjson.gz",
+      "positions": 4566,
+      "moves": 6839,
+      "bytes": 182561
+    },
+    {
+      "file": "a6.ndjson.gz",
+      "positions": 4453,
+      "moves": 6608,
+      "bytes": 176898
+    },
+    {
+      "file": "a7.ndjson.gz",
+      "positions": 4439,
+      "moves": 6676,
+      "bytes": 178591
+    },
+    {
+      "file": "a8.ndjson.gz",
+      "positions": 4579,
+      "moves": 6909,
+      "bytes": 184267
+    },
+    {
+      "file": "a9.ndjson.gz",
+      "positions": 4441,
+      "moves": 6673,
+      "bytes": 178160
+    },
+    {
+      "file": "aa.ndjson.gz",
+      "positions": 4507,
+      "moves": 6822,
+      "bytes": 181540
+    },
+    {
+      "file": "ab.ndjson.gz",
+      "positions": 4499,
+      "moves": 6805,
+      "bytes": 180917
+    },
+    {
+      "file": "ac.ndjson.gz",
+      "positions": 4438,
+      "moves": 6635,
+      "bytes": 177159
+    },
+    {
+      "file": "ad.ndjson.gz",
+      "positions": 4493,
+      "moves": 6632,
+      "bytes": 177367
+    },
+    {
+      "file": "ae.ndjson.gz",
+      "positions": 4571,
+      "moves": 6777,
+      "bytes": 180877
+    },
+    {
+      "file": "af.ndjson.gz",
+      "positions": 4602,
+      "moves": 6815,
+      "bytes": 181970
+    },
+    {
+      "file": "b0.ndjson.gz",
+      "positions": 4537,
+      "moves": 6741,
+      "bytes": 180443
+    },
+    {
+      "file": "b1.ndjson.gz",
+      "positions": 4563,
+      "moves": 6728,
+      "bytes": 180477
+    },
+    {
+      "file": "b2.ndjson.gz",
+      "positions": 4480,
+      "moves": 6646,
+      "bytes": 178009
+    },
+    {
+      "file": "b3.ndjson.gz",
+      "positions": 4582,
+      "moves": 6791,
+      "bytes": 181507
+    },
+    {
+      "file": "b4.ndjson.gz",
+      "positions": 4592,
+      "moves": 6827,
+      "bytes": 182837
+    },
+    {
+      "file": "b5.ndjson.gz",
+      "positions": 4529,
+      "moves": 6767,
+      "bytes": 180354
+    },
+    {
+      "file": "b6.ndjson.gz",
+      "positions": 4620,
+      "moves": 6886,
+      "bytes": 184429
+    },
+    {
+      "file": "b7.ndjson.gz",
+      "positions": 4511,
+      "moves": 6729,
+      "bytes": 180639
+    },
+    {
+      "file": "b8.ndjson.gz",
+      "positions": 4512,
+      "moves": 6779,
+      "bytes": 181118
+    },
+    {
+      "file": "b9.ndjson.gz",
+      "positions": 4494,
+      "moves": 6714,
+      "bytes": 180368
+    },
+    {
+      "file": "ba.ndjson.gz",
+      "positions": 4570,
+      "moves": 6728,
+      "bytes": 180184
+    },
+    {
+      "file": "bb.ndjson.gz",
+      "positions": 4576,
+      "moves": 6813,
+      "bytes": 182295
+    },
+    {
+      "file": "bc.ndjson.gz",
+      "positions": 4519,
+      "moves": 6658,
+      "bytes": 179288
+    },
+    {
+      "file": "bd.ndjson.gz",
+      "positions": 4457,
+      "moves": 6600,
+      "bytes": 176246
+    },
+    {
+      "file": "be.ndjson.gz",
+      "positions": 4583,
+      "moves": 6941,
+      "bytes": 184812
+    },
+    {
+      "file": "bf.ndjson.gz",
+      "positions": 4540,
+      "moves": 6810,
+      "bytes": 181247
+    },
+    {
+      "file": "c0.ndjson.gz",
+      "positions": 4589,
+      "moves": 6837,
+      "bytes": 181945
+    },
+    {
+      "file": "c1.ndjson.gz",
+      "positions": 4647,
+      "moves": 6869,
+      "bytes": 184008
+    },
+    {
+      "file": "c2.ndjson.gz",
+      "positions": 4464,
+      "moves": 6671,
+      "bytes": 178307
+    },
+    {
+      "file": "c3.ndjson.gz",
+      "positions": 4481,
+      "moves": 6594,
+      "bytes": 177126
+    },
+    {
+      "file": "c4.ndjson.gz",
+      "positions": 4552,
+      "moves": 6816,
+      "bytes": 182529
+    },
+    {
+      "file": "c5.ndjson.gz",
+      "positions": 4486,
+      "moves": 6607,
+      "bytes": 177177
+    },
+    {
+      "file": "c6.ndjson.gz",
+      "positions": 4573,
+      "moves": 6833,
+      "bytes": 182641
+    },
+    {
+      "file": "c7.ndjson.gz",
+      "positions": 4537,
+      "moves": 6783,
+      "bytes": 181156
+    },
+    {
+      "file": "c8.ndjson.gz",
+      "positions": 4624,
+      "moves": 6850,
+      "bytes": 182578
+    },
+    {
+      "file": "c9.ndjson.gz",
+      "positions": 4648,
+      "moves": 6966,
+      "bytes": 185193
+    },
+    {
+      "file": "ca.ndjson.gz",
+      "positions": 4573,
+      "moves": 6771,
+      "bytes": 181865
+    },
+    {
+      "file": "cb.ndjson.gz",
+      "positions": 4618,
+      "moves": 6906,
+      "bytes": 184545
+    },
+    {
+      "file": "cc.ndjson.gz",
+      "positions": 4552,
+      "moves": 6797,
+      "bytes": 181386
+    },
+    {
+      "file": "cd.ndjson.gz",
+      "positions": 4525,
+      "moves": 6699,
+      "bytes": 179466
+    },
+    {
+      "file": "ce.ndjson.gz",
+      "positions": 4508,
+      "moves": 6615,
+      "bytes": 177523
+    },
+    {
+      "file": "cf.ndjson.gz",
+      "positions": 4455,
+      "moves": 6686,
+      "bytes": 179656
+    },
+    {
+      "file": "d0.ndjson.gz",
+      "positions": 4651,
+      "moves": 6994,
+      "bytes": 186768
+    },
+    {
+      "file": "d1.ndjson.gz",
+      "positions": 4380,
+      "moves": 6541,
+      "bytes": 174988
+    },
+    {
+      "file": "d2.ndjson.gz",
+      "positions": 4560,
+      "moves": 6673,
+      "bytes": 179504
+    },
+    {
+      "file": "d3.ndjson.gz",
+      "positions": 4579,
+      "moves": 6861,
+      "bytes": 182441
+    },
+    {
+      "file": "d4.ndjson.gz",
+      "positions": 4483,
+      "moves": 6684,
+      "bytes": 178669
+    },
+    {
+      "file": "d5.ndjson.gz",
+      "positions": 4393,
+      "moves": 6620,
+      "bytes": 177343
+    },
+    {
+      "file": "d6.ndjson.gz",
+      "positions": 4458,
+      "moves": 6655,
+      "bytes": 177539
+    },
+    {
+      "file": "d7.ndjson.gz",
+      "positions": 4616,
+      "moves": 6819,
+      "bytes": 183165
+    },
+    {
+      "file": "d8.ndjson.gz",
+      "positions": 4553,
+      "moves": 6869,
+      "bytes": 182930
+    },
+    {
+      "file": "d9.ndjson.gz",
+      "positions": 4668,
+      "moves": 6836,
+      "bytes": 183448
+    },
+    {
+      "file": "da.ndjson.gz",
+      "positions": 4563,
+      "moves": 6855,
+      "bytes": 183763
+    },
+    {
+      "file": "db.ndjson.gz",
+      "positions": 4573,
+      "moves": 6853,
+      "bytes": 182258
+    },
+    {
+      "file": "dc.ndjson.gz",
+      "positions": 4545,
+      "moves": 6748,
+      "bytes": 180497
+    },
+    {
+      "file": "dd.ndjson.gz",
+      "positions": 4618,
+      "moves": 6953,
+      "bytes": 186101
+    },
+    {
+      "file": "de.ndjson.gz",
+      "positions": 4463,
+      "moves": 6647,
+      "bytes": 177735
+    },
+    {
+      "file": "df.ndjson.gz",
+      "positions": 4554,
+      "moves": 6823,
+      "bytes": 182810
+    },
+    {
+      "file": "e0.ndjson.gz",
+      "positions": 4468,
+      "moves": 6801,
+      "bytes": 181410
+    },
+    {
+      "file": "e1.ndjson.gz",
+      "positions": 4501,
+      "moves": 6689,
+      "bytes": 179087
+    },
+    {
+      "file": "e2.ndjson.gz",
+      "positions": 4538,
+      "moves": 6722,
+      "bytes": 180593
+    },
+    {
+      "file": "e3.ndjson.gz",
+      "positions": 4717,
+      "moves": 6941,
+      "bytes": 185379
+    },
+    {
+      "file": "e4.ndjson.gz",
+      "positions": 4544,
+      "moves": 6706,
+      "bytes": 179106
+    },
+    {
+      "file": "e5.ndjson.gz",
+      "positions": 4587,
+      "moves": 6815,
+      "bytes": 182225
+    },
+    {
+      "file": "e6.ndjson.gz",
+      "positions": 4573,
+      "moves": 6828,
+      "bytes": 182454
+    },
+    {
+      "file": "e7.ndjson.gz",
+      "positions": 4556,
+      "moves": 6772,
+      "bytes": 180642
+    },
+    {
+      "file": "e8.ndjson.gz",
+      "positions": 4608,
+      "moves": 6807,
+      "bytes": 182274
+    },
+    {
+      "file": "e9.ndjson.gz",
+      "positions": 4504,
+      "moves": 6739,
+      "bytes": 179493
+    },
+    {
+      "file": "ea.ndjson.gz",
+      "positions": 4571,
+      "moves": 6796,
+      "bytes": 181606
+    },
+    {
+      "file": "eb.ndjson.gz",
+      "positions": 4469,
+      "moves": 6710,
+      "bytes": 179439
+    },
+    {
+      "file": "ec.ndjson.gz",
+      "positions": 4643,
+      "moves": 7003,
+      "bytes": 186396
+    },
+    {
+      "file": "ed.ndjson.gz",
+      "positions": 4482,
+      "moves": 6644,
+      "bytes": 178362
+    },
+    {
+      "file": "ee.ndjson.gz",
+      "positions": 4484,
+      "moves": 6644,
+      "bytes": 177844
+    },
+    {
+      "file": "ef.ndjson.gz",
+      "positions": 4622,
+      "moves": 6791,
+      "bytes": 181972
+    },
+    {
+      "file": "f0.ndjson.gz",
+      "positions": 4473,
+      "moves": 6758,
+      "bytes": 180011
+    },
+    {
+      "file": "f1.ndjson.gz",
+      "positions": 4549,
+      "moves": 6702,
+      "bytes": 178981
+    },
+    {
+      "file": "f2.ndjson.gz",
+      "positions": 4617,
+      "moves": 6864,
+      "bytes": 183899
+    },
+    {
+      "file": "f3.ndjson.gz",
+      "positions": 4505,
+      "moves": 6562,
+      "bytes": 175464
+    },
+    {
+      "file": "f4.ndjson.gz",
+      "positions": 4535,
+      "moves": 6649,
+      "bytes": 178127
+    },
+    {
+      "file": "f5.ndjson.gz",
+      "positions": 4527,
+      "moves": 6705,
+      "bytes": 179191
+    },
+    {
+      "file": "f6.ndjson.gz",
+      "positions": 4563,
+      "moves": 6888,
+      "bytes": 183395
+    },
+    {
+      "file": "f7.ndjson.gz",
+      "positions": 4449,
+      "moves": 6697,
+      "bytes": 178678
+    },
+    {
+      "file": "f8.ndjson.gz",
+      "positions": 4549,
+      "moves": 6657,
+      "bytes": 178580
+    },
+    {
+      "file": "f9.ndjson.gz",
+      "positions": 4566,
+      "moves": 6876,
+      "bytes": 182957
+    },
+    {
+      "file": "fa.ndjson.gz",
+      "positions": 4569,
+      "moves": 6735,
+      "bytes": 181079
+    },
+    {
+      "file": "fb.ndjson.gz",
+      "positions": 4615,
+      "moves": 6834,
+      "bytes": 183353
+    },
+    {
+      "file": "fc.ndjson.gz",
+      "positions": 4518,
+      "moves": 6686,
+      "bytes": 178855
+    },
+    {
+      "file": "fd.ndjson.gz",
+      "positions": 4432,
+      "moves": 6542,
+      "bytes": 175854
+    },
+    {
+      "file": "fe.ndjson.gz",
+      "positions": 4548,
+      "moves": 6857,
+      "bytes": 183336
+    },
+    {
+      "file": "ff.ndjson.gz",
+      "positions": 4580,
+      "moves": 6833,
+      "bytes": 182780
+    }
+  ]
+}
