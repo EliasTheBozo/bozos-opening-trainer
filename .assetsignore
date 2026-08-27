@@ -1,5 +1,6 @@
-.git
-.git/**
-.github
-.github/**
+**/.git
+**/.git/**
+**/.github
+**/.github/**
+wrangler.jsonc
 DEPLOY-MASTER-EXPLORER.txt
