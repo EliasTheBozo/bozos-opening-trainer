@@ -10243,7 +10243,28 @@ let bozoMasterExplorerOrientation = 'white';
 let bozoMasterExplorerRequest = 0;
 
 function bozoMasterExplorerFenKey(fen='') {
-  return String(fen || '').trim().split(/\s+/).slice(0,4).join(' ');
+  const fullFen = String(fen || '').trim();
+  const parts = fullFen.split(/\s+/);
+  if (parts.length < 4) return parts.slice(0,4).join(' ');
+
+  // Match python-chess's legal-en-passant FEN normalization used by
+  // the master database. chess.js keeps the raw EP target square after
+  // every double pawn push (for example e3 after 1.e4), even if no legal
+  // en-passant capture exists.
+  if (parts[3] !== '-') {
+    try {
+      const probe = new Chess(fullFen);
+      const hasLegalEnPassant = probe.moves({ verbose: true }).some(move => {
+        if (typeof move?.isEnPassant === 'function' && move.isEnPassant()) return true;
+        return String(move?.flags || '').includes('e');
+      });
+      if (!hasLegalEnPassant) parts[3] = '-';
+    } catch (error) {
+      console.warn('Master Explorer FEN normalization fallback:', error);
+    }
+  }
+
+  return parts.slice(0,4).join(' ');
 }
 
 async function bozoMasterExplorerShardName(fenKey) {

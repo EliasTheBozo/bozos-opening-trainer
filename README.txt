@@ -1,13 +1,8 @@
-BOZO v4.14.10 — Master Library Pagination
+BOZO v4.14.13 Master Explorer fix
 
-1. Run SUPABASE_BOZO_MASTER_GAMES_V41410_PAGINATION.sql in Supabase SQL Editor.
-2. Upload/replace index.html.
-3. Upload app-v4.14.10.js.
-4. Hard refresh the site.
+Replace ONLY app.js and index.html in the GitHub repository root.
+Do NOT touch explorer-data or re-upload the 256 shards.
 
-What changed:
-- Master Library count now shows the true number of matching games in the database.
-- The browser loads 100 games at a time instead of trying to load the entire database.
-- Scrolling near the bottom automatically fetches the next 100.
-- Search/result/year filters get their own accurate counts and paginated result set.
-- Existing master viewer, titles, eval bar, puzzle fixes, and source-agnostic header are preserved.
+Fixes:
+- Explorer continuation lookup after moves such as 1.e4 by normalizing the FEN en-passant field to match the python-chess database keys.
+- Widens the Explorer page and enforces a true 8x8 square board grid so the board is not compressed.
