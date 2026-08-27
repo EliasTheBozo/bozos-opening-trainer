@@ -1,8 +1,11 @@
-BOZO v4.14.13 Master Explorer fix
+BOZO v4.14.14 Explorer UI polish
 
-Replace ONLY app.js and index.html in the GitHub repository root.
-Do NOT touch explorer-data or re-upload the 256 shards.
+Replace index.html and app.js at the GitHub repository root.
+Do NOT alter explorer-data or re-upload the shards.
 
-Fixes:
-- Explorer continuation lookup after moves such as 1.e4 by normalizing the FEN en-passant field to match the python-chess database keys.
-- Widens the Explorer page and enforces a true 8x8 square board grid so the board is not compressed.
+Changes:
+- Explorer board reduced to a comfortable desktop size while remaining perfectly square.
+- Page width reduced from the oversized full-screen version.
+- Heading receives proper top clearance beneath the sticky navigation.
+- Stats panel is denser and cleaner, with Move / Games / Results headings.
+- Existing Master Explorer lookup fix and all functionality are preserved.
