@@ -3649,6 +3649,18 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
 .review-coach-panel {
   border-color:rgba(168,85,247,.26);
 }
+
+.review-auto-explanation{display:grid;gap:10px}
+.review-auto-topline{display:flex;align-items:center;justify-content:space-between;gap:10px;color:var(--muted);font-size:10px}
+.review-auto-badge{display:inline-flex;width:max-content;padding:4px 7px;border-radius:999px;background:rgba(168,85,247,.16);border:1px solid rgba(168,85,247,.28);color:#d8b4fe;font-size:9px;font-weight:900;letter-spacing:.5px}
+.review-auto-explanation h4{margin:0;color:#fff;font-size:15px;line-height:1.35}
+.review-auto-explanation p{margin:0;color:rgba(255,255,255,.82);font-size:12px;line-height:1.55}
+.review-auto-comparison,.review-auto-lesson{display:grid;gap:4px;padding:9px 10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+.review-auto-comparison b,.review-auto-lesson b{color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.35px}
+.review-auto-comparison span,.review-auto-lesson span{color:rgba(255,255,255,.74);font-size:11px;line-height:1.45}
+.review-auto-explanation small{color:var(--muted);font-size:9px;line-height:1.4}
+.review-auto-empty{padding:2px 0}
+
 .review-coach-answer .coach-summary {
   font-size:14px;
   line-height:1.6;
@@ -6647,12 +6659,12 @@ footer a,footer button,.footer-brand{color:#fff!important}
               <div class="coach-heading">
                 <div>
                   <span class="eyebrow">BOZO COACH</span>
-                  <h3>Why did this move matter?</h3>
+                  <h3>Move explanation</h3>
                 </div>
                 <span id="review-coach-move-label" class="coach-move-label">Choose a move</span>
               </div>
               <div id="review-coach-answer" class="coach-answer">
-                Select an analyzed move to ask BOZO about it.
+                Select any analyzed move. BOZO's explanation is already prepared.
               </div>
               <div class="review-coach-shortcuts" aria-label="Suggested coach questions">
                 <button id="review-coach-primary-question" type="button" data-review-question="Why did this move matter?">Why did this move matter?</button>
@@ -6660,7 +6672,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
                 <button id="review-coach-lesson-question" type="button" data-review-question="What is the one lesson I should remember from this position?">What should I remember?</button>
               </div>
               <label class="coach-question-label">
-                Ask your own question
+                Want more detail? Ask a follow-up
                 <input id="review-coach-question"
                        maxlength="300"
                        placeholder="What should I understand about this position?">

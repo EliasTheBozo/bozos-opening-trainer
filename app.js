@@ -6552,32 +6552,165 @@ function reviewRecommendedLine(row) {
     : `Recommended line: ${line}`;
 }
 
-function updateReviewCoachIdleState(row) {
+
+function reviewAutoExplanation(row) {
+  if (!row) return null;
+
+  // Cache on the analyzed row so Previous/Next and move-list jumps restore
+  // the same explanation instantly without another request.
+  if (row.autoExplanation) return row.autoExplanation;
+
+  const moveLabel = `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
+  const phase = reviewPhaseLabel(row.phase);
+  const position = row.terminal?.type === 'checkmate'
+    ? `${row.terminal.winner === 'w' ? 'White' : 'Black'} won by checkmate`
+    : reviewPositionDescription(row.whiteCp, row.mate);
+  const best = row.engineBest && row.engineBest !== ' - ' ? row.engineBest : null;
+  const pv = (row.principalVariationSan || []).slice(0, 5);
+  const loss = Math.max(0, Number(row.rawEngineLoss) || 0);
+  const cls = String(row.label || row.cls || 'Move');
+  const accuracy = Math.round((Number(row.accuracy) || 0) * 10) / 10;
+
+  let headline = `${moveLabel} was classified as ${cls}.`;
+  let why = '';
+  let comparison = '';
+  let lesson = '';
+
+  if (row.terminal?.type === 'checkmate') {
+    why = `${row.san} ends the game immediately by checkmate. There is no stronger continuation to look for after this move.`;
+    lesson = 'When a forcing move ends the game, calculation outranks every positional consideration.';
+  } else if (row.isBook) {
+    why = `${row.san} keeps the game inside BOZO's opening reference. The engine did not flag a meaningful loss from playing it.`;
+    lesson = `In the ${phase.toLowerCase()}, a sound book move is mainly about reaching a healthy position while keeping the opening plan intact.`;
+  } else if (row.wasTop || loss <= 15) {
+    why = best && best === row.san
+      ? `${row.san} matches the engine's first choice and preserves the best evaluation available in the position.`
+      : `${row.san} gives up essentially nothing according to the engine and keeps the position at ${position.toLowerCase()}.`;
+    lesson = 'This is the kind of move to remember: it solves the position without creating a meaningful concession.';
+  } else if (loss <= 40) {
+    why = `${row.san} is playable, but it is slightly less precise than the engine's preferred continuation. The evaluation cost is small, so the position remains ${position.toLowerCase()}.`;
+    lesson = 'Small inaccuracies usually matter because of precision, not because the position is suddenly lost.';
+  } else if (loss <= 80) {
+    why = `${row.san} gives the opponent a modest improvement compared with the best continuation. The move is still playable, but the engine sees a cleaner way to handle the position.`;
+    lesson = 'When two moves both look reasonable, compare what they allow your opponent to do next.';
+  } else if (loss <= 150) {
+    why = `${row.san} causes a meaningful evaluation drop. That means the move changes more than style: the opponent receives a concrete improvement that the best move avoids.`;
+    lesson = 'Before committing, check forcing replies and ask what changed in the position after your move.';
+  } else if (loss <= 250) {
+    why = `${row.san} gives away a large part of the position's value. The engine sees a substantially stronger continuation, so this is one of the decisions worth studying closely.`;
+    lesson = 'Large mistakes are usually best learned by comparing the played move directly with the engine move and its first forcing reply.';
+  } else {
+    why = `${row.san} produces a very large evaluation swing. This is a critical turning point: the position after the move is much worse than the position the engine could have reached instead.`;
+    lesson = 'At major turning points, focus on the concrete threat, capture, check, or tactical resource that changed the evaluation.';
+  }
+
+  if (best && best !== row.san) {
+    comparison = `${best} was stronger than ${row.san}.`;
+    if (pv.length) comparison += ` A representative engine continuation is ${pv.join(' ')}.`;
+  } else if (pv.length) {
+    comparison = `The engine's continuation after this decision begins ${pv.join(' ')}.`;
+  }
+
+  row.autoExplanation = {
+    headline,
+    why,
+    comparison,
+    lesson,
+    phase,
+    position,
+    accuracy,
+    loss,
+    best,
+    moveLabel
+  };
+  return row.autoExplanation;
+}
+
+function renderReviewAutoExplanation(row) {
   const answer = $('review-coach-answer');
+  if (!answer) return;
+
+  if (!row) {
+    answer.innerHTML = `
+      <div class="review-auto-explanation review-auto-empty">
+        <span class="review-auto-badge">READY WITH THE REVIEW</span>
+        <p>Select any analyzed move. BOZO's explanation is already prepared, and Previous/Next will restore each move's explanation instantly.</p>
+      </div>`;
+    return;
+  }
+
+  const ex = reviewAutoExplanation(row);
+  answer.innerHTML = `
+    <div class="review-auto-explanation">
+      <div class="review-auto-topline">
+        <span class="review-auto-badge">AUTO EXPLANATION</span>
+        <span>${escapeHtml(ex.phase)} · ${escapeHtml(String(ex.accuracy))}% accuracy</span>
+      </div>
+      <h4>${escapeHtml(ex.headline)}</h4>
+      <p>${escapeHtml(ex.why)}</p>
+      ${ex.comparison ? `
+        <div class="review-auto-comparison">
+          <b>${ex.best && ex.best !== row.san ? `Better: ${escapeHtml(ex.best)}` : 'Engine continuation'}</b>
+          <span>${escapeHtml(ex.comparison)}</span>
+        </div>` : ''}
+      <div class="review-auto-lesson">
+        <b>What to remember</b>
+        <span>${escapeHtml(ex.lesson)}</span>
+      </div>
+      <small>Engine-grounded explanation generated with the review. Ask BOZO below only if you want a deeper follow-up.</small>
+    </div>`;
+}
+
+function updateReviewCoachIdleState(row) {
   const primary = $('review-coach-primary-question');
   const better = $('review-coach-better-question');
   const lesson = $('review-coach-lesson-question');
+
   if (!row) {
-    answer.textContent = 'Select an analyzed move to ask BOZO about it.';
-    primary.textContent = 'Why did this move matter?'; primary.dataset.reviewQuestion = 'Why did this move matter?';
-    better.textContent = 'Why is the better move stronger?'; better.dataset.reviewQuestion = 'Why is the better move stronger here?';
+    renderReviewAutoExplanation(null);
+    primary.textContent = 'Why did this move matter?';
+    primary.dataset.reviewQuestion = 'Why did this move matter?';
+    better.textContent = 'Why is the better move stronger?';
+    better.dataset.reviewQuestion = 'Why is the better move stronger here?';
+    lesson.dataset.reviewQuestion = 'What is the one lesson I should remember from this position?';
     return;
   }
+
   const move = `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
   const cls = String(row.cls || row.label || '').toLowerCase();
-  let label = 'Why did this move matter?', question = `Why did ${move} matter?`;
-  if (row.isBook || cls.includes('book')) { label='Why is this a book move?'; question=`Why is ${move} a book move, and what idea does it serve?`; }
-  else if (cls.includes('blunder')) { label='Why was this a blunder?'; question=`Why was ${move} a blunder?`; }
-  else if (cls.includes('mistake')) { label='Why was this a mistake?'; question=`Why was ${move} a mistake?`; }
-  else if (cls.includes('inaccuracy')) { label='Why was this inaccurate?'; question=`Why was ${move} inaccurate?`; }
-  else if (row.wasTop || cls.includes('best')) { label='Why was this the best move?'; question=`Why was ${move} the best move?`; }
-  else if (cls.includes('good') || cls.includes('excellent')) { label='Why was this move good?'; question=`Why was ${move} a good move?`; }
-  answer.textContent = `Ask BOZO about ${move}. Choose a question below or ask your own.`;
-  primary.textContent=label; primary.dataset.reviewQuestion=question;
-  const hasBetter=!row.isBook && !row.wasTop && row.engineBest && row.engineBest !== row.san;
-  better.textContent=hasBetter ? `Why is ${row.engineBest} stronger?` : 'What was the main alternative?';
-  better.dataset.reviewQuestion=hasBetter ? `Why is ${row.engineBest} stronger than ${row.san} here?` : `What was the strongest practical alternative to ${move}, and why?`;
-  lesson.dataset.reviewQuestion=`What is the one lesson I should remember from the position after ${move}?`;
+  let label = 'Explain this move deeper';
+  let question = `Explain ${move} in more depth.`;
+
+  if (row.isBook || cls.includes('book')) {
+    label = 'Why is this a book move?';
+    question = `Why is ${move} a book move, and what idea does it serve?`;
+  } else if (cls.includes('blunder')) {
+    label = 'Why was this a blunder?';
+    question = `Why was ${move} a blunder?`;
+  } else if (cls.includes('mistake')) {
+    label = 'Why was this a mistake?';
+    question = `Why was ${move} a mistake?`;
+  } else if (cls.includes('inaccuracy')) {
+    label = 'Why was this inaccurate?';
+    question = `Why was ${move} inaccurate?`;
+  } else if (row.wasTop || cls.includes('best')) {
+    label = 'Why was this the best move?';
+    question = `Why was ${move} the best move?`;
+  } else if (cls.includes('good') || cls.includes('excellent')) {
+    label = 'Why was this move good?';
+    question = `Why was ${move} a good move?`;
+  }
+
+  renderReviewAutoExplanation(row);
+  primary.textContent = label;
+  primary.dataset.reviewQuestion = question;
+
+  const hasBetter = !row.isBook && !row.wasTop && row.engineBest && row.engineBest !== row.san;
+  better.textContent = hasBetter ? `Why is ${row.engineBest} stronger?` : 'What was the main alternative?';
+  better.dataset.reviewQuestion = hasBetter
+    ? `Why is ${row.engineBest} stronger than ${row.san} here?`
+    : `What was the strongest practical alternative to ${move}, and why?`;
+  lesson.dataset.reviewQuestion = `What is the one lesson I should remember from the position after ${move}?`;
 }
 
 function updateReviewSelectedMove() {
@@ -6626,7 +6759,7 @@ function clearReviewCoachAnnotations() {
 function clearReviewCoach() {
   clearReviewCoachAnnotations();
   const row = reviewStepIndex === 0 ? null : reviewData?.rows[reviewStepIndex - 1];
-  updateReviewCoachIdleState(row);
+  renderReviewAutoExplanation(row);
   $('review-coach-question').value = '';
 }
 
