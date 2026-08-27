@@ -338,6 +338,7 @@ function route(name) {
   if (name === 'play') renderPlay();
   if (name === 'challenges') renderChallenges();
   if (name === 'masters') loadMasterGames();
+  if (name === 'explorer') initializeMasterExplorer();
   if (name === 'friends') renderFriends();
   if (name === 'review') prepareReviewPage();
   if (name === 'studies') renderStudies();
@@ -10232,6 +10233,186 @@ function fenBoard(fen) {
     return squares;
   });
 }
+
+
+// BOZO v4.14.12: dedicated static Master Explorer.
+const BOZO_MASTER_EXPLORER_BASE = './explorer-data';
+const bozoMasterExplorerShardCache = new Map();
+let bozoMasterExplorerGame = null;
+let bozoMasterExplorerOrientation = 'white';
+let bozoMasterExplorerRequest = 0;
+
+function bozoMasterExplorerFenKey(fen='') {
+  return String(fen || '').trim().split(/\s+/).slice(0,4).join(' ');
+}
+
+async function bozoMasterExplorerShardName(fenKey) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(fenKey)));
+  return digest[0].toString(16).padStart(2,'0');
+}
+
+async function bozoMasterExplorerDecode(response) {
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    if (typeof DecompressionStream !== 'function') throw new Error('Gzip decompression is not supported in this browser.');
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return await new Response(stream).text();
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+async function bozoMasterExplorerLoadShard(name) {
+  if (bozoMasterExplorerShardCache.has(name)) return bozoMasterExplorerShardCache.get(name);
+  const promise = (async()=>{
+    const response = await fetch(`${BOZO_MASTER_EXPLORER_BASE}/${name}.ndjson.gz`, {cache:'force-cache'});
+    if (!response.ok) throw new Error(`Shard ${name} returned ${response.status}`);
+    const text = await bozoMasterExplorerDecode(response);
+    const positions = new Map();
+    for (const line of text.split('\n')) {
+      if (!line) continue;
+      const row = JSON.parse(line);
+      positions.set(row.f,row.m);
+    }
+    return positions;
+  })();
+  bozoMasterExplorerShardCache.set(name,promise);
+  try { return await promise; }
+  catch (error) { bozoMasterExplorerShardCache.delete(name); throw error; }
+}
+
+function bozoMasterExplorerPaintBoard() {
+  const target = $('master-explorer-board');
+  if (!target || !bozoMasterExplorerGame) return;
+  const board = fenBoard(bozoMasterExplorerGame.fen());
+  const ranks = bozoMasterExplorerOrientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
+  const files = bozoMasterExplorerOrientation === 'white' ? [...'abcdefgh'] : [...'hgfedcba'];
+  target.innerHTML = ranks.flatMap(rank => files.map(file => {
+    const row = 8-rank, col = file.charCodeAt(0)-97;
+    const light = ((file.charCodeAt(0)-97) + rank) % 2 === 1;
+    const showFile = rank === (bozoMasterExplorerOrientation === 'white' ? 1 : 8);
+    const showRank = file === (bozoMasterExplorerOrientation === 'white' ? 'a' : 'h');
+    return `<div class="master-explorer-square ${light?'light':'dark'}">
+      ${webPiece(board[row][col])}
+      ${showFile?`<span class="master-explorer-file">${file}</span>`:''}
+      ${showRank?`<span class="master-explorer-rank">${rank}</span>`:''}
+    </div>`;
+  })).join('');
+  const fenInput = $('master-explorer-fen');
+  if (fenInput) fenInput.value = bozoMasterExplorerGame.fen();
+}
+
+function bozoMasterExplorerPaintHistory() {
+  const target = $('master-explorer-history');
+  if (!target || !bozoMasterExplorerGame) return;
+  const moves = bozoMasterExplorerGame.history();
+  target.innerHTML = moves.length ? moves.map((move,i)=>`<span>${i+1}. ${escapeHtml(move)}</span>`).join('') : '<span>Start position</span>';
+  const label = $('master-explorer-position-label');
+  if (label) label.textContent = moves.length ? `${moves.length} ply${moves.length===1?'':'ies'} from start` : 'Starting position';
+}
+
+function bozoMasterExplorerStats(move) {
+  const games = Number(move[2]||0);
+  const white = Number(move[3]||0);
+  const draws = Number(move[4]||0);
+  const black = Number(move[5]||0);
+  const wp = games ? white*100/games : 0;
+  const dp = games ? draws*100/games : 0;
+  const bp = games ? black*100/games : 0;
+  return {games,wp,dp,bp};
+}
+
+async function bozoMasterExplorerRefresh() {
+  if (!bozoMasterExplorerGame) return;
+  bozoMasterExplorerPaintBoard();
+  bozoMasterExplorerPaintHistory();
+
+  const token = ++bozoMasterExplorerRequest;
+  const status = $('master-explorer-status');
+  const list = $('master-explorer-moves');
+  if (!status || !list) return;
+
+  status.textContent = 'Loading master data…';
+  list.innerHTML = '<div class="master-explorer-empty">Loading master moves…</div>';
+
+  try {
+    const key = bozoMasterExplorerFenKey(bozoMasterExplorerGame.fen());
+    const shardName = await bozoMasterExplorerShardName(key);
+    const shard = await bozoMasterExplorerLoadShard(shardName);
+    if (token !== bozoMasterExplorerRequest) return;
+
+    const moves = shard.get(key) || [];
+    if (!moves.length) {
+      status.textContent = 'No retained master moves';
+      list.innerHTML = '<div class="master-explorer-empty">BOZO has no retained master-game continuation from this position.</div>';
+      return;
+    }
+
+    const total = moves.reduce((sum,m)=>sum+Number(m[2]||0),0);
+    status.textContent = `${moves.length} move${moves.length===1?'':'s'} · ${total.toLocaleString()} games`;
+
+    list.innerHTML = moves.slice(0,20).map((move,index)=>{
+      const s = bozoMasterExplorerStats(move);
+      return `<button type="button" class="master-explorer-move" data-master-explorer-move="${escapeHtml(move[0])}">
+        <strong>${escapeHtml(move[1]||move[0])}</strong>
+        <span class="master-explorer-games">${s.games.toLocaleString()} games</span>
+        <span>
+          <span class="master-explorer-resultbar">
+            <span class="w" style="width:${s.wp.toFixed(2)}%"></span>
+            <span class="d" style="width:${s.dp.toFixed(2)}%"></span>
+            <span class="b" style="width:${s.bp.toFixed(2)}%"></span>
+          </span>
+          <span class="master-explorer-percent">W ${s.wp.toFixed(1)}% · D ${s.dp.toFixed(1)}% · B ${s.bp.toFixed(1)}%</span>
+        </span>
+      </button>`;
+    }).join('');
+
+    $$('[data-master-explorer-move]').forEach(button=>button.addEventListener('click',()=>{
+      const uci = button.dataset.masterExplorerMove;
+      const found = bozoMasterExplorerGame.moves({verbose:true}).find(m => (m.from+m.to+(m.promotion||'')) === uci);
+      if (!found) return toast('That move could not be played.');
+      bozoMasterExplorerGame.move(found);
+      bozoMasterExplorerRefresh();
+    }));
+  } catch (error) {
+    console.error('Master Explorer failed:',error);
+    status.textContent = 'Explorer unavailable';
+    list.innerHTML = '<div class="master-explorer-empty">The master explorer data could not be loaded. Check that explorer-data was included in this deployment.</div>';
+  }
+}
+
+function initializeMasterExplorer() {
+  if (!$('master-explorer-board')) return;
+  if (!bozoMasterExplorerGame) bozoMasterExplorerGame = new Chess();
+  bozoMasterExplorerRefresh();
+}
+
+$('master-explorer-start')?.addEventListener('click',()=>{
+  bozoMasterExplorerGame = new Chess();
+  bozoMasterExplorerRefresh();
+});
+
+$('master-explorer-back')?.addEventListener('click',()=>{
+  if (!bozoMasterExplorerGame) return;
+  bozoMasterExplorerGame.undo();
+  bozoMasterExplorerRefresh();
+});
+
+$('master-explorer-flip')?.addEventListener('click',()=>{
+  bozoMasterExplorerOrientation = bozoMasterExplorerOrientation === 'white' ? 'black' : 'white';
+  bozoMasterExplorerPaintBoard();
+});
+
+$('master-explorer-load-fen')?.addEventListener('click',()=>{
+  const raw = $('master-explorer-fen')?.value?.trim();
+  if (!raw) return;
+  try {
+    bozoMasterExplorerGame = new Chess(raw);
+    bozoMasterExplorerRefresh();
+  } catch {
+    toast('That FEN is not valid.');
+  }
+});
+
 
 function myDuelColor(c) {
   return challengeColor(c).toLowerCase();

@@ -5362,6 +5362,38 @@ footer a,footer button,.footer-brand{color:#fff!important}
 }
 </style>
 
+
+<style id="bozo-master-explorer-v41412">
+.master-explorer-layout{display:grid;grid-template-columns:minmax(420px,.9fr) minmax(420px,1.1fr);gap:22px;align-items:start}
+.master-explorer-card{border:1px solid var(--border);border-radius:22px;background:var(--panel);box-shadow:var(--shadow);overflow:hidden}
+.master-explorer-board-wrap{padding:18px}
+.master-explorer-board{width:min(100%,620px);aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);border:2px solid rgba(168,85,247,.45);border-radius:14px;overflow:hidden;margin:auto;background:#fff}
+.master-explorer-square{border:0;padding:0;display:grid;place-items:center;position:relative}
+.master-explorer-square.light{background:#e8ddb7}.master-explorer-square.dark{background:#80677b}
+.master-explorer-square img{width:88%;height:88%;object-fit:contain;pointer-events:none}
+.master-explorer-file,.master-explorer-rank{position:absolute;font-size:10px;font-weight:900;opacity:.68;pointer-events:none}
+.master-explorer-file{right:4px;bottom:2px}.master-explorer-rank{left:4px;top:2px}
+.master-explorer-toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:0 18px 18px}
+.master-explorer-toolbar .button{flex:1;min-width:110px}
+.master-explorer-side{padding:20px}
+.master-explorer-status{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:14px;color:var(--muted);font-size:12px}
+.master-explorer-status b{color:#fff}
+.master-explorer-history{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 16px}
+.master-explorer-history span{padding:5px 8px;border-radius:8px;background:rgba(168,85,247,.12);font-size:11px}
+.master-explorer-moves{display:grid;gap:8px}
+.master-explorer-move{width:100%;display:grid;grid-template-columns:minmax(72px,.55fr) minmax(88px,.65fr) 1.3fr;gap:10px;align-items:center;text-align:left;padding:11px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025);color:#fff;cursor:pointer}
+.master-explorer-move:hover{border-color:rgba(168,85,247,.45);background:rgba(168,85,247,.08)}
+.master-explorer-move strong{font-size:15px}.master-explorer-games{color:var(--muted);font-size:12px}
+.master-explorer-resultbar{height:8px;border-radius:999px;overflow:hidden;display:flex;background:rgba(255,255,255,.08)}
+.master-explorer-resultbar span{height:100%}.master-explorer-resultbar .w{background:#f5f2ea}.master-explorer-resultbar .d{background:#91869a}.master-explorer-resultbar .b{background:#2c2530}
+.master-explorer-percent{margin-top:4px;color:var(--muted);font-size:10px}
+.master-explorer-empty{padding:24px;border:1px dashed var(--border);border-radius:14px;color:var(--muted);text-align:center}
+.master-explorer-inputs{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:14px}
+.master-explorer-note{margin-top:14px;color:var(--muted);font-size:11px;line-height:1.5}
+@media(max-width:980px){.master-explorer-layout{grid-template-columns:1fr}.master-explorer-board{max-width:620px}}
+@media(max-width:560px){.master-explorer-board-wrap{padding:10px}.master-explorer-side{padding:14px}.master-explorer-move{grid-template-columns:64px 76px 1fr;padding:9px}.master-explorer-inputs{grid-template-columns:1fr}.master-explorer-toolbar{padding:0 10px 10px}.master-explorer-status{align-items:flex-start;flex-direction:column}}
+</style>
+
 </head>
 <body>
   <div class="background-glow glow-one"></div>
@@ -5390,6 +5422,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
         <button type="button" data-route="play"><b>Play</b><span>Free play, matchmaking, and BOZO Bot</span></button>
         <button type="button" data-route="challenges"><b>Challenges</b><span>Opening duels and friend challenges</span></button>
         <button type="button" data-route="masters"><b>Master Games</b><span>Study and train from real games</span></button>
+        <button type="button" data-route="explorer"><b>Master Explorer</b><span>See what masters played from any position</span></button>
       </div>
     </div>
       <button data-route="friends">Social</button>
@@ -5429,6 +5462,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
     <button class="mobile-play-sub" data-route="play" data-mobile-play-section="arenas">↳ Arenas</button>
     <button data-route="challenges">Challenges</button>
     <button data-route="masters">Master Games</button>
+    <button data-route="explorer">Master Explorer</button>
     <button data-route="friends">Social</button>
     <button type="button" data-comms-tab="notifications">Alerts</button>
     <button type="button" data-comms-tab="messages">DMs</button>
@@ -6543,6 +6577,49 @@ footer a,footer button,.footer-brand{color:#fff!important}
         </aside>
       </div>
     </div>
+  </div>
+</section>
+
+
+<section id="view-explorer" class="view">
+  <div class="page-heading">
+    <div>
+      <div class="eyebrow">MASTER EXPLORER</div>
+      <h1>See what masters played.</h1>
+      <p>Choose moves and follow real master-game statistics through the opening.</p>
+    </div>
+  </div>
+
+  <div class="master-explorer-layout">
+    <section class="master-explorer-card">
+      <div class="master-explorer-board-wrap">
+        <div id="master-explorer-board" class="master-explorer-board" aria-label="Master Explorer chessboard"></div>
+      </div>
+      <div class="master-explorer-toolbar">
+        <button id="master-explorer-start" class="button secondary" type="button">Start</button>
+        <button id="master-explorer-back" class="button secondary" type="button">Back</button>
+        <button id="master-explorer-flip" class="button secondary" type="button">Flip board</button>
+      </div>
+    </section>
+
+    <section class="master-explorer-card master-explorer-side">
+      <div class="master-explorer-inputs">
+        <input id="master-explorer-fen" type="text" spellcheck="false" aria-label="FEN" placeholder="Paste a FEN or use the board">
+        <button id="master-explorer-load-fen" class="button secondary" type="button">Load FEN</button>
+      </div>
+
+      <div class="master-explorer-status">
+        <b id="master-explorer-position-label">Starting position</b>
+        <span id="master-explorer-status">Loading master data…</span>
+      </div>
+
+      <div id="master-explorer-history" class="master-explorer-history"></div>
+      <div id="master-explorer-moves" class="master-explorer-moves">
+        <div class="master-explorer-empty">Loading master moves…</div>
+      </div>
+
+      <p class="master-explorer-note">The explorer uses BOZO's compact master-game database. Select a move to advance the board. Use Back to return one move.</p>
+    </section>
   </div>
 </section>
 

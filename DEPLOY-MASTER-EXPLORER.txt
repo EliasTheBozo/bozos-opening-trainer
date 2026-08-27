@@ -1,0 +1,6 @@
+LIVE-SITE PATCH
+1. Copy the 256 .ndjson.gz shards and manifest.json into explorer-data.
+2. Deploy this folder using the same Cloudflare process you normally use for BOZO.
+3. Open Play > Master Explorer on the live site.
+4. If anything is wrong, report the visible error or browser console message and redeploy a fix.
+No local Python server is required.
