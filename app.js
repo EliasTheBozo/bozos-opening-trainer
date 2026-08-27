@@ -10241,6 +10241,8 @@ const bozoMasterExplorerShardCache = new Map();
 let bozoMasterExplorerGame = null;
 let bozoMasterExplorerOrientation = 'white';
 let bozoMasterExplorerRequest = 0;
+let bozoMasterExplorerBaseFen = null;
+let bozoMasterExplorerMinGames = 1;
 
 function bozoMasterExplorerFenKey(fen='') {
   const fullFen = String(fen || '').trim();
@@ -10326,9 +10328,30 @@ function bozoMasterExplorerPaintHistory() {
   const target = $('master-explorer-history');
   if (!target || !bozoMasterExplorerGame) return;
   const moves = bozoMasterExplorerGame.history();
-  target.innerHTML = moves.length ? moves.map((move,i)=>`<span>${i+1}. ${escapeHtml(move)}</span>`).join('') : '<span>Start position</span>';
+
+  const startLabel = bozoMasterExplorerBaseFen ? 'Loaded position' : 'Start position';
+  target.innerHTML = `<button type="button" class="master-explorer-history-chip${moves.length ? '' : ' active'}" data-master-explorer-ply="0">${startLabel}</button>` +
+    moves.map((move,i)=>`<button type="button" class="master-explorer-history-chip${i === moves.length - 1 ? ' active' : ''}" data-master-explorer-ply="${i+1}">${i+1}. ${escapeHtml(move)}</button>`).join('');
+
+  target.querySelectorAll('[data-master-explorer-ply]').forEach(button => button.addEventListener('click', () => {
+    const targetPly = Math.max(0, Number(button.dataset.masterExplorerPly || 0));
+    const fullHistory = bozoMasterExplorerGame.history();
+    try {
+      const rebuilt = bozoMasterExplorerBaseFen ? new Chess(bozoMasterExplorerBaseFen) : new Chess();
+      for (let i = 0; i < targetPly; i++) rebuilt.move(fullHistory[i]);
+      bozoMasterExplorerGame = rebuilt;
+      bozoMasterExplorerRefresh();
+    } catch (error) {
+      console.error('Could not jump to explorer history position:', error);
+      toast('Could not jump to that position.');
+    }
+  }));
+
   const label = $('master-explorer-position-label');
-  if (label) label.textContent = moves.length ? `${moves.length} ply${moves.length===1?'':'ies'} from start` : 'Starting position';
+  if (label) {
+    if (!moves.length) label.textContent = bozoMasterExplorerBaseFen ? 'Loaded position' : 'Starting position';
+    else label.textContent = `${moves.length} ply${moves.length===1?'':'ies'} from ${bozoMasterExplorerBaseFen ? 'loaded position' : 'start'}`;
+  }
 }
 
 function bozoMasterExplorerStats(move) {
@@ -10361,15 +10384,25 @@ async function bozoMasterExplorerRefresh() {
     const shard = await bozoMasterExplorerLoadShard(shardName);
     if (token !== bozoMasterExplorerRequest) return;
 
-    const moves = shard.get(key) || [];
-    if (!moves.length) {
+    const allMoves = shard.get(key) || [];
+    if (!allMoves.length) {
       status.textContent = 'No retained master moves';
       list.innerHTML = '<div class="master-explorer-empty">BOZO has no retained master-game continuation from this position.</div>';
       return;
     }
 
+    const moves = allMoves.filter(move => Number(move[2] || 0) >= bozoMasterExplorerMinGames);
     const total = moves.reduce((sum,m)=>sum+Number(m[2]||0),0);
-    status.textContent = `${moves.length} move${moves.length===1?'':'s'} · ${total.toLocaleString()} games`;
+
+    if (!moves.length) {
+      status.textContent = `0 of ${allMoves.length} moves shown`;
+      list.innerHTML = `<div class="master-explorer-empty">No continuations meet the current minimum of ${bozoMasterExplorerMinGames.toLocaleString()} games. Lower the filter to see more moves.</div>`;
+      return;
+    }
+
+    status.textContent = bozoMasterExplorerMinGames > 1
+      ? `${moves.length} of ${allMoves.length} moves · ${total.toLocaleString()} games`
+      : `${moves.length} move${moves.length===1?'':'s'} · ${total.toLocaleString()} games`;
 
     list.innerHTML = moves.slice(0,20).map((move,index)=>{
       const s = bozoMasterExplorerStats(move);
@@ -10408,6 +10441,7 @@ function initializeMasterExplorer() {
 }
 
 $('master-explorer-start')?.addEventListener('click',()=>{
+  bozoMasterExplorerBaseFen = null;
   bozoMasterExplorerGame = new Chess();
   bozoMasterExplorerRefresh();
 });
@@ -10428,10 +10462,16 @@ $('master-explorer-load-fen')?.addEventListener('click',()=>{
   if (!raw) return;
   try {
     bozoMasterExplorerGame = new Chess(raw);
+    bozoMasterExplorerBaseFen = bozoMasterExplorerGame.fen();
     bozoMasterExplorerRefresh();
   } catch {
     toast('That FEN is not valid.');
   }
+});
+
+$('master-explorer-min-games')?.addEventListener('change', (event)=>{
+  bozoMasterExplorerMinGames = Math.max(1, Number(event.target.value || 1));
+  bozoMasterExplorerRefresh();
 });
 
 

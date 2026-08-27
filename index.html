@@ -5485,12 +5485,39 @@ footer a,footer button,.footer-brand{color:#fff!important}
   flex-wrap:wrap;
   margin:8px 0 12px;
 }
-.master-explorer-history span{
+.master-explorer-history-chip{
+  border:1px solid transparent;
   padding:4px 7px;
   border-radius:7px;
   background:rgba(103,132,210,.32);
+  color:#fff;
+  font:inherit;
   font-size:10px;
+  cursor:pointer;
 }
+.master-explorer-history-chip:hover{background:rgba(168,85,247,.28);border-color:rgba(168,85,247,.35)}
+.master-explorer-history-chip.active{background:rgba(168,85,247,.36);border-color:rgba(196,151,255,.36)}
+.master-explorer-filterbar{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:-1px 0 10px;
+  color:rgba(255,255,255,.64);
+  font-size:9px;
+}
+.master-explorer-filterbar label{font-weight:900;color:rgba(255,255,255,.82);text-transform:uppercase;letter-spacing:.35px}
+.master-explorer-filterbar select{
+  appearance:auto;
+  border:1px solid rgba(184,154,255,.34);
+  border-radius:8px;
+  background:rgba(54,65,139,.62);
+  color:#fff;
+  padding:5px 8px;
+  font:inherit;
+  font-weight:800;
+}
+.master-explorer-filterbar span{margin-left:auto}
 .master-explorer-columns{
   display:grid;
   grid-template-columns:minmax(62px,.45fr) minmax(92px,.65fr) 1.35fr;
@@ -5579,6 +5606,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
   }
   .master-explorer-inputs{grid-template-columns:1fr}
   .master-explorer-status{align-items:flex-start;flex-direction:column}
+  .master-explorer-filterbar span{width:100%;margin-left:0}
 }
 
 </style>
@@ -6795,6 +6823,20 @@ footer a,footer button,.footer-brand{color:#fff!important}
       <div class="master-explorer-inputs">
         <input id="master-explorer-fen" type="text" spellcheck="false" aria-label="FEN" placeholder="Paste a FEN or use the board">
         <button id="master-explorer-load-fen" class="button secondary" type="button">Load FEN</button>
+      </div>
+      <div class="master-explorer-filterbar">
+        <label for="master-explorer-min-games">Minimum games</label>
+        <select id="master-explorer-min-games" aria-label="Minimum master games">
+          <option value="1">Show all</option>
+          <option value="5">5+</option>
+          <option value="10">10+</option>
+          <option value="25">25+</option>
+          <option value="50">50+</option>
+          <option value="100">100+</option>
+          <option value="500">500+</option>
+          <option value="1000">1,000+</option>
+        </select>
+        <span>Hide rare continuations without changing the database.</span>
       </div>
 
       <div class="master-explorer-status">
