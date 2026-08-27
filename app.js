@@ -6537,10 +6537,10 @@ function reviewSelectedVerdict(row) {
     return `${phaseLabel}: this was the most precise move in the position.`;
   }
 
-  const betterMove = row.engineBest && row.engineBest !== ' - ' ? row.engineBest : 'another move';
+  const betterMove = row.engineBest && row.engineBest !== ' - ' ? row.engineBest : 'another continuation';
   const cost = reviewEvaluationCostLabel(row.rawEngineLoss);
   const position = reviewPositionDescription(row.whiteCp, row.mate).toLowerCase();
-  return `${phaseLabel}: ${row.san} was playable, but ${betterMove} was more precise. The difference was ${cost}, and the resulting position is ${position}.`;
+  return `${phaseLabel}: ${row.san} was playable, but ${betterMove} was the more precise continuation. The difference was ${cost}, and the resulting position is ${position}.`;
 }
 
 function reviewRecommendedLine(row) {
@@ -6553,12 +6553,98 @@ function reviewRecommendedLine(row) {
 }
 
 
+
+function reviewPieceWord(type) {
+  return ({p:'pawn', n:'knight', b:'bishop', r:'rook', q:'queen', k:'king'})[type] || 'piece';
+}
+
+function reviewMoveFacts(fen, san) {
+  if (!fen || !san || san === ' - ') return null;
+  try {
+    const game = new Chess(fen);
+    const move = game.move(san, { sloppy: true });
+    if (!move) return null;
+    const fromPiece = reviewPieceWord(move.piece);
+    const captured = move.captured ? reviewPieceWord(move.captured) : null;
+    const destination = move.to;
+    const isCastle = move.san === 'O-O' || move.san === 'O-O-O';
+    const isCheck = /[+#]$/.test(move.san);
+    const isCapture = Boolean(move.captured) || move.san.includes('x');
+    const isPromotion = Boolean(move.promotion);
+    const isCenter = ['d4','e4','d5','e5'].includes(destination);
+    const developsMinor =
+      (move.piece === 'n' && ['b1','g1','b8','g8'].includes(move.from)) ||
+      (move.piece === 'b' && ['c1','f1','c8','f8'].includes(move.from));
+    const queenEarly = move.piece === 'q';
+    return { ...move, fromPiece, captured, destination, isCastle, isCheck, isCapture, isPromotion, isCenter, developsMinor, queenEarly };
+  } catch (_) {
+    return null;
+  }
+}
+
+function reviewDescribeMovePurpose(facts) {
+  if (!facts) return '';
+  const bits = [];
+  if (facts.isCastle) {
+    bits.push('gets the king to safety and connects the rooks');
+  } else {
+    if (facts.isCapture && facts.captured) bits.push(`removes the ${facts.captured} on ${facts.destination}`);
+    if (facts.isCheck) bits.push('does so with tempo by checking the king');
+    if (facts.developsMinor) bits.push(`develops the ${facts.fromPiece} from its starting square`);
+    if (facts.isCenter && facts.piece === 'p') bits.push('claims central space');
+    else if (facts.isCenter) bits.push('places a piece directly in the center');
+    if (facts.isPromotion) bits.push(`promotes the pawn to a ${reviewPieceWord(facts.promotion)}`);
+  }
+  return bits.join(' and ');
+}
+
+function reviewConcreteComparison(row, best, pv) {
+  if (!best || best === row.san || row.isBook) return '';
+  const played = reviewMoveFacts(row.previousFen, row.san);
+  const better = reviewMoveFacts(row.previousFen, best);
+  if (!better) {
+    return pv.length
+      ? `${best} was the more precise continuation because it leads into ${pv.join(' ')} while keeping more control of the position.`
+      : `${best} was the more precise continuation because it keeps more of the position's advantages intact.`;
+  }
+
+  const purpose = reviewDescribeMovePurpose(better);
+  let reason = '';
+
+  if (played && better.isCapture && played.isCapture && played.to === better.to && played.piece !== better.piece) {
+    if (played.piece === 'q' && better.piece === 'p') {
+      reason = `${best} recaptures on ${better.to} with the ${reviewPieceWord(better.piece)} instead of bringing the queen into the center early. That keeps the queen from becoming an easy target for development moves and uses the pawn to contest the center.`;
+    } else {
+      reason = `${best} handles the same capture with the ${reviewPieceWord(better.piece)} rather than the ${reviewPieceWord(played.piece)}, which leaves the other piece available for a more useful job.`;
+    }
+  } else if (better.isCastle) {
+    reason = `${best} was more precise because it improves king safety immediately and brings the rooks closer to working together.`;
+  } else if (better.developsMinor && !(played && played.developsMinor)) {
+    reason = `${best} was more precise because it develops a new piece while ${row.san} does less to improve coordination.`;
+  } else if (better.isCapture && better.captured) {
+    reason = `${best} was more precise because it ${purpose || `wins material on ${better.to}`}, forcing the position to be resolved on favorable terms.`;
+  } else if (better.isCheck) {
+    reason = `${best} was more precise because it creates a forcing check, limiting the opponent's replies instead of giving them a free choice of plans.`;
+  } else if (better.isCenter && !(played && played.isCenter)) {
+    reason = `${best} was more precise because it ${purpose || 'improves central control'}, giving the position more space and influence over the key central squares.`;
+  } else if (purpose) {
+    reason = `${best} was more precise because it ${purpose}.`;
+  } else {
+    reason = `${best} was the more precise continuation because it keeps the position more coordinated and gives the opponent fewer useful replies.`;
+  }
+
+  if (pv.length) {
+    const continuation = pv[0] === best ? pv.slice(1) : pv;
+    if (continuation.length) {
+      reason += ` One natural continuation is ${continuation.slice(0,4).join(' ')}, which shows the idea rather than just naming the move.`;
+    }
+  }
+  return reason;
+}
+
 function reviewAutoExplanation(row) {
   if (!row) return null;
-
-  // Cache on the analyzed row so Previous/Next and move-list jumps restore
-  // the same explanation instantly without another request.
-  if (row.autoExplanation) return row.autoExplanation;
+  if (row.autoExplanationV2) return row.autoExplanationV2;
 
   const moveLabel = `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
   const phase = reviewPhaseLabel(row.phase);
@@ -6570,51 +6656,72 @@ function reviewAutoExplanation(row) {
   const loss = Math.max(0, Number(row.rawEngineLoss) || 0);
   const cls = String(row.label || row.cls || 'Move');
   const accuracy = Math.round((Number(row.accuracy) || 0) * 10) / 10;
+  const playedFacts = reviewMoveFacts(row.previousFen, row.san);
+  const playedPurpose = reviewDescribeMovePurpose(playedFacts);
 
-  let headline = `${moveLabel} was classified as ${cls}.`;
+  let headline = `${moveLabel} — ${cls}`;
   let why = '';
   let comparison = '';
+  let comparisonLabel = '';
   let lesson = '';
 
   if (row.terminal?.type === 'checkmate') {
-    why = `${row.san} ends the game immediately by checkmate. There is no stronger continuation to look for after this move.`;
-    lesson = 'When a forcing move ends the game, calculation outranks every positional consideration.';
+    why = `${row.san} ends the game immediately by checkmate. The move is forcing and leaves the opponent no legal way to continue.`;
+    lesson = 'When you have a forced finish, calculate checks and captures before worrying about positional improvements.';
   } else if (row.isBook) {
-    why = `${row.san} keeps the game inside BOZO's opening reference. The engine did not flag a meaningful loss from playing it.`;
-    lesson = `In the ${phase.toLowerCase()}, a sound book move is mainly about reaching a healthy position while keeping the opening plan intact.`;
+    if (playedPurpose) {
+      why = `${row.san} is a known opening move. Its immediate job is to ${playedPurpose}.`;
+    } else {
+      why = `${row.san} is a known opening move that reaches a playable opening structure without creating a meaningful concession.`;
+    }
+    lesson = `The important part of a book move is the idea behind it, not whether another first move also scores well. Keep developing toward the plan created by ${row.san}.`;
+    // Do not contradict a Book/100% label by presenting another move as "better."
+    comparison = '';
   } else if (row.wasTop || loss <= 15) {
-    why = best && best === row.san
-      ? `${row.san} matches the engine's first choice and preserves the best evaluation available in the position.`
-      : `${row.san} gives up essentially nothing according to the engine and keeps the position at ${position.toLowerCase()}.`;
-    lesson = 'This is the kind of move to remember: it solves the position without creating a meaningful concession.';
-  } else if (loss <= 40) {
-    why = `${row.san} is playable, but it is slightly less precise than the engine's preferred continuation. The evaluation cost is small, so the position remains ${position.toLowerCase()}.`;
-    lesson = 'Small inaccuracies usually matter because of precision, not because the position is suddenly lost.';
-  } else if (loss <= 80) {
-    why = `${row.san} gives the opponent a modest improvement compared with the best continuation. The move is still playable, but the engine sees a cleaner way to handle the position.`;
-    lesson = 'When two moves both look reasonable, compare what they allow your opponent to do next.';
-  } else if (loss <= 150) {
-    why = `${row.san} causes a meaningful evaluation drop. That means the move changes more than style: the opponent receives a concrete improvement that the best move avoids.`;
-    lesson = 'Before committing, check forcing replies and ask what changed in the position after your move.';
-  } else if (loss <= 250) {
-    why = `${row.san} gives away a large part of the position's value. The engine sees a substantially stronger continuation, so this is one of the decisions worth studying closely.`;
-    lesson = 'Large mistakes are usually best learned by comparing the played move directly with the engine move and its first forcing reply.';
+    why = playedPurpose
+      ? `${row.san} is very precise because it ${playedPurpose} without giving the opponent a meaningful concession.`
+      : `${row.san} is very precise and keeps the position at ${position.toLowerCase()} without giving away anything important.`;
+    lesson = 'Remember what the move actually accomplished in the position, not just that it received a strong label.';
   } else {
-    why = `${row.san} produces a very large evaluation swing. This is a critical turning point: the position after the move is much worse than the position the engine could have reached instead.`;
-    lesson = 'At major turning points, focus on the concrete threat, capture, check, or tactical resource that changed the evaluation.';
+    const costPhrase =
+      loss <= 40 ? 'only a little precision'
+      : loss <= 80 ? 'a modest amount of control'
+      : loss <= 150 ? 'a meaningful part of the position'
+      : loss <= 250 ? 'a large part of the position'
+      : 'a major part of the position';
+
+    why = `${row.san} is playable, but it gives up ${costPhrase}.`;
+    if (playedPurpose) why += ` It does ${playedPurpose}, but the position offered a more efficient way to solve the same problem.`;
+    else why += ` The issue is not that the move is random; it is that the position offered a more efficient continuation.`;
+
+    if (best && best !== row.san) {
+      comparisonLabel = `More precise: ${best}`;
+      comparison = reviewConcreteComparison(row, best, pv);
+    }
+
+    if (loss <= 40) {
+      lesson = 'Small inaccuracies are usually about efficiency: look for a move that improves the position while giving the opponent less counterplay.';
+    } else if (loss <= 80) {
+      lesson = 'When two moves look reasonable, compare what each one develops, protects, attacks, and allows on the next move.';
+    } else if (loss <= 150) {
+      lesson = 'Before committing, check the opponent’s forcing replies and compare your move with a continuation that solves the position more directly.';
+    } else if (loss <= 250) {
+      lesson = 'This is worth reviewing concretely: identify what the more precise move accomplishes that the played move fails to accomplish.';
+    } else {
+      lesson = 'At a major swing, find the concrete tactical or positional resource that changed the game instead of memorizing the evaluation number.';
+    }
   }
 
-  if (best && best !== row.san) {
-    comparison = `${best} was stronger than ${row.san}.`;
-    if (pv.length) comparison += ` A representative engine continuation is ${pv.join(' ')}.`;
-  } else if (pv.length) {
-    comparison = `The engine's continuation after this decision begins ${pv.join(' ')}.`;
+  if (!row.isBook && !comparison && best && best !== row.san) {
+    comparisonLabel = `More precise: ${best}`;
+    comparison = reviewConcreteComparison(row, best, pv);
   }
 
-  row.autoExplanation = {
+  row.autoExplanationV2 = {
     headline,
     why,
     comparison,
+    comparisonLabel,
     lesson,
     phase,
     position,
@@ -6623,7 +6730,7 @@ function reviewAutoExplanation(row) {
     best,
     moveLabel
   };
-  return row.autoExplanation;
+  return row.autoExplanationV2;
 }
 
 function renderReviewAutoExplanation(row) {
@@ -6650,14 +6757,14 @@ function renderReviewAutoExplanation(row) {
       <p>${escapeHtml(ex.why)}</p>
       ${ex.comparison ? `
         <div class="review-auto-comparison">
-          <b>${ex.best && ex.best !== row.san ? `Better: ${escapeHtml(ex.best)}` : 'Engine continuation'}</b>
+          <b>${escapeHtml(ex.comparisonLabel || 'Why this works')}</b>
           <span>${escapeHtml(ex.comparison)}</span>
         </div>` : ''}
       <div class="review-auto-lesson">
         <b>What to remember</b>
         <span>${escapeHtml(ex.lesson)}</span>
       </div>
-      <small>Engine-grounded explanation generated with the review. Ask BOZO below only if you want a deeper follow-up.</small>
+      <small>Want the idea broken down further? Ask BOZO a follow-up below.</small>
     </div>`;
 }
 
@@ -6746,7 +6853,9 @@ function updateReviewSelectedMove() {
     : reviewPositionDescription(row.whiteCp, row.mate);
   $('review-move-accuracy').textContent = `${Math.round(row.accuracy * 10) / 10}%`;
   $('review-move-loss').textContent = row.terminal?.type === 'checkmate' ? 'none' : (row.isBook ? 'Book' : reviewEvaluationCostLabel(row.rawEngineLoss));
-  $('review-engine-best').textContent = row.wasTop ? row.san : (row.engineBest || ' - ');
+  $('review-engine-best').textContent = row.isBook
+    ? 'Opening choice'
+    : (row.wasTop ? row.san : (row.engineBest || ' - '));
   $('review-coach-move-label').textContent = moveLabel;
   updateReviewCoachIdleState(row);
 }
