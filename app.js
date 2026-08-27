@@ -5284,7 +5284,7 @@ function reviewCleanSan(move) {
 async function loadReviewOpeningCatalog() {
   if (reviewOpeningCatalog) return reviewOpeningCatalog;
   const { data, error } = await sb.from('openings')
-    .select('id,eco,name,variation,pgn')
+    .select('id,eco,name,variation,pgn,notes,metadata')
     .eq('status', 'published')
     .limit(10000);
   if (error) throw error;
@@ -5292,8 +5292,23 @@ async function loadReviewOpeningCatalog() {
   reviewOpeningCatalog = (data || []).map(opening => {
     const parser = new Chess();
     const okay = parser.load_pgn(opening.pgn || '', { sloppy: true });
+
+    const builtIn = BOZO_CLOUD_OPENINGS.find(item =>
+      item.name === opening.name &&
+      (item.variation || '') === (opening.variation || '') &&
+      reviewCleanSan(item.pgn || '') === reviewCleanSan(opening.pgn || '')
+    );
+
+    const authored =
+      opening.metadata?.author_explanations ||
+      opening.metadata?.authorExplanations ||
+      opening.author_explanations ||
+      builtIn?.author_explanations ||
+      null;
+
     return {
       ...opening,
+      author_explanations: authored,
       sans: okay ? parser.history().map(reviewCleanSan) : []
     };
   }).filter(opening => opening.sans.length);
@@ -6264,6 +6279,21 @@ async function startGameReview() {
 
     reviewData.headers = parsed.headers;
     reviewData.openingMatch = openingMatch;
+
+    const reviewOpeningExplanations =
+      openingMatch?.opening?.author_explanations ||
+      openingMatch?.opening?.metadata?.author_explanations ||
+      openingMatch?.opening?.metadata?.authorExplanations ||
+      {};
+
+    reviewData.rows.forEach(row => {
+      row.authorExplanation = String(
+        reviewOpeningExplanations?.[String(row.ply)] ||
+        reviewOpeningExplanations?.[row.ply] ||
+        ''
+      ).trim();
+    });
+
     reviewData.playerSide = playerSide;
     reviewData.events = reviewBuildEvents(reviewData.rows, openingMatch, reviewData.phasePlan);
     reviewData.story = reviewGameStory(reviewData.rows, reviewData.phasePlan, playerSide);
@@ -6642,6 +6672,27 @@ function reviewConcreteComparison(row, best, pv) {
   return reason;
 }
 
+
+function reviewAuthoredOpeningExplanation(row) {
+  if (!row?.isBook) return '';
+  if (row.authorExplanation) return row.authorExplanation;
+  if (!reviewData?.openingMatch?.opening) return '';
+  const opening = reviewData.openingMatch.opening;
+  const explanations =
+    opening.author_explanations ||
+    opening.metadata?.author_explanations ||
+    opening.metadata?.authorExplanations ||
+    {};
+  return String(explanations?.[String(row.ply)] || explanations?.[row.ply] || '').trim();
+}
+
+function reviewOpeningContext(row) {
+  const opening = reviewData?.openingMatch?.opening;
+  if (!opening) return '';
+  const name = [opening.name, opening.variation].filter(Boolean).join(': ');
+  return opening.notes ? `${name}. ${opening.notes}` : name;
+}
+
 function reviewAutoExplanation(row) {
   if (!row) return null;
   if (row.autoExplanationV2) return row.autoExplanationV2;
@@ -6669,13 +6720,23 @@ function reviewAutoExplanation(row) {
     why = `${row.san} ends the game immediately by checkmate. The move is forcing and leaves the opponent no legal way to continue.`;
     lesson = 'When you have a forced finish, calculate checks and captures before worrying about positional improvements.';
   } else if (row.isBook) {
-    if (playedPurpose) {
-      why = `${row.san} is a known opening move. Its immediate job is to ${playedPurpose}.`;
+    const authored = reviewAuthoredOpeningExplanation(row);
+    const openingContext = reviewOpeningContext(row);
+
+    if (authored) {
+      // Use the opening author's actual move-by-move teaching text. This is the
+      // same theory the Study/Trainer side already exposes; Review should not
+      // replace it with a vague generated sentence.
+      why = authored;
+      lesson = `This move belongs to ${openingContext || 'the detected opening'}. The point is to carry the authored idea forward into the next moves, not merely to remember that the move is "book."`;
+    } else if (playedPurpose) {
+      why = `${row.san} is part of ${openingContext || 'the detected opening'}. Concretely, it ${playedPurpose}.`;
+      lesson = `Connect this move to the next few moves in the opening: ask what square, pawn break, piece placement, or attack it is preparing.`;
     } else {
-      why = `${row.san} is a known opening move that reaches a playable opening structure without creating a meaningful concession.`;
+      why = `${row.san} is part of ${openingContext || 'the detected opening'}, but this opening entry does not currently contain an authored explanation for this exact ply.`;
+      lesson = `BOZO has the move in its opening line, but no move-specific teaching note was found for this ply. That should be treated as missing theory data, not disguised with a vague "follow the plan" sentence.`;
     }
-    lesson = `The important part of a book move is the idea behind it, not whether another first move also scores well. Keep developing toward the plan created by ${row.san}.`;
-    // Do not contradict a Book/100% label by presenting another move as "better."
+
     comparison = '';
   } else if (row.wasTop || loss <= 15) {
     why = playedPurpose
@@ -6764,7 +6825,9 @@ function renderReviewAutoExplanation(row) {
         <b>What to remember</b>
         <span>${escapeHtml(ex.lesson)}</span>
       </div>
-      <small>Want the idea broken down further? Ask BOZO a follow-up below.</small>
+      <small>${row.isBook && reviewAuthoredOpeningExplanation(row)
+        ? 'Opening explanation comes from BOZO’s authored move-by-move theory.'
+        : 'Want the idea broken down further? Ask BOZO a follow-up below.'}</small>
     </div>`;
 }
 
