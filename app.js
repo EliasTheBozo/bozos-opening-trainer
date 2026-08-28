@@ -6939,48 +6939,111 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
   const facts = reviewVerifiedTeachingFacts(row, selectedIndex);
   const move = facts?.moveFacts || {};
   const exact = reviewOpeningNameForPly(row.ply);
+  const before = facts?.beforePieces || {};
   const after = facts?.afterPieces || {};
   const movedPiece = move.to ? after[move.to] : null;
   const pieceName = movedPiece ? COACH_PIECE_NAMES[movedPiece.type] : 'piece';
   const sideName = row.mover === 'w' ? 'White' : 'Black';
-  const immediate=[], prepares=[], connections=[], forbidden=[];
+  const opponent = row.mover === 'w' ? 'Black' : 'White';
 
-  if (move.from && move.to) immediate.push(`${sideName} moves the ${pieceName} from ${move.from} to ${move.to}.`);
-  if (move.captured) immediate.push(`The move captures the ${COACH_PIECE_NAMES[move.captured] || 'piece'} on ${move.to}.`);
-  if (move.isCheck) immediate.push('The move gives check.');
-  if (move.isCastle) immediate.push(`${sideName} castles, moving the king toward safety and activating the rook.`);
-  if ((facts?.movedPieceAttacks || []).length) immediate.push(`From ${move.to}, the moved ${pieceName} directly attacks ${facts.movedPieceAttacks.join(', ')}.`);
+  const immediateEffects=[], preparedMoves=[], developmentGoals=[], secondaryIdeas=[], gameConnections=[], forbidden=[];
+  let primaryIdea='';
 
-  if (move.piece === 'p' && ['b3','g3','b6','g6'].includes(move.to)) {
-    const map={b3:{bishop:'c1',dest:'b2'},g3:{bishop:'f1',dest:'g2'},b6:{bishop:'c8',dest:'b7'},g6:{bishop:'f8',dest:'g7'}};
-    const f=map[move.to], bishop=after[f.bishop];
-    if (bishop?.type==='b' && bishop.color===row.mover) {
-      try {
-        const g=new Chess(row.fen);
-        if (g.moves({verbose:true}).some(m=>m.from===f.bishop && m.to===f.dest))
-          prepares.push(`It makes ${f.dest} available for the bishop on ${f.bishop}, so ${f.bishop}-${f.dest} is a legal development plan.`);
-      } catch(_){}
+  // chess.js calls every geometrically attacked square an "attack". For teaching,
+  // split that into empty squares CONTROLLED and occupied enemy pieces ATTACKED.
+  const controlledSquares=[];
+  const attackedPieces=[];
+  for (const sq of (facts?.movedPieceAttacks || [])) {
+    const target=after[sq];
+    if (target && movedPiece && target.color !== movedPiece.color) {
+      attackedPieces.push({square:sq,piece:COACH_PIECE_NAMES[target.type] || 'piece'});
+    } else if (!target) {
+      controlledSquares.push(sq);
     }
   }
 
-  if (move.piece==='b' && move.to && (facts?.movedPieceAttacks || []).length)
-    connections.push(`The bishop's verified line from ${move.to} currently reaches ${facts.movedPieceAttacks.join(', ')}.`);
+  if (move.from && move.to) immediateEffects.push(`${sideName} moves the ${pieceName} from ${move.from} to ${move.to}.`);
+  if (move.captured) immediateEffects.push(`It captures the ${COACH_PIECE_NAMES[move.captured] || 'piece'} on ${move.to}.`);
+  if (move.isCheck) immediateEffects.push(`It gives check.`);
+  if (move.isCastle) {
+    primaryIdea=`Castle the king and connect the rook to the game.`;
+    developmentGoals.push(`King safety and rook activation.`);
+  }
+  if (controlledSquares.length) secondaryIdeas.push(`The ${pieceName} on ${move.to} controls ${controlledSquares.join(', ')}.`);
+  if (attackedPieces.length) immediateEffects.push(`It attacks ${attackedPieces.map(x=>`${opponent}'s ${x.piece} on ${x.square}`).join(' and ')}.`);
 
+  // Pawn moves that free a bishop: this is often the PURPOSE, not a footnote.
+  if (move.piece === 'p') {
+    const bishopPrep={
+      b3:{bishop:'c1',dest:'b2'}, g3:{bishop:'f1',dest:'g2'},
+      b6:{bishop:'c8',dest:'b7'}, g6:{bishop:'f8',dest:'g7'},
+      b4:{bishop:'c1',dest:'b2'}, g4:{bishop:'f1',dest:'g2'},
+      b5:{bishop:'c8',dest:'b7'}, g5:{bishop:'f8',dest:'g7'}
+    }[move.to];
+    if (bishopPrep) {
+      const bishop=after[bishopPrep.bishop];
+      if (bishop?.type==='b' && bishop.color===row.mover) {
+        try {
+          const g=new Chess(row.fen);
+          const legal=g.moves({verbose:true});
+          if (legal.some(m=>m.from===bishopPrep.bishop && m.to===bishopPrep.dest)) {
+            const prepSan = row.mover==='w' ? `B${bishopPrep.dest}` : `B${bishopPrep.dest}`;
+            preparedMoves.push(prepSan);
+            developmentGoals.push(`Develop the bishop from ${bishopPrep.bishop} to ${bishopPrep.dest}.`);
+            primaryIdea=`Prepare ${prepSan}, developing the bishop from ${bishopPrep.bishop} to ${bishopPrep.dest}.`;
+          }
+        } catch(_){}
+      }
+    }
+  }
+
+  // A bishop leaving its home square is itself a development goal. Describe its
+  // real ray, but don't confuse an empty square with an attacked piece.
+  if (move.piece==='b' && move.from && move.to) {
+    const homeBishops=['c1','f1','c8','f8'];
+    if (homeBishops.includes(move.from)) {
+      developmentGoals.push(`Develop the bishop from ${move.from} to ${move.to}.`);
+      if (!primaryIdea) primaryIdea=`Develop the bishop to ${move.to} and use its diagonal from there.`;
+    }
+  }
+
+  // Knight development from the back rank: teach development + real central influence.
+  if (move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
+    developmentGoals.push(`Develop the knight from ${move.from} to ${move.to}.`);
+    if (!primaryIdea) primaryIdea=`Develop the knight to ${move.to}${controlledSquares.length ? `, where it controls ${controlledSquares.join(', ')}` : ''}.`;
+  }
+
+  // Actual continuation is context. If the very next move realizes a prepared
+  // move, that strongly confirms the teaching priority without claiming causation.
   const next=facts?.actualNextMoves || [];
-  if(next.length) connections.push(`The game actually continued ${next.join(' ')}.`);
-  if(exact?.name && exact.name!=='Unknown opening')
-    connections.push(`At this exact ply the line is identified as ${exact.name}${exact.variation?`: ${exact.variation}`:''}.`);
+  if(next.length) gameConnections.push(`The game continued ${next.join(' ')}.`);
+  if(preparedMoves.length && next.some(san=>preparedMoves.includes(String(san).replace(/[+#?!]/g,'')))) {
+    gameConnections.push(`The prepared development idea is realized immediately in the game.`);
+  }
 
-  if(move.piece==='p' && move.to)
-    forbidden.push(`Do not say the pawn on ${move.to} supports/protects/attacks any square except: ${(facts?.movedPieceAttacks||[]).join(', ')||'none'}.`);
-  forbidden.push('Do not invent weak squares, loosened squares, holes, pins, threats, or strategic relationships not present in the structured facts.');
+  if(exact?.name && exact.name!=='Unknown opening')
+    gameConnections.push(`At this exact ply the line is ${exact.name}${exact.variation?`: ${exact.variation}`:''}.`);
+
+  // If no stronger purpose was verified, fall back to the most educational
+  // concrete fact, in priority order.
+  if(!primaryIdea && attackedPieces.length) primaryIdea=`Create immediate pressure on ${attackedPieces.map(x=>x.square).join(', ')}.`;
+  if(!primaryIdea && move.captured) primaryIdea=`Make the concrete capture on ${move.to}.`;
+  if(!primaryIdea && controlledSquares.length) primaryIdea=`Improve the ${pieceName}'s influence by controlling ${controlledSquares.join(', ')}.`;
+  if(!primaryIdea) primaryIdea=`Improve the piece placement with ${row.san}.`;
+
+  if(move.piece==='p' && move.to) {
+    forbidden.push(`Do not say the pawn on ${move.to} attacks a piece unless an enemy piece actually occupies one of its capture squares.`);
+    forbidden.push(`Empty pawn capture squares are controlled squares, not attacked pieces.`);
+  }
+  forbidden.push('Do not invent weak squares, loosened squares, holes, pins, threats, targets, or strategic relationships not present in the structured facts.');
   forbidden.push('Do not infer that one move caused a later move merely because it appears in the continuation.');
 
   return {
     move:reviewMoveNotation(row), classification:row.label,
     openingAtThisPly:exact?.name||'Unknown opening', variationAtThisPly:exact?.variation||'',
-    immediateEffects:immediate, verifiedPreparations:prepares, verifiedConnections:connections,
-    verifiedMovedPieceAttacks:facts?.movedPieceAttacks||[],
+    primaryIdea, secondaryIdeas, developmentGoals, preparedMoves,
+    controlledSquares, attackedPieces,
+    immediateEffects, verifiedConnections:gameConnections,
     verifiedNewlyOpenedLines:facts?.newlyOpenedLines||[],
     actualContinuation:next, principalVariation:row.principalVariationSan||[],
     forbiddenClaims:forbidden, rawVerifiedFacts:facts
@@ -6988,18 +7051,26 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
 }
 
 function reviewDeterministicTeachingFromStructure(row, s) {
-  const parts=[];
-  if(s.verifiedPreparations.length) parts.push(s.verifiedPreparations[0]);
-  if(s.immediateEffects.length>1) parts.push(...s.immediateEffects.slice(1,3));
-  if(!parts.length && s.immediateEffects.length) parts.push(s.immediateEffects[0]);
-  const c=s.verifiedConnections.find(x=>/verified line|game actually continued/i.test(x));
-  if(c) parts.push(c);
-  const summary=parts.join(' ').trim() || `${row.san} is legal here, but BOZO did not verify enough strategic detail to make a stronger claim safely.`;
-  const takeaway=s.verifiedPreparations.length
-    ? s.verifiedPreparations[0].replace(/^It /,'Remember that it ')
-    : s.verifiedMovedPieceAttacks.length
-      ? `After ${row.san}, remember the moved piece's concrete influence on ${s.verifiedMovedPieceAttacks.join(', ')}.`
-      : `Remember the concrete board change created by ${row.san}, not just its opening label.`;
+  const explanation=[];
+  if (s.primaryIdea) explanation.push(s.primaryIdea);
+
+  const development=s.developmentGoals.find(x=>!s.primaryIdea?.toLowerCase().includes(x.toLowerCase()));
+  if (development) explanation.push(development);
+
+  if (s.attackedPieces?.length) {
+    explanation.push(`It also attacks ${s.attackedPieces.map(x=>`${x.piece} on ${x.square}`).join(' and ')}.`);
+  }
+  if (s.controlledSquares?.length) {
+    explanation.push(`It also controls ${s.controlledSquares.join(', ')}.`);
+  }
+
+  const realized=s.verifiedConnections?.find(x=>/realized immediately/i.test(x));
+  if(realized) explanation.push(realized);
+
+  const summary=explanation.slice(0,4).join(' ').trim() || `${row.san} improves the position, but BOZO did not verify enough detail for a stronger teaching claim.`;
+  const takeaway=s.primaryIdea
+    ? s.primaryIdea.replace(/^([A-Z])/,m=>m).replace(/\.$/,'') + '.'
+    : `Remember the main purpose of ${row.san}, not just the square the piece moved to.`;
   return {summary,takeaway,source:'structured-local',structure:s};
 }
 
@@ -7034,24 +7105,32 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
       structuredAnalysis:{
         move:structure.move, openingAtThisPly:structure.openingAtThisPly,
         variationAtThisPly:structure.variationAtThisPly,
+        primaryIdea:structure.primaryIdea,
+        secondaryIdeas:structure.secondaryIdeas,
+        developmentGoals:structure.developmentGoals,
+        preparedMoves:structure.preparedMoves,
+        controlledSquares:structure.controlledSquares,
+        attackedPieces:structure.attackedPieces,
         immediateEffects:structure.immediateEffects,
-        verifiedPreparations:structure.verifiedPreparations,
         verifiedConnections:structure.verifiedConnections,
-        verifiedMovedPieceAttacks:structure.verifiedMovedPieceAttacks,
         verifiedNewlyOpenedLines:structure.verifiedNewlyOpenedLines,
         actualContinuation:structure.actualContinuation,
         principalVariation:structure.principalVariation,
         forbiddenClaims:structure.forbiddenClaims
       },
       question:[
-        `You are only the prose writer. structuredAnalysis is authoritative chess analysis.`,
-        `Write a move-specific teaching note for ${structure.move}.`,
-        `Use only claims explicitly supported by structuredAnalysis. Do not add chess facts from intuition, memory, or general opening knowledge.`,
+        `You are the teaching writer, not the chess analyst. structuredAnalysis is authoritative.`,
+        `Write a move-specific coaching note for ${structure.move} in the style of a strong annotated opening course.`,
+        `Lead with primaryIdea. The main purpose must never be buried under secondary geometry.`,
+        `Then naturally connect concrete effects, development, pressure, preparation, or continuation when those fields support them.`,
+        `Model the explanatory rhythm of high-quality annotated PGNs: say what the move does, why that matters here, and what idea it sets up or answers.`,
+        `When a move follows a normal opening principle, name the concrete principle only when supported (development, center, king safety). When a move is unusual, explain the concrete reason only if supplied by the facts.`,
+        `Distinguish chess terminology carefully: an empty square is controlled; an enemy piece on a reachable square is attacked. Never call an empty square an attacked piece.`,
+        `Use actualContinuation to connect moves when useful, but do not pretend the later move was forced or caused unless the structure explicitly says so.`,
+        `Use only claims explicitly supported by structuredAnalysis. Do not add chess facts from intuition, memory, or generic opening lore.`,
         `Do not invent support, attacks, weaknesses, diagonals, threats, plans, or causal relationships.`,
-        `Opening names are context only, not evidence for a strategic claim.`,
-        `Explain why the verified facts matter naturally. If the structure does not support a claim, omit it.`,
-        `Never say "the engine preferred."`,
-        `Return roughly 2-4 concise teaching sentences and one practical takeaway.`,
+        `Avoid robotic wording such as "the engine preferred", "concrete influence", "verified line", or "the moved piece". Name the pawn, knight, bishop, rook, queen, king, square, or plan directly.`,
+        `Return 2-4 natural teaching sentences and one practical takeaway. The takeaway should restate primaryIdea in memorable chess language, not a secondary detail.`,
         `Never mention structuredAnalysis, validation, metadata, prompts, databases, or implementation.`
       ].join(' '), strictGrounding:true
     };

@@ -1,22 +1,18 @@
-BOZO v4.14.22 — Structured Chess Review
+BOZO v4.14.23 — Teaching Priority + Annotated-PGN Style
 
 Replace app.js and index.html at the GitHub root. Do NOT touch explorer-data.
 
-Architecture change:
-1. BOZO/chess.js constructs structured move facts first.
-2. A safe deterministic teaching note is immediately built from those facts.
-3. explain-move is only a prose writer over that structure.
-4. Generated prose is validated before it can replace the safe note.
-5. If generation fails or invents a claim, the structured note stays visible.
-
-Structured facts include exact-ply opening context, immediate effects, verified
-preparations, moved-piece attacks, newly opened lines, actual game continuation,
-principal variation, and explicit forbidden claims.
-
-Examples:
-- ...g6 may verify Bg7 as a legal fianchetto development plan.
-- ...g6 cannot claim to support Nf6 because the g6 pawn's verified attacks do
-  not include f6.
-- Bb2 can describe its verified line from b2 instead of only saying it develops.
+Changes:
+- Human chess terminology: empty reachable squares are CONTROLLED, not described as attacked pieces.
+- Structured review now ranks ideas: primaryIdea, secondaryIdeas, developmentGoals, preparedMoves, controlledSquares, attackedPieces, and game continuation.
+- What to Remember is driven by primaryIdea first, never an arbitrary secondary fact.
+- Added bishop-development recognition for flank pawn moves including 1.b4 -> Bb2.
+- 1.b4 should prioritize preparing Bb2/developing the c1 bishop; a5/c5 are secondary controlled squares.
+- ...g6 should prioritize ...Bg7 when that development is legal.
+- Bishop and knight development from home squares are explicitly recognized.
+- The prose-writer prompt now follows the explanatory rhythm of the supplied gustafsson.pgn: what the move does, why it matters in this position, and what it prepares/answers.
+- The PGN is used as a STYLE model, not copied as chess facts for unrelated positions.
+- Writer is explicitly forbidden from robotic phrases like "the moved piece" and "concrete influence."
+- Existing structured grounding and hallucination rejection remain.
 
 No database migration required.
