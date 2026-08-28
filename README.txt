@@ -1,29 +1,22 @@
-BOZO v4.14.20 — Fact-Grounded Game Review
+BOZO v4.14.22 — Structured Chess Review
 
-Replace app.js and index.html at the GitHub repository root.
-Do NOT touch explorer-data.
+Replace app.js and index.html at the GitHub root. Do NOT touch explorer-data.
 
-What changed:
-- Adds a before/after board-fact layer before automatic teaching generation.
-- Sends the teaching backend verified:
-  * exact move from/to/capture facts
-  * changed squares
-  * moved-piece attacks
-  * newly opened sliding-piece lines
-  * legal follow-up moves
-  * actual next moves from the reviewed game
-  * exact board piece map
-- Explicitly forbids invented weak/loosened-square claims.
-- Automatic explanations are validated BEFORE display.
-- If the first generated explanation makes an unsupported board/strategic
-  claim, BOZO rejects it and automatically requests one grounded rewrite.
-- If the rewrite is still unsupported, BOZO refuses to display it and keeps
-  the deterministic local fallback instead.
-- This specifically prevents nonsense such as claiming 1.b4 "loosens a3/c3"
-  without verified evidence.
-- Future-plan claims must be tied to a legal follow-up, the actual game
-  continuation, an authored note, or the supplied principal variation.
-- Previous/Next caching remains unchanged.
-- Exact-ply opening context from v4.14.19 remains unchanged.
+Architecture change:
+1. BOZO/chess.js constructs structured move facts first.
+2. A safe deterministic teaching note is immediately built from those facts.
+3. explain-move is only a prose writer over that structure.
+4. Generated prose is validated before it can replace the safe note.
+5. If generation fails or invents a claim, the structured note stays visible.
 
-No database migration is required.
+Structured facts include exact-ply opening context, immediate effects, verified
+preparations, moved-piece attacks, newly opened lines, actual game continuation,
+principal variation, and explicit forbidden claims.
+
+Examples:
+- ...g6 may verify Bg7 as a legal fianchetto development plan.
+- ...g6 cannot claim to support Nf6 because the g6 pawn's verified attacks do
+  not include f6.
+- Bb2 can describe its verified line from b2 instead of only saying it develops.
+
+No database migration required.
