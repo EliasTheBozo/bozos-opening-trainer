@@ -4500,6 +4500,106 @@ function verifiedCoachFacts(fen, previousFen, playedMove) {
   }
 }
 
+
+function reviewVerifiedTeachingFacts(row, selectedIndex) {
+  const base = verifiedCoachFacts(row.fen, row.previousFen, row.san);
+  try {
+    const beforeBoard = parseFenBoard(row.previousFen);
+    const afterBoard = parseFenBoard(row.fen);
+    const move = base.moveFacts || {};
+    const changedSquares = [];
+
+    const allSquares = new Set([...Object.keys(beforeBoard), ...Object.keys(afterBoard)]);
+    allSquares.forEach(square => {
+      const before = beforeBoard[square];
+      const after = afterBoard[square];
+      const beforeLabel = before ? `${before.color === 'w' ? 'White' : 'Black'} ${COACH_PIECE_NAMES[before.type]}` : 'empty';
+      const afterLabel = after ? `${after.color === 'w' ? 'White' : 'Black'} ${COACH_PIECE_NAMES[after.type]}` : 'empty';
+      if (beforeLabel !== afterLabel) changedSquares.push({ square, before: beforeLabel, after: afterLabel });
+    });
+
+    const movedPiece = move.to && afterBoard[move.to] ? afterBoard[move.to] : null;
+    const movedPieceAttacks = movedPiece
+      ? attackedSquaresForPiece(move.to, movedPiece, afterBoard)
+      : [];
+
+    // What lines became available because the origin square was vacated?
+    const newlyOpenedFromOrigin = [];
+    if (move.from) {
+      Object.entries(afterBoard).forEach(([square, piece]) => {
+        if (!['b','r','q'].includes(piece.type)) return;
+        const afterAttacks = attackedSquaresForPiece(square, piece, afterBoard);
+        const beforePiece = beforeBoard[square];
+        const beforeAttacks = beforePiece ? attackedSquaresForPiece(square, beforePiece, beforeBoard) : [];
+        afterAttacks.filter(sq => !beforeAttacks.includes(sq)).forEach(sq => {
+          newlyOpenedFromOrigin.push(`${piece.color === 'w' ? 'White' : 'Black'} ${COACH_PIECE_NAMES[piece.type]} on ${square} newly reaches ${sq}`);
+        });
+      });
+    }
+
+    const nextMoves = reviewData?.rows?.slice(selectedIndex + 1, selectedIndex + 5).map(r => r.san) || [];
+    const previousMoves = reviewData?.rows?.slice(Math.max(0, selectedIndex - 3), selectedIndex).map(r => r.san) || [];
+
+    // Explicitly verify whether common follow-up moves are legal from the resulting position.
+    const afterGame = new Chess(row.fen);
+    const legalSan = afterGame.moves();
+    const legalFollowUps = legalSan.slice(0, 80);
+
+    return {
+      ...base,
+      beforeFen: row.previousFen,
+      afterFen: row.fen,
+      changedSquares,
+      movedPieceAttacks,
+      newlyOpenedLines: newlyOpenedFromOrigin.slice(0, 30),
+      previousMoves,
+      actualNextMoves: nextMoves,
+      legalFollowUps,
+      factualTeachingRules: [
+        'Every concrete square, piece-location, attack, weakness, opened line, capture, or threat claim must be supported by these verified facts.',
+        'Do NOT invent weak or loosened squares. A pawn move does not automatically make nearby squares weak.',
+        'Do NOT claim that a square became weak merely because a pawn moved unless the supplied before/after facts explicitly establish that idea.',
+        'For opening plans, distinguish verified current facts from future plans. Say "prepares" or "aims to" only when the follow-up is legal or appears in the actual continuation/authored knowledge.',
+        'If a strategic claim cannot be verified, omit it rather than filling space with chess-sounding language.',
+        'Use actualNextMoves to connect a move to what happened next in this game.',
+        'Use movedPieceAttacks only for attacks created by the moved piece in the resulting position.',
+        'Use newlyOpenedLines only for lines that the board comparison actually shows became newly available.'
+      ]
+    };
+  } catch (error) {
+    return base;
+  }
+}
+
+function reviewTeachingText(explanation) {
+  if (!explanation || typeof explanation !== 'object') return '';
+  const values = [];
+  const walk = value => {
+    if (typeof value === 'string') values.push(value);
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === 'object') Object.values(value).forEach(walk);
+  };
+  walk(explanation);
+  return values.join(' ');
+}
+
+function reviewTeachingHasUnsupportedStrategicClaim(explanation, facts) {
+  const text = reviewTeachingText(explanation);
+  if (!text) return false;
+
+  // These claims require special evidence. Until BOZO has a dedicated square-
+  // weakness evaluator, rejecting them is safer than hallucinating them.
+  if (/\b(?:weakens?|weakened|weak square|weak squares|loosens?|loosened|creates? a hole|holes on|vulnerable square)\b/i.test(text)) {
+    return true;
+  }
+
+  if (textClaimsImpossibleBoardReference(text, facts) || textClaimsUnsupportedAttack(text, facts)) {
+    return true;
+  }
+
+  return false;
+}
+
 function textClaimsUnsupportedAttack(text, facts) {
   if (!text || !/attack(?:s|ed|ing)?|threaten(?:s|ed|ing)?|fork(?:s|ed|ing)?|pin(?:s|ned|ning)?|hang(?:s|ing)?/i.test(text)) return false;
   const whiteTargets = (facts.attackedWhitePieces || []).join(' ').toLowerCase();
@@ -6745,7 +6845,7 @@ function reviewTeachingPayload(row, selectedIndex) {
     .slice(selectedIndex + 1, selectedIndex + 9)
     .map(item => item.san);
   const gamePhase = row.phase || reviewGamePhase(row.ply, reviewData.rows.length, row.fen, reviewData.phasePlan);
-  const facts = verifiedCoachFacts(row.fen, row.previousFen, row.san);
+  const facts = reviewVerifiedTeachingFacts(row, selectedIndex);
   const authored = reviewAuthoredOpeningExplanation(row);
 
   return {
@@ -6787,6 +6887,9 @@ function reviewTeachingPayload(row, selectedIndex) {
         ? `Because this is a book move, explain its concrete purpose, what it prepares, which squares, pieces, or pawn breaks matter, and how it connects to the next moves. Never say only "follow the plan" or "known opening move."`
         : `Explain what the played move accomplishes, what it misses if anything, and why the more precise continuation is stronger. Do not merely name the alternative.`,
       `Use natural chess-coach language. Never say "the engine preferred."`,
+      `FACTUAL GROUNDING IS MANDATORY: every concrete square, piece location, attack, weakness, opened line, capture, or threat must be supported by verifiedBoardFacts.`,
+      `Never invent "loosened squares", "weak squares", holes, pins, attacks, or threats just because they sound plausible. If verifiedBoardFacts does not establish the claim, leave it out.`,
+      `For future plans, use prepares/aims/plans language and tie the claim to a legal follow-up, actualContinuation, authoredTeachingExample, or principalVariation.`,
       `Do not mention missing metadata, missing authored notes, databases, prompts, or internal implementation.`,
       `Keep the main explanation to roughly 2-4 useful sentences, then give one concise practical takeaway.`
     ].join(' '),
@@ -6808,11 +6911,39 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
   }
 
   try {
-    const { data, error } = await sb.functions.invoke('explain-move', { body: reviewTeachingPayload(row, selectedIndex) });
-    if (error || data?.error || !data?.explanation) return;
+    const payload = reviewTeachingPayload(row, selectedIndex);
+    const facts = payload.verifiedBoardFacts;
 
-    const facts = verifiedCoachFacts(row.fen, row.previousFen, row.san);
-    const grounded = sanitizeCoachExplanation(data.explanation, facts);
+    const invoke = async body => {
+      const { data, error } = await sb.functions.invoke('explain-move', { body });
+      if (error || data?.error || !data?.explanation) return null;
+      return data.explanation;
+    };
+
+    let raw = await invoke(payload);
+    if (!raw) return;
+
+    // Hard validation BEFORE anything is displayed.
+    if (reviewTeachingHasUnsupportedStrategicClaim(raw, facts)) {
+      const rejectedText = reviewTeachingText(raw).slice(0, 1800);
+      raw = await invoke({
+        ...payload,
+        mode: 'game_review_auto_teaching_reground',
+        rejectedExplanation: rejectedText,
+        question: [
+          payload.question,
+          `Your previous draft was rejected because it contained at least one unsupported board/strategic claim.`,
+          `Rewrite it from scratch using ONLY verifiedBoardFacts plus clearly labeled future plans supported by actualContinuation, principalVariation, or authoredTeachingExample.`,
+          `Do not use the words weak, weakness, weaken, loosen, hole, pinned, hanging, attacked, threatened, or vulnerable unless the verified facts explicitly establish the claim.`,
+          `Previous rejected draft: ${rejectedText}`
+        ].join(' ')
+      });
+      if (!raw || reviewTeachingHasUnsupportedStrategicClaim(raw, facts)) return;
+    }
+
+    const grounded = sanitizeCoachExplanation(raw, facts);
+    if (reviewTeachingHasUnsupportedStrategicClaim(grounded, facts)) return;
+
     const purposeText = Array.isArray(grounded?.purpose) ? grounded.purpose.filter(Boolean).join(' ') : '';
     const summary = String(grounded?.summary || grounded?.howWeGotHere || purposeText || '').trim();
     const takeaway = String(
@@ -6821,10 +6952,18 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
     ).trim();
 
     if (summary) {
-      row.generatedTeachingNote = { summary, takeaway, source: 'generated', full: grounded };
+      row.generatedTeachingNote = {
+        summary,
+        takeaway,
+        source: 'generated-grounded',
+        full: grounded,
+        groundingFacts: facts
+      };
       if (reviewData?.rows?.[reviewStepIndex - 1] === row) renderReviewAutoExplanation(row);
     }
-  } catch (_) {}
+  } catch (_) {
+    // Keep the deterministic local fallback if generation or validation fails.
+  }
 }
 
 async function primeReviewTeachingNotes() {
@@ -6994,7 +7133,7 @@ function renderReviewAutoExplanation(row) {
         <b>What to remember</b>
         <span>${escapeHtml(ex.lesson)}</span>
       </div>
-      <small>${row.generatedTeachingNote?.source === 'generated'
+      <small>${String(row.generatedTeachingNote?.source || '').startsWith('generated')
         ? 'Prepared automatically from this position, the game context, and BOZO’s chess knowledge.'
         : row.generatedTeachingNote?.source === 'authored' || (row.isBook && reviewAuthoredOpeningExplanation(row))
           ? 'Based on BOZO’s move-by-move opening theory.'
