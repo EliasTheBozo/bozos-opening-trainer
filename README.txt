@@ -1,26 +1,14 @@
-BOZO v4.14.18 — Game Review now uses authored opening theory
+BOZO v4.14.19 — Smart Move Teaching
 
-Replace app.js and index.html at the GitHub repository root.
-Do not touch explorer-data.
+Replace app.js and index.html in the GitHub repository root.
+Do NOT touch explorer-data.
 
-Root cause fixed:
-The Review opening catalog was selecting only:
-id, eco, name, variation, pgn
-
-That meant Review discarded notes/metadata, including the move-by-move
-author_explanations already used elsewhere by BOZO.
-
-This patch:
-- Loads notes + metadata into the Game Review opening catalog.
-- Reads metadata.author_explanations / metadata.authorExplanations.
-- Also falls back to BOZO_CLOUD_OPENINGS author_explanations.
-- Copies the exact authored explanation onto each matching book row.
-- Book moves use that authored move-specific idea first.
-- Previous/Next restores the exact same authored explanation instantly.
-- If a book ply truly has no authored note, Review now says the theory note
-  is missing instead of inventing vague language about "the plan."
-- Non-book moves continue using the concrete review explanation logic from 4.14.17.
-
-Important:
-This does not invent new opening theory. It connects Game Review to the
-move explanations BOZO already stores.
+Fixes:
+- Opening context is resolved independently at each ply, so deep branch metadata no longer contaminates early moves.
+- Signed-in Game Review automatically prepares move-specific teaching notes using the existing explain-move backend.
+- Three background workers prepare and cache explanations, so users do not need to press Ask BOZO on every move.
+- Existing authored notes are reused instantly when available.
+- Missing authored notes are not exposed to users; BOZO derives the teaching explanation from the board, exact opening context, game history, actual continuation, engine line, and verified board facts.
+- Prompts forbid robotic engine-preferred wording, vague follow-the-plan filler, and merely naming a better move without saying why.
+- Previous/Next and move jumps restore cached explanations.
+- No database migration or explorer-data change required.

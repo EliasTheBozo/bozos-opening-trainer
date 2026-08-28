@@ -5316,6 +5316,41 @@ async function loadReviewOpeningCatalog() {
   return reviewOpeningCatalog;
 }
 
+
+function reviewOpeningForPly(ply) {
+  if (!reviewOpeningCatalog?.length || !reviewData?.rows?.length || !ply) return null;
+  const gamePrefix = reviewData.rows.slice(0, ply).map(row => reviewCleanSan(row.san));
+
+  const matches = reviewOpeningCatalog.filter(opening => {
+    if (!opening.sans || opening.sans.length < ply) return false;
+    for (let i = 0; i < ply; i++) {
+      if (opening.sans[i] !== gamePrefix[i]) return false;
+    }
+    return true;
+  });
+
+  if (!matches.length) return null;
+
+  return [...matches].sort((a, b) => {
+    const aExact = a.sans.length === ply ? 0 : 1;
+    const bExact = b.sans.length === ply ? 0 : 1;
+    if (aExact !== bExact) return aExact - bExact;
+    const aVariation = a.variation ? 1 : 0;
+    const bVariation = b.variation ? 1 : 0;
+    if (aVariation !== bVariation) return aVariation - bVariation;
+    const aDistance = Math.abs(a.sans.length - ply);
+    const bDistance = Math.abs(b.sans.length - ply);
+    if (aDistance !== bDistance) return aDistance - bDistance;
+    return String(a.name || '').length - String(b.name || '').length;
+  })[0];
+}
+
+function reviewOpeningNameForPly(ply) {
+  const opening = reviewOpeningForPly(ply);
+  if (!opening) return { name: 'Unknown opening', variation: '', opening: null };
+  return { name: opening.name || 'Unknown opening', variation: opening.variation || '', opening };
+}
+
 async function detectReviewOpening(gameSans) {
   const catalog = await loadReviewOpeningCatalog();
   const cleanGame = gameSans.map(reviewCleanSan);
@@ -6296,6 +6331,8 @@ async function startGameReview() {
 
     reviewData.playerSide = playerSide;
     reviewData.events = reviewBuildEvents(reviewData.rows, openingMatch, reviewData.phasePlan);
+
+    primeReviewTeachingNotes();
     reviewData.story = reviewGameStory(reviewData.rows, reviewData.phasePlan, playerSide);
     reviewStepIndex = 0;
     reviewOrientation = playerSide;
@@ -6675,26 +6712,155 @@ function reviewConcreteComparison(row, best, pv) {
 
 function reviewAuthoredOpeningExplanation(row) {
   if (!row?.isBook) return '';
-  if (row.authorExplanation) return row.authorExplanation;
-  if (!reviewData?.openingMatch?.opening) return '';
-  const opening = reviewData.openingMatch.opening;
+  if (row.generatedTeachingNote) return '';
+
+  const opening = reviewOpeningForPly(row.ply) || reviewData?.openingMatch?.opening;
+  if (!opening) return '';
+
   const explanations =
     opening.author_explanations ||
     opening.metadata?.author_explanations ||
     opening.metadata?.authorExplanations ||
     {};
+
   return String(explanations?.[String(row.ply)] || explanations?.[row.ply] || '').trim();
 }
 
 function reviewOpeningContext(row) {
-  const opening = reviewData?.openingMatch?.opening;
-  if (!opening) return '';
-  const name = [opening.name, opening.variation].filter(Boolean).join(': ');
-  return opening.notes ? `${name}. ${opening.notes}` : name;
+  const exact = reviewOpeningNameForPly(row?.ply || 0);
+  if (!exact.opening) return '';
+  return [exact.name, exact.variation].filter(Boolean).join(': ');
+}
+
+
+
+let reviewTeachingGenerationToken = 0;
+
+function reviewTeachingPayload(row, selectedIndex) {
+  const exactOpening = reviewOpeningNameForPly(row.ply);
+  const contextBeforeMoves = reviewData.rows
+    .slice(Math.max(0, selectedIndex - 10), selectedIndex)
+    .map(item => item.san);
+  const actualContinuation = reviewData.rows
+    .slice(selectedIndex + 1, selectedIndex + 9)
+    .map(item => item.san);
+  const gamePhase = row.phase || reviewGamePhase(row.ply, reviewData.rows.length, row.fen, reviewData.phasePlan);
+  const facts = verifiedCoachFacts(row.fen, row.previousFen, row.san);
+  const authored = reviewAuthoredOpeningExplanation(row);
+
+  return {
+    mode: 'game_review_auto_teaching',
+    gameStatus: 'completed',
+    fen: row.fen,
+    previousFen: row.previousFen,
+    playedMove: row.san,
+    moveNumber: Math.ceil(row.ply / 2),
+    opening: exactOpening.name,
+    variation: exactOpening.variation || 'Main line / current position',
+    exactOpeningPly: row.ply,
+    gamePhase,
+    contextBeforeMoves,
+    contextBeforeText: reviewHistoryToMoveText(contextBeforeMoves),
+    actualContinuation,
+    moveHistory: reviewData.rows.slice(0, row.ply).map(item => item.san),
+    evaluationBefore: selectedIndex > 0 ? reviewData.rows[selectedIndex - 1].whiteCp : 0,
+    evaluationAfter: row.whiteCp,
+    bestMove: row.engineBest,
+    bestMoveFen: row.bestMoveFen,
+    principalVariation: row.principalVariation,
+    principalVariationSan: row.principalVariationSan,
+    classification: row.label,
+    centipawnLoss: row.rawEngineLoss,
+    moveAccuracy: Math.round(row.accuracy * 10) / 10,
+    verifiedBoardFacts: facts,
+    authoredTeachingExample: authored || null,
+    question: [
+      `Write the ready-to-display teaching note for ${reviewMoveNotation(row)}.`,
+      `Explain THIS move in THIS position, not the opening in general.`,
+      exactOpening.name !== 'Unknown opening'
+        ? `The opening context at this exact ply is ${exactOpening.name}${exactOpening.variation ? `: ${exactOpening.variation}` : ''}.`
+        : `Do not invent an opening name if the position is not clearly identified.`,
+      authored
+        ? `Use this existing BOZO authored note as a knowledge/style example when relevant: "${authored}"`
+        : `There is no authored note for this exact ply, so derive the explanation from known chess principles, the board, the game context, and the supplied continuation.`,
+      row.isBook
+        ? `Because this is a book move, explain its concrete purpose, what it prepares, which squares, pieces, or pawn breaks matter, and how it connects to the next moves. Never say only "follow the plan" or "known opening move."`
+        : `Explain what the played move accomplishes, what it misses if anything, and why the more precise continuation is stronger. Do not merely name the alternative.`,
+      `Use natural chess-coach language. Never say "the engine preferred."`,
+      `Do not mention missing metadata, missing authored notes, databases, prompts, or internal implementation.`,
+      `Keep the main explanation to roughly 2-4 useful sentences, then give one concise practical takeaway.`
+    ].join(' '),
+    strictGrounding: true
+  };
+}
+
+async function generateReviewTeachingNote(row, selectedIndex, token) {
+  if (!row || row.generatedTeachingNote || token !== reviewTeachingGenerationToken) return;
+
+  const authored = reviewAuthoredOpeningExplanation(row);
+  if (authored) {
+    row.generatedTeachingNote = {
+      summary: authored,
+      takeaway: `Remember the concrete idea behind ${row.san} and how it connects to the next move in the line.`,
+      source: 'authored'
+    };
+    return;
+  }
+
+  try {
+    const { data, error } = await sb.functions.invoke('explain-move', { body: reviewTeachingPayload(row, selectedIndex) });
+    if (error || data?.error || !data?.explanation) return;
+
+    const facts = verifiedCoachFacts(row.fen, row.previousFen, row.san);
+    const grounded = sanitizeCoachExplanation(data.explanation, facts);
+    const purposeText = Array.isArray(grounded?.purpose) ? grounded.purpose.filter(Boolean).join(' ') : '';
+    const summary = String(grounded?.summary || grounded?.howWeGotHere || purposeText || '').trim();
+    const takeaway = String(
+      (Array.isArray(grounded?.practicalPlan) ? grounded.practicalPlan.filter(Boolean)[0] : '') ||
+      grounded?.keyLesson || grounded?.lesson || ''
+    ).trim();
+
+    if (summary) {
+      row.generatedTeachingNote = { summary, takeaway, source: 'generated', full: grounded };
+      if (reviewData?.rows?.[reviewStepIndex - 1] === row) renderReviewAutoExplanation(row);
+    }
+  } catch (_) {}
+}
+
+async function primeReviewTeachingNotes() {
+  if (!reviewData?.rows?.length || !state.session?.user) return;
+  const token = ++reviewTeachingGenerationToken;
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < reviewData.rows.length && token === reviewTeachingGenerationToken) {
+      const index = cursor++;
+      await generateReviewTeachingNote(reviewData.rows[index], index, token);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
 }
 
 function reviewAutoExplanation(row) {
   if (!row) return null;
+
+  if (row.generatedTeachingNote) {
+    const exact = reviewOpeningNameForPly(row.ply);
+    return {
+      headline: `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san} — ${String(row.label || row.cls || 'Move')}`,
+      why: row.generatedTeachingNote.summary,
+      comparison: '',
+      comparisonLabel: '',
+      lesson: row.generatedTeachingNote.takeaway || `Remember what ${row.san} changes in this position and how it connects to the next move.`,
+      phase: reviewPhaseLabel(row.phase),
+      position: reviewPositionDescription(row.whiteCp, row.mate),
+      accuracy: Math.round((Number(row.accuracy) || 0) * 10) / 10,
+      loss: Math.max(0, Number(row.rawEngineLoss) || 0),
+      best: row.engineBest,
+      moveLabel: reviewMoveNotation(row),
+      exactOpening: exact.name
+    };
+  }
+
   if (row.autoExplanationV2) return row.autoExplanationV2;
 
   const moveLabel = `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san}`;
@@ -6733,8 +6899,11 @@ function reviewAutoExplanation(row) {
       why = `${row.san} is part of ${openingContext || 'the detected opening'}. Concretely, it ${playedPurpose}.`;
       lesson = `Connect this move to the next few moves in the opening: ask what square, pawn break, piece placement, or attack it is preparing.`;
     } else {
-      why = `${row.san} is part of ${openingContext || 'the detected opening'}, but this opening entry does not currently contain an authored explanation for this exact ply.`;
-      lesson = `BOZO has the move in its opening line, but no move-specific teaching note was found for this ply. That should be treated as missing theory data, not disguised with a vague "follow the plan" sentence.`;
+      const exact = reviewOpeningNameForPly(row.ply);
+      const next = reviewData?.rows?.[row.ply]?.san || '';
+      const nextText = next ? ` The next move in the game was ${next}, so ${row.san} should be understood partly by what it prepares for that continuation.` : '';
+      why = `${row.san} is a theoretical move in ${[exact.name, exact.variation].filter(Boolean).join(': ') || 'this opening position'}.${playedPurpose ? ` Concretely, it ${playedPurpose}.` : ''}${nextText}`;
+      lesson = `Focus on the concrete square, piece placement, pawn break, or threat that ${row.san} is preparing rather than memorizing the move only because it is book.`;
     }
 
     comparison = '';
@@ -6825,9 +6994,13 @@ function renderReviewAutoExplanation(row) {
         <b>What to remember</b>
         <span>${escapeHtml(ex.lesson)}</span>
       </div>
-      <small>${row.isBook && reviewAuthoredOpeningExplanation(row)
-        ? 'Opening explanation comes from BOZO’s authored move-by-move theory.'
-        : 'Want the idea broken down further? Ask BOZO a follow-up below.'}</small>
+      <small>${row.generatedTeachingNote?.source === 'generated'
+        ? 'Prepared automatically from this position, the game context, and BOZO’s chess knowledge.'
+        : row.generatedTeachingNote?.source === 'authored' || (row.isBook && reviewAuthoredOpeningExplanation(row))
+          ? 'Based on BOZO’s move-by-move opening theory.'
+          : state.session?.user
+            ? 'BOZO is preparing a more detailed move-specific teaching note in the background.'
+            : 'Sign in to have BOZO automatically prepare richer move-specific teaching notes.'}</small>
     </div>`;
 }
 
@@ -6956,7 +7129,8 @@ async function askReviewCoach() {
 
   try {
     const question = $('review-coach-question').value.trim();
-    const opening = reviewData.openingMatch?.opening;
+    const exactOpeningContext = reviewOpeningNameForPly(row.ply);
+    const opening = exactOpeningContext.opening || reviewData.openingMatch?.opening;
     const selectedIndex = reviewStepIndex - 1;
     const contextBeforeMoves = reviewData.rows
       .slice(Math.max(0, selectedIndex - 10), selectedIndex)
