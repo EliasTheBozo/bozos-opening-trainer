@@ -6983,17 +6983,17 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
     }[move.to];
     if (bishopPrep) {
       const bishop=after[bishopPrep.bishop];
-      if (bishop?.type==='b' && bishop.color===row.mover) {
-        try {
-          const g=new Chess(row.fen);
-          const legal=g.moves({verbose:true});
-          if (legal.some(m=>m.from===bishopPrep.bishop && m.to===bishopPrep.dest)) {
-            const prepSan = row.mover==='w' ? `B${bishopPrep.dest}` : `B${bishopPrep.dest}`;
-            preparedMoves.push(prepSan);
-            developmentGoals.push(`Develop the bishop from ${bishopPrep.bishop} to ${bishopPrep.dest}.`);
-            primaryIdea=`Prepare ${prepSan}, developing the bishop from ${bishopPrep.bishop} to ${bishopPrep.dest}.`;
-          }
-        } catch(_){}
+      // Verify the pawn really vacated the bishop's intended development square.
+      // Do NOT use Chess(row.fen).moves() here: after the pawn move it is the
+      // opponent's turn, so chess.js will never list the mover's bishop move.
+      const beforeDest=before[bishopPrep.dest];
+      const afterDest=after[bishopPrep.dest];
+      const pawnVacatedDest = beforeDest?.type==='p' && beforeDest.color===row.mover && !afterDest;
+      if (bishop?.type==='b' && bishop.color===row.mover && pawnVacatedDest) {
+        const prepSan = `B${bishopPrep.dest}`;
+        preparedMoves.push(prepSan);
+        developmentGoals.push(`Develop the bishop from ${bishopPrep.bishop} to ${bishopPrep.dest}.`);
+        primaryIdea=`Prepare ${prepSan}, developing the bishop from ${bishopPrep.bishop} to ${bishopPrep.dest}.`;
       }
     }
   }
@@ -7011,7 +7011,8 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
   // Knight development from the back rank: teach development + real central influence.
   if (move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
     developmentGoals.push(`Develop the knight from ${move.from} to ${move.to}.`);
-    if (!primaryIdea) primaryIdea=`Develop the knight to ${move.to}${controlledSquares.length ? `, where it controls ${controlledSquares.join(', ')}` : ''}.`;
+    const centralKnightSquares=controlledSquares.filter(sq=>['d4','e4','d5','e5'].includes(sq));
+    if (!primaryIdea) primaryIdea=`Develop the knight to ${move.to}${centralKnightSquares.length ? ` and influence the center` : ''}.`;
   }
 
   // Actual continuation is context. If the very next move realizes a prepared
@@ -7030,7 +7031,11 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
   if(!primaryIdea && attackedPieces.length) primaryIdea=`Create immediate pressure on ${attackedPieces.map(x=>x.square).join(', ')}.`;
   if(!primaryIdea && move.captured) primaryIdea=`Make the concrete capture on ${move.to}.`;
   if(!primaryIdea && move.piece==='b' && controlledSquares.length) primaryIdea=`Improve the bishop's activity along its diagonal from ${move.to}.`;
-  if(!primaryIdea && controlledSquares.length) primaryIdea=`Improve the ${pieceName}'s influence by controlling ${controlledSquares.join(', ')}.`;
+  if(!primaryIdea && controlledSquares.length) {
+    if(move.piece==='p') primaryIdea=`Use the pawn on ${move.to} to claim space and control nearby squares.`;
+    else if(move.piece==='n') primaryIdea=`Improve the knight's placement and influence useful squares from ${move.to}.`;
+    else primaryIdea=`Improve the ${pieceName}'s activity from ${move.to}.`;
+  }
   if(!primaryIdea) primaryIdea=`Improve the piece placement with ${row.san}.`;
 
   if(move.piece==='p' && move.to) {
@@ -7079,7 +7084,6 @@ function reviewDeterministicTeachingFromStructure(row, s) {
     if(central.length) first+=` and controlling ${central.join(' and ')}`;
     first+='.';
     sentences.push(first);
-    if(otherControlled.length) sentences.push(`From ${move.to}, the knight also controls ${otherControlled.join(', ')}.`);
     sentences.push(`This is useful early development because ${side} improves a piece without committing another pawn.`);
   } else if(move.piece==='b' && ['c1','f1','c8','f8'].includes(move.from)) {
     sentences.push(`${side} develops the bishop from ${move.from} to ${move.to}, bringing it off its starting square and into the game.`);
@@ -7093,7 +7097,8 @@ function reviewDeterministicTeachingFromStructure(row, s) {
   } else {
     if(s.primaryIdea) sentences.push(String(s.primaryIdea).replace(/^Primary idea:\s*/i,'').replace(/\.$/, '')+'.');
     if(s.attackedPieces?.length) sentences.push(`The ${pieceName} on ${move.to} attacks ${s.attackedPieces.map(x=>`${x.piece} on ${x.square}`).join(' and ')}.`);
-    if(s.controlledSquares?.length) sentences.push(`It controls ${s.controlledSquares.join(', ')}.`);
+    const usefulCentral=(s.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
+    if(usefulCentral.length) sentences.push(`It also influences the center by controlling ${usefulCentral.join(' and ')}.`);
   }
 
   const realized=s.verifiedConnections?.some(x=>/realized immediately/i.test(x));
@@ -7116,7 +7121,7 @@ function reviewStructuredTeachingIsSafe(explanation,s) {
   const visible=JSON.stringify(explanation);
   if(/primary idea:|secondary ideas?:|development goals?:|prepared moves?:|concrete influence|the moved piece/i.test(visible)) return false;
   const mv=s?.rawVerifiedFacts?.moveFacts || {};
-  if(mv.piece==='b' && /(?:[a-h][1-8][, ]+){3,}[a-h][1-8]/i.test(visible)) return false;
+  if(/(?:[a-h][1-8][, ]+){3,}[a-h][1-8]/i.test(visible)) return false;
   return !reviewTeachingHasUnsupportedStrategicClaim(explanation,s.rawVerifiedFacts)
       && !reviewTeachingHasUnsupportedRelationship(explanation,s.rawVerifiedFacts);
 }
@@ -7173,6 +7178,7 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
         `Use only claims explicitly supported by structuredAnalysis. Do not add chess facts from intuition, memory, or generic opening lore.`,
         `Do not invent support, attacks, weaknesses, diagonals, threats, plans, or causal relationships.`,
         `Avoid robotic wording such as "the engine preferred", "concrete influence", "verified line", or "the moved piece". Name the pawn, knight, bishop, rook, queen, king, square, or plan directly.`,
+        `Never dump a piece's full move map as a list of squares. Mention central squares only when strategically relevant; for bishops describe the diagonal, and for knights summarize central influence unless a specific occupied target matters.`,
         `Return 2-4 natural teaching sentences and one practical takeaway. The takeaway should restate primaryIdea in memorable chess language, not a secondary detail.`,
         `Never mention structuredAnalysis, validation, metadata, prompts, databases, or implementation.`
       ].join(' '), strictGrounding:true
