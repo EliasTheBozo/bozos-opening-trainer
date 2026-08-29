@@ -7051,31 +7051,65 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
 }
 
 function reviewDeterministicTeachingFromStructure(row, s) {
-  const explanation=[];
-  if (s.primaryIdea) explanation.push(s.primaryIdea);
+  const side = row.mover === 'w' ? 'White' : 'Black';
+  const move = s?.rawVerifiedFacts?.moveFacts || {};
+  const piece = s?.rawVerifiedFacts?.afterPieces?.[move.to];
+  const pieceName = piece ? (COACH_PIECE_NAMES[piece.type] || 'piece') : 'piece';
+  const sentences=[];
 
-  const development=s.developmentGoals.find(x=>!s.primaryIdea?.toLowerCase().includes(x.toLowerCase()));
-  if (development) explanation.push(development);
+  // Compose the verified fields into normal annotated-PGN prose. Internal labels
+  // such as "primary idea" or raw fact fragments should never reach the reader.
+  const prep=s.preparedMoves?.[0] || '';
+  const dev=s.developmentGoals?.[0] || '';
+  const central=(s.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
+  const otherControlled=(s.controlledSquares||[]).filter(x=>!central.includes(x));
 
-  if (s.attackedPieces?.length) {
-    explanation.push(`It also attacks ${s.attackedPieces.map(x=>`${x.piece} on ${x.square}`).join(' and ')}.`);
+  // Polish-style flank pawn moves: development is the headline, space is useful context.
+  if(move.piece==='p' && prep && /^(Bb2|Bg2|Bb7|Bg7)$/.test(prep)) {
+    const wing=['a','b','c'].includes(String(move.to||'')[0]) ? 'queenside' : 'kingside';
+    const bishopFrom=(s.developmentGoals?.[0]?.match(/from ([a-h][1-8])/)||[])[1];
+    const bishopTo=(s.developmentGoals?.[0]?.match(/to ([a-h][1-8])/)||[])[1];
+    sentences.push(`${side} advances the pawn to ${move.to}, gaining ${wing} space while clearing a development square for the bishop.`);
+    if(bishopFrom && bishopTo) sentences.push(`The main idea is ${prep}: the bishop can develop from ${bishopFrom} to ${bishopTo} and become active from there.`);
+    else sentences.push(`The main idea is to follow with ${prep} and bring the bishop into the game.`);
+  } else if(move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
+    let first=`${side} develops the knight from ${move.from} to ${move.to}, bringing a minor piece into the game`;
+    if(central.length) first+=` and controlling ${central.join(' and ')}`;
+    first+='.';
+    sentences.push(first);
+    if(otherControlled.length) sentences.push(`From ${move.to}, the knight also controls ${otherControlled.join(', ')}.`);
+    sentences.push(`This is useful early development because ${side} improves a piece without committing another pawn.`);
+  } else if(move.piece==='b' && ['c1','f1','c8','f8'].includes(move.from)) {
+    sentences.push(`${side} develops the bishop from ${move.from} to ${move.to}, bringing it off its starting square and into the game.`);
+    if(s.attackedPieces?.length) sentences.push(`From ${move.to}, it attacks ${s.attackedPieces.map(x=>`${x.piece} on ${x.square}`).join(' and ')}.`);
+    else if(s.controlledSquares?.length) sentences.push(`From ${move.to}, it controls ${s.controlledSquares.join(', ')}.`);
+  } else if(move.isCastle) {
+    sentences.push(`${side} castles, improving king safety while bringing the rook closer to the center of the game.`);
+  } else {
+    if(s.primaryIdea) sentences.push(String(s.primaryIdea).replace(/^Primary idea:\s*/i,'').replace(/\.$/, '')+'.');
+    if(s.attackedPieces?.length) sentences.push(`The ${pieceName} on ${move.to} attacks ${s.attackedPieces.map(x=>`${x.piece} on ${x.square}`).join(' and ')}.`);
+    if(s.controlledSquares?.length) sentences.push(`It controls ${s.controlledSquares.join(', ')}.`);
   }
-  if (s.controlledSquares?.length) {
-    explanation.push(`It also controls ${s.controlledSquares.join(', ')}.`);
-  }
 
-  const realized=s.verifiedConnections?.find(x=>/realized immediately/i.test(x));
-  if(realized) explanation.push(realized);
+  const realized=s.verifiedConnections?.some(x=>/realized immediately/i.test(x));
+  if(realized && prep) sentences.push(`In the game, ${prep} followed immediately, carrying out that development plan.`);
 
-  const summary=explanation.slice(0,4).join(' ').trim() || `${row.san} improves the position, but BOZO did not verify enough detail for a stronger teaching claim.`;
-  const takeaway=s.primaryIdea
-    ? s.primaryIdea.replace(/^([A-Z])/,m=>m).replace(/\.$/,'') + '.'
-    : `Remember the main purpose of ${row.san}, not just the square the piece moved to.`;
+  const summary=sentences.filter(Boolean).slice(0,4).join(' ').trim() || `${row.san} improves the position, but BOZO did not verify enough detail for a stronger teaching claim.`;
+
+  let takeaway='';
+  if(move.piece==='p' && prep) takeaway=`The main point of ${row.san} is to make room for ${prep} and develop the bishop; the space gained by the pawn is a bonus.`;
+  else if(move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)) takeaway=`Develop the knight to ${move.to}${central.length?` and use it to control ${central.join(' and ')}`:''}.`;
+  else if(move.piece==='b' && ['c1','f1','c8','f8'].includes(move.from)) takeaway=`${row.san} is a development move: bring the bishop into the game and make use of its new diagonal.`;
+  else if(move.isCastle) takeaway=`Castle to improve king safety and activate the rook.`;
+  else takeaway=String(s.primaryIdea||`Remember the main purpose of ${row.san}, not just the destination square.`).replace(/^Primary idea:\s*/i,'').replace(/\.$/,'')+'.';
+
   return {summary,takeaway,source:'structured-local',structure:s};
 }
 
 function reviewStructuredTeachingIsSafe(explanation,s) {
   if(!explanation) return false;
+  const visible=JSON.stringify(explanation);
+  if(/primary idea:|secondary ideas?:|development goals?:|prepared moves?:|concrete influence|the moved piece/i.test(visible)) return false;
   return !reviewTeachingHasUnsupportedStrategicClaim(explanation,s.rawVerifiedFacts)
       && !reviewTeachingHasUnsupportedRelationship(explanation,s.rawVerifiedFacts);
 }
@@ -7149,7 +7183,8 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
     }
     const summary=unique.slice(0,3).join(' ').trim();
     const plans=Array.isArray(grounded?.practicalPlan)?grounded.practicalPlan.filter(Boolean):[];
-    const takeaway=String(plans[0]||grounded?.keyLesson||grounded?.lesson||safeLocal.takeaway).trim();
+    const candidateTakeaway=String(plans[0]||grounded?.keyLesson||grounded?.lesson||'').trim();
+    const takeaway=(candidateTakeaway && candidateTakeaway.toLowerCase().includes(String(structure.primaryIdea||'').split(/[,:]/)[0].toLowerCase())) ? candidateTakeaway : safeLocal.takeaway;
     if(summary){
       row.generatedTeachingNote={summary,takeaway,source:'structured-writer',structure,full:grounded};
       if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
