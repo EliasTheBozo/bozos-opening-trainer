@@ -6687,13 +6687,35 @@ function renderReviewMoveList() {
   });
 }
 
+function reviewClassificationSymbol(row) {
+  const cls = String(row?.cls || '').toLowerCase();
+  const symbols = {
+    book: '📖',
+    best: '★',
+    excellent: '!',
+    good: '✓',
+    inaccuracy: '?!',
+    mistake: '?',
+    blunder: '??'
+  };
+  return symbols[cls] || '•';
+}
+
 function reviewMoveButton(row) {
   if (!row) return '<button disabled></button>';
+  const phase = reviewPhaseLabel(row.phase);
+  const symbol = reviewClassificationSymbol(row);
+  const accessibleLabel = `${row.san}, ${row.label}, ${phase}`;
   return `
     <button data-review-step="${row.ply}"
-            class="review-move-button review-${row.cls}">
+            class="review-move-button review-${row.cls}"
+            aria-label="${escapeHtml(accessibleLabel)}"
+            title="${escapeHtml(row.label)} · ${escapeHtml(phase)}">
       <b>${escapeHtml(row.san)}</b>
-      <small>${escapeHtml(row.label)} · ${escapeHtml(reviewPhaseLabel(row.phase))}</small>
+      <span class="review-move-meta">
+        <span class="review-move-symbol" aria-hidden="true">${escapeHtml(symbol)}</span>
+        <small>${escapeHtml(phase)}</small>
+      </span>
     </button>
   `;
 }
