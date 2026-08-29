@@ -3400,9 +3400,9 @@ const BOZO_CLOUD_OPENINGS = [
     notes:'A BOZO custom variation combining the Polish setup with a Grob-style g-pawn expansion.',
     author_explanations: {
       "1": "White gains queenside space with b4 and, more importantly, clears b2 so the c1-bishop can develop there. The usual idea is Bb2, putting the bishop on the long diagonal and letting White influence the center from the flank rather than occupying it immediately with a central pawn.",
-      "2": "Black develops the kingside knight to f6, bringing a minor piece into the game and putting pressure on the central e4 square. The move keeps Black flexible because the central pawns have not committed yet, while also moving Black closer to a normal kingside setup.",
+      "2": "Against 1.b4, Black develops the kingside knight to f6 without committing a central pawn. The knight directly controls e4, so White cannot simply build the center for free, while Black keeps both ...d5 and ...g6 setups available.",
       "3": "Bb2 completes the immediate idea behind 1.b4. White develops the c1-bishop onto the long diagonal, where it can influence the center and become an active part of the position instead of remaining blocked on its starting square.",
-      "4": "Black plays ...g6 to prepare ...Bg7. The point is to fianchetto the dark-squared bishop, develop it onto its own long diagonal, and build a flexible kingside setup that can lead to castling.",
+      "4": "After White has committed the bishop to b2, ...g6 prepares ...Bg7 and gives Black a matching long-diagonal setup. It develops toward kingside castling without fixing the central pawns yet, so Black can meet White's flank play while keeping the center flexible.",
       "5": "White begins the Grob-style part of the setup with g4. The pawn gains kingside space and prepares g5, which can question the knight on f6 and force Black to decide where that knight belongs.",
       "6": "...Bg7 carries out the plan behind ...g6. Black develops the bishop onto the long diagonal and clears the f8 square, making kingside castling available once the king and rook are ready.",
       "7": "White pushes g5 and attacks the knight on f6, gaining space with tempo. The move is concrete: the knight must react, and White uses the advanced g-pawn to disrupt Black's comfortable kingside development.",
@@ -3439,9 +3439,9 @@ const BOZO_CLOUD_OPENINGS = [
     notes:'A BOZO custom branch where Black challenges the advanced g-pawn with ...h5.',
     author_explanations: {
       "1": "White gains queenside space with b4 and clears b2 so the c1-bishop can develop there. The central opening idea is to follow with Bb2 and use the long diagonal from the flank.",
-      "2": "Black develops the kingside knight to f6, bringing a minor piece into the game, influencing the center, and keeping the central pawn structure flexible.",
+      "2": "Against 1.b4, Black develops the kingside knight to f6 without committing a central pawn. The knight controls e4, discouraging White from getting an easy central expansion while Black keeps both ...d5 and ...g6 setups available.",
       "3": "Bb2 completes the immediate purpose of 1.b4 by developing the bishop onto the long diagonal.",
-      "4": "...g6 prepares ...Bg7, giving Black a natural fianchetto and a route toward kingside castling.",
+      "4": "With White's bishop now on b2, ...g6 prepares ...Bg7 so Black can answer with a fianchetto of its own and get ready to castle. The central pawns stay uncommitted, which keeps Black flexible against White's flank setup.",
       "5": "g4 gains kingside space and prepares g5, a direct way to question the knight on f6.",
       "6": "...Bg7 completes the fianchetto and develops the bishop onto the long diagonal.",
       "7": "g5 attacks the f6-knight and gains space with tempo, forcing Black to respond to the pawn advance.",
@@ -7083,7 +7083,7 @@ function reviewOpeningContext(row) {
 
 
 
-// BOZO v4.14.31: verified move-fact normalization + immediate causal teaching + prioritized AI upgrades.
+// BOZO v4.14.32: concise causal coaching + transferable lessons + automatic board annotations.
 let reviewTeachingGenerationToken = 0;
 
 function reviewTeachingPayload(row, selectedIndex) {
@@ -7371,7 +7371,9 @@ function reviewStructureTakeaway(row, s) {
     return `When two moves look playable, compare what each one actually solves. Here ${cmp.bestMove} handled the position more completely.`;
   }
   if (s?.qualityKind === 'best' || s?.qualityKind === 'excellent' || s?.qualityKind === 'good') {
-    return `A strong move is worth remembering for the problem it solves, not for the label it received. Identify the concrete job ${row.san} performs and look for that job in similar positions.`;
+    // Do not manufacture a lesson just because the move received a positive label.
+    // If no reusable motif was verified, omit Key Idea instead of showing filler.
+    return '';
   }
   return '';
 }
@@ -7389,6 +7391,10 @@ function reviewBookKeyIdea(row, s, authoredTakeaway='') {
     return `${row.san} is the payoff of the earlier pawn move. In a flank setup, make sure the space-gaining pawn move actually improves the piece behind it.`;
   }
   if(pieceCode==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
+    const prefix=(reviewData?.rows||[]).slice(0,row.ply).map(item=>reviewCleanSan(item.san));
+    if(row.mover==='b' && reviewCleanSan(row.san)==='Nf6' && prefix[0]==='b4') {
+      return `Against 1.b4, ...Nf6 develops without committing a central pawn and directly controls e4. Black stays flexible while making it harder for White to build the center for free.`;
+    }
     return central.length
       ? `${row.san} is efficient development: the knight leaves the back rank, influences ${central.join(' and ')}, and keeps the central pawns flexible.`
       : `${row.san} develops a new piece while keeping the pawn structure flexible, which is often more valuable than committing the center too early.`;
@@ -7396,6 +7402,152 @@ function reviewBookKeyIdea(row, s, authoredTakeaway='') {
   const structural=reviewStructureTakeaway(row,s);
   if(structural) return structural;
   return String(authoredTakeaway||'').trim();
+}
+
+
+function reviewNormalizeTeachingText(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .trim();
+}
+
+function reviewSentenceKey(value) {
+  return reviewNormalizeTeachingText(value)
+    .toLowerCase()
+    .replace(/\b(?:the|a|an|this|that|move|position|here|now|very|really)\b/g, ' ')
+    .replace(/[^a-z0-9=+#-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function reviewSplitSentences(value) {
+  const text = reviewNormalizeTeachingText(value);
+  if (!text) return [];
+  return (text.match(/[^.!?]+[.!?]?/g) || [text]).map(reviewNormalizeTeachingText).filter(Boolean);
+}
+
+function reviewSentenceAddsMeaning(sentence, chosen) {
+  const key = reviewSentenceKey(sentence);
+  if (!key || key.length < 8) return false;
+  for (const existing of chosen) {
+    const other = reviewSentenceKey(existing);
+    if (!other) continue;
+    if (other === key || other.includes(key) || key.includes(other)) return false;
+    const a = new Set(key.split(' ').filter(x => x.length > 2));
+    const b = new Set(other.split(' ').filter(x => x.length > 2));
+    if (a.size && b.size) {
+      let overlap = 0;
+      a.forEach(token => { if (b.has(token)) overlap++; });
+      if (overlap / Math.min(a.size, b.size) >= 0.72) return false;
+    }
+  }
+  return true;
+}
+
+function reviewComposeCoachSummary(grounded, safeLocal, row, structure) {
+  const candidates = [
+    grounded?.summary,
+    grounded?.whatChanged,
+    grounded?.playedMoveIdea
+  ].filter(Boolean);
+  const chosen = [];
+  for (const candidate of candidates) {
+    for (const sentence of reviewSplitSentences(candidate)) {
+      if (reviewSentenceAddsMeaning(sentence, chosen)) chosen.push(sentence);
+      if (chosen.length >= 3) break;
+    }
+    if (chosen.length >= 3) break;
+  }
+  let result = chosen.join(' ').trim();
+  if (!result) result = reviewNormalizeTeachingText(safeLocal?.summary);
+
+  // The promotion explanation is a regression test: never let verbose generated
+  // prose bury the actual conversion plan under repeated wording.
+  if (structure?.promotionPlan) {
+    const promo = structure.promotionPlan;
+    const route = promo.forcedLine || promo.move || '';
+    const first = `${row.san} makes the passed pawn the immediate problem: from ${promo.pawnSquare} it is only ${promo.distance} push${promo.distance===1?'':'es'} from promotion.`;
+    const second = route
+      ? `The concrete route is ${route}; Black has to spend time stopping the pawn instead of creating counterplay.`
+      : `${row.mover==='w'?'White':'Black'} should calculate the push to the back rank before considering slower improvements.`;
+    result = `${first} ${second}`;
+  }
+
+  // Two useful sentences beat four versions of the same idea.
+  const compact = reviewSplitSentences(result).slice(0, 3).join(' ');
+  return compact.length > 520 ? compact.slice(0, 517).replace(/\s+\S*$/, '') + '…' : compact;
+}
+
+function reviewChooseKeyIdea(row, structure, grounded, localTakeaway) {
+  // Key Idea is deliberately a transferable lesson, not another description of
+  // the move. For highly concrete themes we trust the deterministic lesson first.
+  if (structure?.promotionPlan) return reviewStructureTakeaway(row, structure);
+  if (row?.isBook) return reviewBookKeyIdea(row, structure, reviewAuthoredOpeningTakeaway(row));
+
+  const local = reviewNormalizeTeachingText(localTakeaway || reviewStructureTakeaway(row, structure));
+  const plans = Array.isArray(grounded?.practicalPlan) ? grounded.practicalPlan.filter(Boolean) : [];
+  const generated = reviewNormalizeTeachingText(
+    grounded?.keyIdea || grounded?.keyLesson || grounded?.lesson || plans[0] || ''
+  );
+  const generic = /(?:remember what|focus on the concrete problem|strong label|received a .* label|be precise|play precisely|good move|very precise|keeps the position)/i;
+  const tooSpecific = new RegExp(`^(?:play|push|prepare|move|take|capture)\\s+${String(row?.san||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&')}`, 'i');
+  if (generated && !generic.test(generated) && !tooSpecific.test(generated) && reviewSentenceKey(generated) !== reviewSentenceKey(local)) {
+    return generated;
+  }
+  return local;
+}
+
+function reviewAutomaticAnnotations(row, structure, grounded=null) {
+  const arrows=[];
+  const highlights=[];
+  const pushArrow=(from,to,color='green',label='')=>{
+    if(validSquare(from)&&validSquare(to)&&!arrows.some(a=>a.from===from&&a.to===to)) arrows.push({from,to,color,label});
+  };
+  const pushHighlight=(square,color='yellow',label='')=>{
+    if(validSquare(square)&&!highlights.some(h=>h.square===square)) highlights.push({square,color,label});
+  };
+  const move=structure?.rawVerifiedFacts?.moveFacts || {};
+  if(move.from && move.to) pushArrow(move.from,move.to,'green','Played move');
+
+  const promo=structure?.promotionPlan;
+  if(promo?.pawnSquare && promo.distance > 0) {
+    const file=promo.pawnSquare[0];
+    const rank=Number(promo.pawnSquare[1]);
+    const dir=row.mover==='w'?1:-1;
+    let from=promo.pawnSquare;
+    for(let i=0;i<Math.min(2,promo.distance);i++){
+      const to=`${file}${rank+dir*(i+1)}`;
+      pushArrow(from,to,'blue',i===0?'Promotion route':'Promote');
+      from=to;
+    }
+    pushHighlight(`${file}${row.mover==='w'?8:1}`,'purple','Promotion square');
+  } else if(structure?.preparedMoves?.length) {
+    // For simple opening prep such as b4 -> Bb2 or ...g6 -> ...Bg7, show the
+    // next move only when we can derive it from the actual current position.
+    try {
+      const game=new Chess(row.fen);
+      const san=structure.preparedMoves[0];
+      const legal=(game.moves({verbose:true})||[]).find(m=>reviewCleanSan(m.san)===reviewCleanSan(san));
+      if(legal) pushArrow(legal.from,legal.to,'blue','Prepared follow-up');
+    } catch(_) {}
+  } else if(structure?.bestMoveComparison && !row.wasTop && !row.isBook) {
+    try {
+      const game=new Chess(row.previousFen);
+      const legal=(game.moves({verbose:true})||[]).find(m=>reviewCleanSan(m.san)===reviewCleanSan(structure.bestMoveComparison.bestMove));
+      if(legal) pushArrow(legal.from,legal.to,'blue','Stronger alternative');
+    } catch(_) {}
+  }
+
+  // If the backend supplied a directly relevant tactical annotation, add at most
+  // one of each after the deterministic teaching arrows.
+  if (grounded) {
+    const ga=Array.isArray(grounded.arrows)?grounded.arrows:[];
+    const gh=Array.isArray(grounded.highlights)?grounded.highlights:[];
+    for(const a of ga.slice(0,1)) pushArrow(a.from,a.to,a.color||'yellow',a.label||'');
+    for(const h of gh.slice(0,1)) pushHighlight(h.square,h.color||'yellow',h.label||'');
+  }
+  return {arrows:arrows.slice(0,3),highlights:highlights.slice(0,3)};
 }
 
 function reviewDeterministicTeachingFromStructure(row, s) {
@@ -7592,11 +7744,12 @@ function seedReviewTeachingNote(row, selectedIndex, token) {
       comparisonLabel:'',
       takeaway:reviewBookKeyIdea(row,structure,reviewAuthoredOpeningTakeaway(row)),
       source:'authored-opening',
-      structure
+      structure,
+      annotations:reviewAutomaticAnnotations(row,structure,null)
     };
     row.reviewTeachingAIState='done';
   } else {
-    row.generatedTeachingNote=safeLocal;
+    row.generatedTeachingNote={...safeLocal,annotations:reviewAutomaticAnnotations(row,structure,null)};
     row.reviewTeachingAIState='idle';
   }
   return structure;
@@ -7626,19 +7779,8 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
       return;
     }
 
-    const purpose=Array.isArray(grounded?.purpose)?grounded.purpose.filter(Boolean).join(' '):'';
-    const chunks=[grounded?.summary,purpose,grounded?.whatChanged,grounded?.playedMoveIdea].map(v=>String(v||'').trim()).filter(Boolean);
-    const unique=[];
-    for(const chunk of chunks){
-      const norm=chunk.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-      if(!unique.some(x=>{const n=x.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();return n===norm||n.includes(norm)||norm.includes(n)})) unique.push(chunk);
-    }
-    const summary=unique.slice(0,3).join(' ').trim();
-
-    const plans=Array.isArray(grounded?.practicalPlan)?grounded.practicalPlan.filter(Boolean):[];
-    const candidateTakeaway=String(plans[0]||grounded?.keyLesson||grounded?.lesson||'').trim();
-    const genericTakeaway=/remember (?:the )?(?:concrete )?purpose|follow (?:the )?(?:opening )?plan|remember what .* changes|remember what .* accomplished|strong label|received a strong label|be precise|play precisely|focus on the concrete problem/i.test(candidateTakeaway);
-    const takeaway=(candidateTakeaway && !genericTakeaway) ? candidateTakeaway : safeLocal.takeaway;
+    const summary=reviewComposeCoachSummary(grounded,safeLocal,row,structure);
+    const takeaway=reviewChooseKeyIdea(row,structure,grounded,safeLocal.takeaway);
 
     const aiComparison=String(grounded?.comparison||grounded?.betterMoveIdea||grounded?.betterMoveExplanation||grounded?.whyBestMove||'').trim();
     const comparison=(!row.wasTop && !row.isBook && structure.bestMoveComparison)
@@ -7651,7 +7793,7 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
     const aiScore=reviewTeachingSpecificityScore(`${summary} ${takeaway} ${comparison}`,row,structure);
     const localScore=reviewTeachingSpecificityScore(`${safeLocal.summary} ${safeLocal.takeaway} ${safeLocal.comparison}`,row,structure);
     if(summary && aiScore >= localScore){
-      row.generatedTeachingNote={summary,comparison,comparisonLabel,takeaway,source:'game-review-writer',structure,full:grounded};
+      row.generatedTeachingNote={summary,comparison,comparisonLabel,takeaway,source:'game-review-writer',structure,full:grounded,annotations:reviewAutomaticAnnotations(row,structure,grounded)};
     }
     row.reviewTeachingAIState='done';
     if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
@@ -7680,8 +7822,15 @@ async function primeReviewTeachingNotes() {
     (row.cls==='blunder' ? 5000 : row.cls==='mistake' ? 3500 : row.cls==='inaccuracy' ? 1800 : 0) +
     (row.reviewTeachingStructure?.promotionPlan ? 4200 : 0) +
     (row.wasTop && !row.isBook ? 350 : 0)
-  })).filter(item=>item.row.generatedTeachingNote?.source!=='authored-opening')
-    .sort((a,b)=>b.score-a.score);
+  })).filter(item=>{
+      if(item.row.generatedTeachingNote?.source==='authored-opening') return false;
+      if(item.index===reviewStepIndex-1) return true;
+      if(item.row.reviewTeachingStructure?.promotionPlan) return true;
+      if(item.row.terminal?.type==='checkmate') return true;
+      if(['blunder','mistake','inaccuracy'].includes(item.row.cls)) return true;
+      if(Math.max(0,Number(item.row.rawEngineLoss)||0)>=60) return true;
+      return false;
+    }).sort((a,b)=>b.score-a.score);
 
   let cursor=0;
   const worker=async()=>{
@@ -7859,6 +8008,7 @@ function renderReviewAutoExplanation(row) {
         <span class="review-auto-badge">READY WITH THE REVIEW</span>
         <p>Select any analyzed move. BOZO's explanation is already prepared, and Previous/Next will restore each move's explanation instantly.</p>
       </div>`;
+    clearReviewCoachAnnotations();
     return;
   }
 
@@ -7892,6 +8042,11 @@ function renderReviewAutoExplanation(row) {
               ? 'Building the position-specific teaching note…'
               : 'Sign in to have BOZO automatically prepare richer move-specific teaching notes.'}</small>
     </div>`;
+
+  const annotations = row.generatedTeachingNote?.annotations ||
+    reviewAutomaticAnnotations(row, row.reviewTeachingStructure || reviewStructuredMoveAnalysis(row, Math.max(0,(row.ply||1)-1)), row.generatedTeachingNote?.full || null);
+  reviewCoachExplanation = { arrows: annotations.arrows || [], highlights: annotations.highlights || [] };
+  drawReviewCoachAnnotations(reviewCoachExplanation.arrows, reviewCoachExplanation.highlights);
 }
 
 function updateReviewCoachIdleState(row) {
@@ -7986,6 +8141,9 @@ function updateReviewSelectedMove() {
     : (row.wasTop ? row.san : (row.engineBest || ' - '));
   $('review-coach-move-label').textContent = moveLabel;
   updateReviewCoachIdleState(row);
+  if(state.session?.user && row.generatedTeachingNote?.source!=='authored-opening' && row.reviewTeachingAIState==='idle') {
+    generateReviewTeachingNote(row, reviewStepIndex - 1, reviewTeachingGenerationToken);
+  }
 }
 
 function clearReviewCoachAnnotations() {
