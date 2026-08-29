@@ -1,13 +1,14 @@
-BOZO'S Opening Trainer v4.14.26 — Review Purpose Fix
+BOZO v4.14.27 — Authored Theory First
 
-Replace app.js and index.html in the repo root.
+Replace app.js and index.html in the site root.
 
-Fixes:
-- Corrects the bishop-preparation verifier. It was checking legal moves after the pawn move, when it was already the opponent's turn, so 1.b4 failed to recognize Bb2 as the main purpose.
-- 1.b4 / ...b5 / g-pawn equivalents now verify that the pawn actually vacated the bishop's development square and prioritize that development plan.
-- Stops dumping full knight/pawn control maps as square lists.
-- Knight development summarizes central influence and only names central squares when useful.
-- Bishop development uses diagonal language rather than enumerating every empty square.
-- Rejects generated prose that leaks long square-map lists for any piece.
+What changed:
+- Book moves now prioritize BOZO-authored per-ply theory before generated/structured fallback text.
+- Added authored explanations + memorable takeaways for the full built-in Polish Opening: King's Indian, Polish Grob Attack main line and h5 branch.
+- 1.b4, 1...Nf6, 2.Bb2 etc. no longer need to rediscover their purpose from raw square geometry.
+- Authored notes are no longer hidden after a fallback note is generated.
+- Internal validator text such as "The coach removed an unsupported board claim" can no longer appear to users.
+- Generic "improve the piece's activity from X" fallback was removed from the book-move path.
+- The Gustafsson PGN remains the annotation-style model; unrelated chess facts are not copied from it.
 
-No database, explorer shard, board, piece-set, or gameplay changes.
+No database migration. No explorer shard changes.

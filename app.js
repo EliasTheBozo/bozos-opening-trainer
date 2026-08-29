@@ -3397,7 +3397,37 @@ const BOZO_CLOUD_OPENINGS = [
     pgn:'1. b4 Nf6 2. Bb2 g6 3. g4 Bg7 4. g5 Nh5 5. Bxg7 Nxg7 6. c4 O-O 7. Qb3',
     source_type:'bozo',
     repertoire_side:'white',
-    notes:'A BOZO custom variation combining the Polish setup with a Grob-style g-pawn expansion.'
+    notes:'A BOZO custom variation combining the Polish setup with a Grob-style g-pawn expansion.',
+    author_explanations: {
+      "1": "White gains queenside space with b4 and, more importantly, clears b2 so the c1-bishop can develop there. The usual idea is Bb2, putting the bishop on the long diagonal and letting White influence the center from the flank rather than occupying it immediately with a central pawn.",
+      "2": "Black develops the kingside knight to f6, bringing a minor piece into the game and putting pressure on the central e4 square. The move keeps Black flexible because the central pawns have not committed yet, while also moving Black closer to a normal kingside setup.",
+      "3": "Bb2 completes the immediate idea behind 1.b4. White develops the c1-bishop onto the long diagonal, where it can influence the center and become an active part of the position instead of remaining blocked on its starting square.",
+      "4": "Black plays ...g6 to prepare ...Bg7. The point is to fianchetto the dark-squared bishop, develop it onto its own long diagonal, and build a flexible kingside setup that can lead to castling.",
+      "5": "White begins the Grob-style part of the setup with g4. The pawn gains kingside space and prepares g5, which can question the knight on f6 and force Black to decide where that knight belongs.",
+      "6": "...Bg7 carries out the plan behind ...g6. Black develops the bishop onto the long diagonal and clears the f8 square, making kingside castling available once the king and rook are ready.",
+      "7": "White pushes g5 and attacks the knight on f6, gaining space with tempo. The move is concrete: the knight must react, and White uses the advanced g-pawn to disrupt Black's comfortable kingside development.",
+      "8": "...Nh5 moves the attacked knight out of danger while keeping it near the kingside. Black accepts a less central knight placement in order to preserve the piece and continue developing.",
+      "9": "Bxg7 removes Black's fianchettoed bishop. White gives up the active b2-bishop to eliminate a key kingside defender and changes the character of the long diagonal before Black can settle into a normal castled setup.",
+      "10": "...Nxg7 recaptures the bishop and restores material equality. The knight is pulled to g7, so Black keeps the piece but ends up with a less conventional kingside arrangement than the one intended after ...g6 and ...Bg7.",
+      "11": "White plays c4 to claim more space and challenge the center from the queenside. It also gives White another pawn that can support central expansion later rather than relying only on the flank pawns.",
+      "12": "Black castles kingside, placing the king in safety and activating the h8-rook. Even with the unusual knight placement on g7, castling completes an important part of Black's development.",
+      "13": "Qb3 develops the queen to an active square and adds pressure along the b-file and diagonal toward the center. It also connects naturally with White's queenside space advantage and the pressure created by the earlier b-pawn advance."
+    },
+    author_takeaways: {
+      "1": "The main point of b4 is to gain queenside space and prepare Bb2, developing the bishop onto the long diagonal.",
+      "2": "Develop the knight to f6, influence the center, and keep Black's setup flexible.",
+      "3": "Bb2 is the payoff of 1.b4: develop the bishop and use the long diagonal.",
+      "4": "...g6 prepares ...Bg7 and a flexible kingside fianchetto.",
+      "5": "g4 gains space with the concrete plan of g5 against the f6-knight.",
+      "6": "...Bg7 completes the fianchetto and prepares kingside castling.",
+      "7": "g5 gains space with tempo by forcing the f6-knight to move.",
+      "8": "...Nh5 preserves the knight after g5 attacks it.",
+      "9": "Bxg7 trades off Black's fianchettoed bishop and changes the kingside structure.",
+      "10": "...Nxg7 recaptures but leaves the knight on an unusual square.",
+      "11": "c4 adds queenside and central space and gives White another way to challenge the center.",
+      "12": "Castling secures the king and activates the rook.",
+      "13": "Qb3 activates the queen and builds on White's queenside pressure."
+    }
   },
   {
     eco:'A00',
@@ -3406,7 +3436,41 @@ const BOZO_CLOUD_OPENINGS = [
     pgn:'1. b4 Nf6 2. Bb2 g6 3. g4 Bg7 4. g5 Nh5 5. Bxg7 Nxg7 6. c4 h5 7. gxh6 Rxh6 8. Qb3',
     source_type:'bozo',
     repertoire_side:'white',
-    notes:'A BOZO custom branch where Black challenges the advanced g-pawn with ...h5.'
+    notes:'A BOZO custom branch where Black challenges the advanced g-pawn with ...h5.',
+    author_explanations: {
+      "1": "White gains queenside space with b4 and clears b2 so the c1-bishop can develop there. The central opening idea is to follow with Bb2 and use the long diagonal from the flank.",
+      "2": "Black develops the kingside knight to f6, bringing a minor piece into the game, influencing the center, and keeping the central pawn structure flexible.",
+      "3": "Bb2 completes the immediate purpose of 1.b4 by developing the bishop onto the long diagonal.",
+      "4": "...g6 prepares ...Bg7, giving Black a natural fianchetto and a route toward kingside castling.",
+      "5": "g4 gains kingside space and prepares g5, a direct way to question the knight on f6.",
+      "6": "...Bg7 completes the fianchetto and develops the bishop onto the long diagonal.",
+      "7": "g5 attacks the f6-knight and gains space with tempo, forcing Black to respond to the pawn advance.",
+      "8": "...Nh5 moves the knight out of attack while keeping it near the kingside.",
+      "9": "Bxg7 removes Black's fianchettoed bishop and changes the kingside before Black can complete a standard setup.",
+      "10": "...Nxg7 recaptures, restoring material while relocating the knight to g7.",
+      "11": "c4 gains more queenside and central space and gives White another pawn lever against Black's center.",
+      "12": "...h5 immediately challenges White's advanced g-pawn instead of castling. Black tries to undermine the pawn chain before White can consolidate the extra kingside space.",
+      "13": "gxh6 accepts the challenge and opens the h-file. White gives up the advanced g-pawn structure in exchange for changing Black's kingside pawn cover and forcing a recapture.",
+      "14": "...Rxh6 recaptures on h6, restoring the pawn while activating the rook along the h-file.",
+      "15": "Qb3 activates the queen and returns White's attention to the queenside and center after the kingside exchanges."
+    },
+    author_takeaways: {
+      "1": "The main point of b4 is to gain queenside space and prepare Bb2.",
+      "2": "...Nf6 develops the knight and keeps Black flexible.",
+      "3": "Bb2 develops the bishop onto the long diagonal.",
+      "4": "...g6 prepares the bishop fianchetto with ...Bg7.",
+      "5": "g4 prepares g5 against the f6-knight.",
+      "6": "...Bg7 completes Black's fianchetto.",
+      "7": "g5 gains space with tempo by attacking the knight.",
+      "8": "...Nh5 preserves the knight after g5.",
+      "9": "Bxg7 removes Black's fianchettoed bishop.",
+      "10": "...Nxg7 recaptures and relocates the knight.",
+      "11": "c4 adds space and another way to challenge the center.",
+      "12": "...h5 attacks White's advanced pawn chain before it can settle.",
+      "13": "gxh6 opens the h-file and forces Black to recapture.",
+      "14": "...Rxh6 restores the pawn and activates the rook.",
+      "15": "Qb3 activates the queen after the kingside exchanges."
+    }
   }
 ];
 
@@ -4707,7 +4771,7 @@ function sanitizeCoachExplanation(explanation, facts) {
     const sentences = value
       .split(/(?<=[.!?])\s+/)
       .filter(sentence => coachSentenceIsGrounded(sentence, facts));
-    return sentences.join(' ').trim() || 'The coach removed an unsupported board claim from this explanation. Ask again for a position-grounded explanation.';
+    return sentences.join(' ').trim();
   };
   const output = Array.isArray(explanation) ? explanation.map(item => typeof item === 'string' ? cleanText(item) : sanitizeCoachExplanation(item, facts)) : {};
   if (!Array.isArray(explanation)) Object.entries(explanation).forEach(([key,value]) => {
@@ -6455,11 +6519,21 @@ async function startGameReview() {
       openingMatch?.opening?.metadata?.author_explanations ||
       openingMatch?.opening?.metadata?.authorExplanations ||
       {};
+    const reviewOpeningTakeaways =
+      openingMatch?.opening?.author_takeaways ||
+      openingMatch?.opening?.metadata?.author_takeaways ||
+      openingMatch?.opening?.metadata?.authorTakeaways ||
+      {};
 
     reviewData.rows.forEach(row => {
       row.authorExplanation = String(
         reviewOpeningExplanations?.[String(row.ply)] ||
         reviewOpeningExplanations?.[row.ply] ||
+        ''
+      ).trim();
+      row.authorTakeaway = String(
+        reviewOpeningTakeaways?.[String(row.ply)] ||
+        reviewOpeningTakeaways?.[row.ply] ||
         ''
       ).trim();
     });
@@ -6847,7 +6921,11 @@ function reviewConcreteComparison(row, best, pv) {
 
 function reviewAuthoredOpeningExplanation(row) {
   if (!row?.isBook) return '';
-  if (row.generatedTeachingNote) return '';
+
+  // Authored opening theory is the highest-authority source for book moves.
+  // Never hide it merely because a generated/fallback note already exists.
+  const cached = String(row.authorExplanation || '').trim();
+  if (cached) return cached;
 
   const opening = reviewOpeningForPly(row.ply) || reviewData?.openingMatch?.opening;
   if (!opening) return '';
@@ -6859,6 +6937,19 @@ function reviewAuthoredOpeningExplanation(row) {
     {};
 
   return String(explanations?.[String(row.ply)] || explanations?.[row.ply] || '').trim();
+}
+
+function reviewAuthoredOpeningTakeaway(row) {
+  if (!row?.isBook) return '';
+  const cached = String(row.authorTakeaway || '').trim();
+  if (cached) return cached;
+  const opening = reviewOpeningForPly(row.ply) || reviewData?.openingMatch?.opening;
+  const takeaways =
+    opening?.author_takeaways ||
+    opening?.metadata?.author_takeaways ||
+    opening?.metadata?.authorTakeaways ||
+    {};
+  return String(takeaways?.[String(row.ply)] || takeaways?.[row.ply] || '').trim();
 }
 
 function reviewOpeningContext(row) {
@@ -7104,7 +7195,7 @@ function reviewDeterministicTeachingFromStructure(row, s) {
   const realized=s.verifiedConnections?.some(x=>/realized immediately/i.test(x));
   if(realized && prep) sentences.push(`In the game, ${prep} followed immediately, carrying out that development plan.`);
 
-  const summary=sentences.filter(Boolean).slice(0,4).join(' ').trim() || `${row.san} improves the position, but BOZO did not verify enough detail for a stronger teaching claim.`;
+  const summary=sentences.filter(Boolean).slice(0,4).join(' ').trim() || `${row.san} is best understood from the concrete change it makes to the position; BOZO did not verify enough detail to add a more specific strategic claim.`;
 
   let takeaway='';
   if(move.piece==='p' && prep) takeaway=`The main point of ${row.san} is to make room for ${prep} and develop the bishop; the space gained by the pawn is a bonus.`;
@@ -7131,7 +7222,12 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
 
   const authored=reviewAuthoredOpeningExplanation(row);
   if(authored){
-    row.generatedTeachingNote={summary:authored,takeaway:`Remember the concrete idea behind ${row.san} and how it connects to the next move in the line.`,source:'authored'};
+    row.generatedTeachingNote={
+      summary:authored,
+      takeaway:reviewAuthoredOpeningTakeaway(row) || `Remember the concrete purpose of ${row.san} and how it fits the opening plan.`,
+      source:'authored-opening'
+    };
+    if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
     return;
   }
 
