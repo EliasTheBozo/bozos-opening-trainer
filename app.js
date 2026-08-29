@@ -6969,7 +6969,8 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
     primaryIdea=`Castle the king and connect the rook to the game.`;
     developmentGoals.push(`King safety and rook activation.`);
   }
-  if (controlledSquares.length) secondaryIdeas.push(`The ${pieceName} on ${move.to} controls ${controlledSquares.join(', ')}.`);
+  if (controlledSquares.length && move.piece !== 'b') secondaryIdeas.push(`The ${pieceName} on ${move.to} controls ${controlledSquares.join(', ')}.`);
+  if (controlledSquares.length && move.piece === 'b') secondaryIdeas.push(`The bishop on ${move.to} is active along its diagonal.`);
   if (attackedPieces.length) immediateEffects.push(`It attacks ${attackedPieces.map(x=>`${opponent}'s ${x.piece} on ${x.square}`).join(' and ')}.`);
 
   // Pawn moves that free a bishop: this is often the PURPOSE, not a footnote.
@@ -7028,6 +7029,7 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
   // concrete fact, in priority order.
   if(!primaryIdea && attackedPieces.length) primaryIdea=`Create immediate pressure on ${attackedPieces.map(x=>x.square).join(', ')}.`;
   if(!primaryIdea && move.captured) primaryIdea=`Make the concrete capture on ${move.to}.`;
+  if(!primaryIdea && move.piece==='b' && controlledSquares.length) primaryIdea=`Improve the bishop's activity along its diagonal from ${move.to}.`;
   if(!primaryIdea && controlledSquares.length) primaryIdea=`Improve the ${pieceName}'s influence by controlling ${controlledSquares.join(', ')}.`;
   if(!primaryIdea) primaryIdea=`Improve the piece placement with ${row.san}.`;
 
@@ -7082,7 +7084,10 @@ function reviewDeterministicTeachingFromStructure(row, s) {
   } else if(move.piece==='b' && ['c1','f1','c8','f8'].includes(move.from)) {
     sentences.push(`${side} develops the bishop from ${move.from} to ${move.to}, bringing it off its starting square and into the game.`);
     if(s.attackedPieces?.length) sentences.push(`From ${move.to}, it attacks ${s.attackedPieces.map(x=>`${x.piece} on ${x.square}`).join(' and ')}.`);
-    else if(s.controlledSquares?.length) sentences.push(`From ${move.to}, it controls ${s.controlledSquares.join(', ')}.`);
+    else if(s.controlledSquares?.length) {
+      const fianchetto=['b2','g2','b7','g7'].includes(move.to);
+      sentences.push(`From ${move.to}, the bishop becomes active on ${fianchetto ? 'the long diagonal' : 'its new diagonal'}.`);
+    }
   } else if(move.isCastle) {
     sentences.push(`${side} castles, improving king safety while bringing the rook closer to the center of the game.`);
   } else {
@@ -7110,6 +7115,8 @@ function reviewStructuredTeachingIsSafe(explanation,s) {
   if(!explanation) return false;
   const visible=JSON.stringify(explanation);
   if(/primary idea:|secondary ideas?:|development goals?:|prepared moves?:|concrete influence|the moved piece/i.test(visible)) return false;
+  const mv=s?.rawVerifiedFacts?.moveFacts || {};
+  if(mv.piece==='b' && /(?:[a-h][1-8][, ]+){3,}[a-h][1-8]/i.test(visible)) return false;
   return !reviewTeachingHasUnsupportedStrategicClaim(explanation,s.rawVerifiedFacts)
       && !reviewTeachingHasUnsupportedRelationship(explanation,s.rawVerifiedFacts);
 }
@@ -7160,6 +7167,8 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
         `Model the explanatory rhythm of high-quality annotated PGNs: say what the move does, why that matters here, and what idea it sets up or answers.`,
         `When a move follows a normal opening principle, name the concrete principle only when supported (development, center, king safety). When a move is unusual, explain the concrete reason only if supplied by the facts.`,
         `Distinguish chess terminology carefully: an empty square is controlled; an enemy piece on a reachable square is attacked. Never call an empty square an attacked piece.`,
+        `For bishops, do not enumerate every empty square on a diagonal. Describe the bishop as active on the long diagonal (for b2, g2, b7, or g7) or on its diagonal, and only name a square when it contains a real target or is strategically necessary.`,
+        `Do not repeat the same geometric fact in multiple sentences. Prefer one natural chess concept over a comma-separated square list.`,
         `Use actualContinuation to connect moves when useful, but do not pretend the later move was forced or caused unless the structure explicitly says so.`,
         `Use only claims explicitly supported by structuredAnalysis. Do not add chess facts from intuition, memory, or generic opening lore.`,
         `Do not invent support, attacks, weaknesses, diagonals, threats, plans, or causal relationships.`,

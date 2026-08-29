@@ -1,14 +1,13 @@
-BOZO v4.14.24 — NATURAL REVIEW COMPOSITION
+BOZO'S Opening Trainer v4.14.25 — Bishop Diagonal Teaching Cleanup
 
-Replace these files in the repo root:
-- app.js
-- index.html
+Replace app.js and index.html in the repository root with these files.
 
-What changed:
-- BOZO Coach now composes verified chess facts into natural annotated-PGN prose instead of exposing structured fragments.
-- Removes reader-facing phrases such as “Primary idea:” and prevents raw fact-list fragments from leaking into explanations.
-- What to Remember is now anchored to the move's main purpose, especially development plans such as 1.b4 followed by Bb2.
-- Knight development prioritizes development and genuinely central controlled squares instead of treating every controlled square as equally important.
-- Empty squares remain “controlled”; only enemy pieces are described as “attacked.”
-- AI-written prose is rejected if it leaks internal labels/robotic phrases, and its takeaway cannot replace the verified main teaching priority with a secondary continuation.
-- No database migration and no explorer-data changes.
+Review changes:
+- Bishop explanations no longer dump every empty square on a diagonal.
+- Fianchetto bishops on b2/g2/b7/g7 are described naturally as becoming active on the long diagonal.
+- Other developed bishops are described by their diagonal rather than a square list.
+- Real occupied enemy targets may still be named explicitly.
+- Generated explanations that dump long bishop square lists are rejected, falling back to BOZO's verified local teaching note.
+- Repeated geometric facts are discouraged in the structured writer prompt.
+
+No database migration. No explorer-data changes. Board/piece set and normal gameplay are unchanged.
