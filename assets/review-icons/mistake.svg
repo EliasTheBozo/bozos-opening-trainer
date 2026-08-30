@@ -1,4 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <circle cx="32" cy="32" r="30" fill="#f47a24"/>
-  <text x="32" y="43" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="35" font-weight="800" fill="#fff">?</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="?"><path d="M16 5c-4 0-7 2-7 6h5c0-1 1-2 2-2s2 1 2 2c0 2-4 3-4 7h5c0-2 5-4 5-8 5-8 0-3-3-5-8-5z M14 23h5v5h-5z" fill="#f97316" stroke="none" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/></svg>

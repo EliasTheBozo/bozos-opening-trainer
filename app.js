@@ -3400,9 +3400,9 @@ const BOZO_CLOUD_OPENINGS = [
     notes:'A BOZO custom variation combining the Polish setup with a Grob-style g-pawn expansion.',
     author_explanations: {
       "1": "White gains queenside space with b4 and, more importantly, clears b2 so the c1-bishop can develop there. The usual idea is Bb2, putting the bishop on the long diagonal and letting White influence the center from the flank rather than occupying it immediately with a central pawn.",
-      "2": "Against 1.b4, Black develops the kingside knight to f6 without committing a central pawn. The knight directly controls e4, so White cannot simply build the center for free, while Black keeps both ...d5 and ...g6 setups available.",
+      "2": "Black develops the kingside knight to f6, bringing a minor piece into the game and putting pressure on the central e4 square. The move keeps Black flexible because the central pawns have not committed yet, while also moving Black closer to a normal kingside setup.",
       "3": "Bb2 completes the immediate idea behind 1.b4. White develops the c1-bishop onto the long diagonal, where it can influence the center and become an active part of the position instead of remaining blocked on its starting square.",
-      "4": "After White has committed the bishop to b2, ...g6 prepares ...Bg7 and gives Black a matching long-diagonal setup. It develops toward kingside castling without fixing the central pawns yet, so Black can meet White's flank play while keeping the center flexible.",
+      "4": "Black plays ...g6 to prepare ...Bg7. The point is to fianchetto the dark-squared bishop, develop it onto its own long diagonal, and build a flexible kingside setup that can lead to castling.",
       "5": "White begins the Grob-style part of the setup with g4. The pawn gains kingside space and prepares g5, which can question the knight on f6 and force Black to decide where that knight belongs.",
       "6": "...Bg7 carries out the plan behind ...g6. Black develops the bishop onto the long diagonal and clears the f8 square, making kingside castling available once the king and rook are ready.",
       "7": "White pushes g5 and attacks the knight on f6, gaining space with tempo. The move is concrete: the knight must react, and White uses the advanced g-pawn to disrupt Black's comfortable kingside development.",
@@ -3439,9 +3439,9 @@ const BOZO_CLOUD_OPENINGS = [
     notes:'A BOZO custom branch where Black challenges the advanced g-pawn with ...h5.',
     author_explanations: {
       "1": "White gains queenside space with b4 and clears b2 so the c1-bishop can develop there. The central opening idea is to follow with Bb2 and use the long diagonal from the flank.",
-      "2": "Against 1.b4, Black develops the kingside knight to f6 without committing a central pawn. The knight controls e4, discouraging White from getting an easy central expansion while Black keeps both ...d5 and ...g6 setups available.",
+      "2": "Black develops the kingside knight to f6, bringing a minor piece into the game, influencing the center, and keeping the central pawn structure flexible.",
       "3": "Bb2 completes the immediate purpose of 1.b4 by developing the bishop onto the long diagonal.",
-      "4": "With White's bishop now on b2, ...g6 prepares ...Bg7 so Black can answer with a fianchetto of its own and get ready to castle. The central pawns stay uncommitted, which keeps Black flexible against White's flank setup.",
+      "4": "...g6 prepares ...Bg7, giving Black a natural fianchetto and a route toward kingside castling.",
       "5": "g4 gains kingside space and prepares g5, a direct way to question the knight on f6.",
       "6": "...Bg7 completes the fianchetto and develops the bishop onto the long diagonal.",
       "7": "g5 attacks the f6-knight and gains space with tempo, forcing Black to respond to the pawn advance.",
@@ -4428,24 +4428,6 @@ let lastCoachExplanation = null;
 
 const COACH_PIECE_NAMES = { p:'pawn', n:'knight', b:'bishop', r:'rook', q:'queen', k:'king' };
 
-const COACH_PIECE_CODES = { pawn:'p', knight:'n', bishop:'b', rook:'r', queen:'q', king:'k' };
-
-function reviewMovePieceCode(move={}) {
-  const direct = String(move.pieceCode || '').toLowerCase();
-  if (/^[pnbrqk]$/.test(direct)) return direct;
-  const raw = String(move.piece || '').toLowerCase();
-  if (/^[pnbrqk]$/.test(raw)) return raw;
-  return COACH_PIECE_CODES[raw] || '';
-}
-
-function reviewCapturedPieceCode(move={}) {
-  const direct = String(move.capturedCode || '').toLowerCase();
-  if (/^[pnbrqk]$/.test(direct)) return direct;
-  const raw = String(move.captured || '').toLowerCase();
-  if (/^[pnbrqk]$/.test(raw)) return raw;
-  return COACH_PIECE_CODES[raw] || '';
-}
-
 function parseFenBoard(fen) {
   const board = {};
   const ranks = String(fen || '').split(' ')[0].split('/');
@@ -4535,17 +4517,12 @@ function verifiedCoachFacts(fen, previousFen, playedMove) {
           san: verbose.san || playedMove,
           color: verbose.color === 'w' ? 'White' : 'Black',
           piece: COACH_PIECE_NAMES[verbose.piece] || verbose.piece,
-          pieceCode: verbose.piece,
           from: verbose.from,
           to: verbose.to,
           captured: verbose.captured ? (COACH_PIECE_NAMES[verbose.captured] || verbose.captured) : null,
-          capturedCode: verbose.captured || null,
           promotion: verbose.promotion ? (COACH_PIECE_NAMES[verbose.promotion] || verbose.promotion) : null,
-          promotionCode: verbose.promotion || null,
           isCapture: Boolean(verbose.captured),
           isCastle: /O-O/.test(verbose.san || playedMove),
-          isCheck: /[+#]$/.test(verbose.san || playedMove),
-          isPromotion: Boolean(verbose.promotion),
           resultingFen: before.fen()
         };
       }
@@ -4636,8 +4613,6 @@ function reviewVerifiedTeachingFacts(row, selectedIndex) {
       ...base,
       beforeFen: row.previousFen,
       afterFen: row.fen,
-      beforePieces: beforeBoard,
-      afterPieces: afterBoard,
       changedSquares,
       movedPieceAttacks,
       newlyOpenedLines: newlyOpenedFromOrigin.slice(0, 30),
@@ -5097,53 +5072,6 @@ function annotationSquareGeometry(boardId, square, orientation = 'white') {
   return { ...center, width:100, height:100 };
 }
 
-function bozoBoardArrowMarkup(fromSquare, toSquare, from, to, color, opacity=.82) {
-  const fileDelta = Math.abs(toSquare.charCodeAt(0) - fromSquare.charCodeAt(0));
-  const rankDelta = Math.abs(Number(toSquare[1]) - Number(fromSquare[1]));
-  const isKnightRoute = (fileDelta === 1 && rankDelta === 2) || (fileDelta === 2 && rankDelta === 1);
-
-  // BOZO's canonical arrow: a separate shaft and destination triangle. The
-  // shaft stops at the triangle base so the head stays crisp at every size.
-  const arrowGeometry = (segmentStart, tip) => {
-    const dx = tip.x - segmentStart.x;
-    const dy = tip.y - segmentStart.y;
-    const length = Math.hypot(dx, dy) || 1;
-    const ux = dx / length;
-    const uy = dy / length;
-    const px = -uy;
-    const py = ux;
-    const headLength = 46;
-    const headHalfWidth = 29;
-    const base = { x: tip.x - ux * headLength, y: tip.y - uy * headLength };
-    const left = { x: base.x + px * headHalfWidth, y: base.y + py * headHalfWidth };
-    const right = { x: base.x - px * headHalfWidth, y: base.y - py * headHalfWidth };
-    return {
-      shaftEnd: base,
-      points: `${tip.x},${tip.y} ${left.x},${left.y} ${right.x},${right.y}`
-    };
-  };
-
-  if (isKnightRoute) {
-    const elbow = fileDelta === 2
-      ? { x:to.x, y:from.y }
-      : { x:from.x, y:to.y };
-    const geometry = arrowGeometry(elbow, to);
-    return `
-      <path d="M ${from.x} ${from.y} L ${elbow.x} ${elbow.y} L ${geometry.shaftEnd.x} ${geometry.shaftEnd.y}"
-            fill="none" stroke="${color}" stroke-width="18"
-            stroke-linecap="square" stroke-linejoin="miter" opacity="${opacity}"></path>
-      <polygon points="${geometry.points}" fill="${color}" opacity="${Math.min(1, opacity + .08)}"></polygon>`;
-  }
-
-  const geometry = arrowGeometry(from, to);
-  return `
-    <line x1="${from.x}" y1="${from.y}"
-          x2="${geometry.shaftEnd.x}" y2="${geometry.shaftEnd.y}"
-          stroke="${color}" stroke-width="18"
-          stroke-linecap="square" opacity="${opacity}"></line>
-    <polygon points="${geometry.points}" fill="${color}" opacity="${Math.min(1, opacity + .08)}"></polygon>`;
-}
-
 function paintBoardUserAnnotations(boardId) {
   const layerId = boardAnnotationLayerId(boardId);
   const svg = layerId ? $(layerId) : null;
@@ -5167,7 +5095,50 @@ function paintBoardUserAnnotations(boardId) {
     if (item.type === 'arrow' && validSquare(item.from) && validSquare(item.to)) {
       const from = annotationSquareGeometry(boardId, item.from, orientation);
       const to = annotationSquareGeometry(boardId, item.to, orientation);
-      return bozoBoardArrowMarkup(item.from, item.to, from, to, color, .82);
+      const fileDelta = Math.abs(item.to.charCodeAt(0) - item.from.charCodeAt(0));
+      const rankDelta = Math.abs(Number(item.to[1]) - Number(item.from[1]));
+      const isKnightRoute = (fileDelta === 1 && rankDelta === 2) || (fileDelta === 2 && rankDelta === 1);
+
+      // Separate shaft + explicit triangle. The shaft stops exactly at the
+      // triangle base, so it can never run underneath or visually cover the head.
+      const arrowGeometry = (segmentStart, tip) => {
+        const dx = tip.x - segmentStart.x;
+        const dy = tip.y - segmentStart.y;
+        const length = Math.hypot(dx, dy) || 1;
+        const ux = dx / length;
+        const uy = dy / length;
+        const px = -uy;
+        const py = ux;
+        const headLength = 46;
+        const headHalfWidth = 29;
+        const base = { x: tip.x - ux * headLength, y: tip.y - uy * headLength };
+        const left = { x: base.x + px * headHalfWidth, y: base.y + py * headHalfWidth };
+        const right = { x: base.x - px * headHalfWidth, y: base.y - py * headHalfWidth };
+        return {
+          shaftEnd: base,
+          points: `${tip.x},${tip.y} ${left.x},${left.y} ${right.x},${right.y}`
+        };
+      };
+
+      if (isKnightRoute) {
+        const elbow = fileDelta === 2
+          ? { x:to.x, y:from.y }
+          : { x:from.x, y:to.y };
+        const geometry = arrowGeometry(elbow, to);
+        return `
+          <path d="M ${from.x} ${from.y} L ${elbow.x} ${elbow.y} L ${geometry.shaftEnd.x} ${geometry.shaftEnd.y}"
+                fill="none" stroke="${color}" stroke-width="18"
+                stroke-linecap="square" stroke-linejoin="miter" opacity=".82"></path>
+          <polygon points="${geometry.points}" fill="${color}" opacity=".90"></polygon>`;
+      }
+
+      const geometry = arrowGeometry(from, to);
+      return `
+        <line x1="${from.x}" y1="${from.y}"
+              x2="${geometry.shaftEnd.x}" y2="${geometry.shaftEnd.y}"
+              stroke="${color}" stroke-width="18"
+              stroke-linecap="square" opacity=".82"></line>
+        <polygon points="${geometry.points}" fill="${color}" opacity=".90"></polygon>`;
     }
     return '';
   }).join('');
@@ -5534,14 +5505,9 @@ async function loadReviewOpeningCatalog() {
       builtIn?.author_explanations ||
       null;
 
-    const authoredTakeaways =
-      opening.metadata?.author_takeaways || opening.metadata?.authorTakeaways ||
-      opening.author_takeaways || builtIn?.author_takeaways || null;
-
     return {
       ...opening,
       author_explanations: authored,
-      author_takeaways: authoredTakeaways,
       sans: okay ? parser.history().map(reviewCleanSan) : []
     };
   }).filter(opening => opening.sans.length);
@@ -5968,14 +5934,75 @@ function reviewMoveAccuracy(winLoss) {
   return Math.max(0, Math.min(100, accuracy));
 }
 
-function classifyReviewLoss(loss, isBook) {
+function classifyReviewLoss(loss, isBook, context = {}) {
   if (isBook) return { label: 'Book', cls: 'book' };
+  if (context.brilliant) return { label: 'Brilliant', cls: 'brilliant' };
+  if (context.great) return { label: 'Great', cls: 'great' };
   if (loss <= 0) return { label: 'Best', cls: 'best' };
   if (loss <= 20) return { label: 'Excellent', cls: 'excellent' };
   if (loss <= 50) return { label: 'Good', cls: 'good' };
   if (loss <= 100) return { label: 'Inaccuracy', cls: 'inaccuracy' };
   if (loss <= 200) return { label: 'Mistake', cls: 'mistake' };
   return { label: 'Blunder', cls: 'blunder' };
+}
+
+// Great is about necessity, not merely low centipawn loss. BOZO compares the
+// played top move with the best alternative from the same position.
+function reviewScoreForMover(line, mover) {
+  if (!line) return null;
+  if (line.mate != null) {
+    const signed = line.mate > 0 ? REVIEW_MATE_SCORE - Math.abs(line.mate) : -REVIEW_MATE_SCORE + Math.abs(line.mate);
+    return signed; // MultiPV scores are already from the side-to-move perspective.
+  }
+  return Number.isFinite(Number(line.cp)) ? Number(line.cp) : null;
+}
+
+function reviewMoveUci(move) {
+  return move ? `${move.from}${move.to}${move.promotion || ''}`.toLowerCase() : '';
+}
+
+function reviewGreatMoveContext(multiLines = [], playedUci = '') {
+  const lines = (multiLines || []).filter(line => line?.pv?.[0]);
+  if (lines.length < 2 || !playedUci) return { great:false, uniqueGap:0, alternative:null };
+  const top = lines[0], second = lines[1];
+  if (String(top.pv[0]).toLowerCase() !== playedUci.toLowerCase()) return { great:false, uniqueGap:0, alternative:second };
+  const topScore = reviewScoreForMover(top), secondScore = reviewScoreForMover(second);
+  if (topScore == null || secondScore == null) return { great:false, uniqueGap:0, alternative:second };
+  const gap = Math.max(0, topScore - secondScore);
+  const topWinning = topScore >= 180;
+  const secondLosesWin = topWinning && secondScore < 80;
+  const onlyDraw = topScore > -80 && secondScore <= -180;
+  const forcedMateOnly = top.mate != null && top.mate > 0 && !(second.mate != null && second.mate > 0);
+  // A large uniqueness gap qualifies; result-state changes qualify even when
+  // centipawn scaling is compressed by a tactical position.
+  return { great: forcedMateOnly || secondLosesWin || onlyDraw || gap >= 140, uniqueGap:gap, alternative:second };
+}
+
+function reviewSideMaterial(fen, side) {
+  const g = new Chess(fen), values={p:1,n:3,b:3,r:5,q:9,k:0}; let total=0;
+  for (const rank of g.board()) for (const piece of rank) if (piece?.color===side) total += values[piece.type] || 0;
+  return total;
+}
+
+function reviewBrilliantSacrificeEvidence(afterFen, mover, pv = []) {
+  // Look down the concrete engine continuation for an accepted/realized
+  // sacrifice. A mere hanging piece is not enough: the top line must actually
+  // permit the material concession.
+  try {
+    const startMaterial = reviewSideMaterial(afterFen, mover);
+    const g = new Chess(afterFen);
+    for (const uci of (pv || []).slice(0, 4)) {
+      const move=g.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'});
+      if (!move) break;
+      if (reviewSideMaterial(g.fen(), mover) <= startMaterial - 2) return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function reviewClassificationIcon(cls='') {
+  const safe = ['book','brilliant','great','best','excellent','good','inaccuracy','mistake','blunder'].includes(cls) ? cls : 'good';
+  return `<img class="review-move-type-icon" src="./assets/review-icons/${safe}.svg" alt="" aria-hidden="true">`;
 }
 
 function reviewUciToSan(fen, uci) {
@@ -6381,14 +6408,28 @@ async function computeWebsiteReview(sans, depth, bookDepth, onProgress) {
       }
     }
 
+    // Compare real alternatives in the pre-move position. This powers BOZO's
+    // necessity-based Great classification instead of treating Great as a CPL bucket.
+    let choiceLines = [];
+    if (!isCheckmate && index >= bookDepth) {
+      try { choiceLines = await engine.analyzeMultiPv(previousFen, depth, 3); } catch (_) {}
+    }
+
     const rawLoss = isCheckmate ? 0 : (mover === 'w'
       ? evalBefore - evalAfter
       : evalAfter - evalBefore);
     const engineLoss = Math.max(0, Math.round(rawLoss));
     const isBook = index < bookDepth;
+    const playedUci = reviewMoveUci(played);
+    const necessity = reviewGreatMoveContext(choiceLines, playedUci);
+    const topMove = choiceLines?.[0]?.pv?.[0] ? String(choiceLines[0].pv[0]).toLowerCase() === playedUci : false;
+    const sacrifice = topMove && reviewBrilliantSacrificeEvidence(fen, mover, analysis?.pv || []);
+    // Brilliant is deliberately stricter than Great: it must be a top move,
+    // concretely sound, and involve a real material concession in Stockfish's line.
+    const brilliant = !isBook && topMove && engineLoss <= 20 && sacrifice && (necessity.great || necessity.uniqueGap >= 70);
     const classification = isCheckmate
       ? { label: 'Best', cls: 'best' }
-      : classifyReviewLoss(engineLoss, isBook);
+      : classifyReviewLoss(engineLoss, isBook, { great: !brilliant && necessity.great, brilliant });
 
     const winBefore = reviewWinPercent(evalBefore);
     const winAfter = reviewWinPercent(evalAfter);
@@ -6417,7 +6458,11 @@ async function computeWebsiteReview(sans, depth, bookDepth, onProgress) {
       bestMoveFen: reviewBestMovePosition(previousFen, isCheckmate ? played.san : engineBestBefore),
       principalVariation: isCheckmate ? [] : pvBefore.slice(0, 8),
       principalVariationSan: isCheckmate ? [] : reviewPvToSan(previousFen, pvBefore, 6),
-      wasTop: isCheckmate || reviewCleanSan(engineBestBefore) === reviewCleanSan(played.san)
+      wasTop: isCheckmate || reviewCleanSan(engineBestBefore) === reviewCleanSan(played.san),
+      choiceLines,
+      uniqueMoveGap: necessity.uniqueGap || 0,
+      greatReason: necessity.great ? 'Only or near-only move that preserves the position' : '',
+      brilliantSacrifice: Boolean(brilliant)
     });
 
     evalBefore = evalAfter;
@@ -6574,11 +6619,11 @@ async function startGameReview() {
 
     reviewData.playerSide = playerSide;
     reviewData.events = reviewBuildEvents(reviewData.rows, openingMatch, reviewData.phasePlan);
+
+    primeReviewTeachingNotes();
     reviewData.story = reviewGameStory(reviewData.rows, reviewData.phasePlan, playerSide);
     reviewStepIndex = 0;
     reviewOrientation = playerSide;
-
-    primeReviewTeachingNotes();
 
     renderReviewSummary();
     renderReviewMoveList();
@@ -6691,35 +6736,15 @@ function renderReviewMoveList() {
   });
 }
 
-function reviewClassificationIcon(row) {
-  const cls = String(row?.cls || '').toLowerCase();
-  const icons = {
-    book: './assets/review-icons/book.svg',
-    best: './assets/review-icons/best.svg',
-    excellent: './assets/review-icons/excellent.svg',
-    good: './assets/review-icons/good.svg',
-    inaccuracy: './assets/review-icons/inaccuracy.svg',
-    mistake: './assets/review-icons/mistake.svg',
-    blunder: './assets/review-icons/blunder.svg'
-  };
-  return icons[cls] || './assets/review-icons/good.svg';
-}
-
 function reviewMoveButton(row) {
   if (!row) return '<button disabled></button>';
-  const phase = reviewPhaseLabel(row.phase);
-  const icon = reviewClassificationIcon(row);
-  const accessibleLabel = `${row.san}, ${row.label}, ${phase}`;
   return `
     <button data-review-step="${row.ply}"
             class="review-move-button review-${row.cls}"
-            aria-label="${escapeHtml(accessibleLabel)}"
-            title="${escapeHtml(row.label)} · ${escapeHtml(phase)}">
+            title="${escapeHtml(row.label)} · ${escapeHtml(reviewPhaseLabel(row.phase))}"
+            aria-label="${escapeHtml(row.san)}: ${escapeHtml(row.label)}, ${escapeHtml(reviewPhaseLabel(row.phase))}">
       <b>${escapeHtml(row.san)}</b>
-      <span class="review-move-meta">
-        <span class="review-move-symbol" aria-hidden="true"><img src="${icon}" alt=""></span>
-        <small>${escapeHtml(phase)}</small>
-      </span>
+      <small>${reviewClassificationIcon(row.cls)}<span>${escapeHtml(reviewPhaseLabel(row.phase))}</span></small>
     </button>
   `;
 }
@@ -6730,10 +6755,6 @@ function setReviewStep(step) {
   clearReviewCoachAnnotations();
   updateReviewSelectedMove();
   paintGameReview();
-  if (reviewStepIndex > 0 && state.session?.user && reviewTeachingGenerationToken) {
-    const selectedIndex = reviewStepIndex - 1;
-    generateReviewTeachingNote(reviewData.rows[selectedIndex], selectedIndex, reviewTeachingGenerationToken);
-  }
 }
 
 function paintGameReview() {
@@ -6999,106 +7020,17 @@ function reviewAuthoredOpeningExplanation(row) {
   return String(explanations?.[String(row.ply)] || explanations?.[row.ply] || '').trim();
 }
 
-function reviewBuiltInOpeningForPly(row) {
-  if (!row?.ply || !reviewData?.rows?.length) return null;
-  const gamePrefix = reviewData.rows.slice(0, row.ply).map(item => reviewCleanSan(item.san));
-  let best = null;
-  for (const opening of BOZO_CLOUD_OPENINGS || []) {
-    try {
-      const parser = new Chess();
-      if (!parser.load_pgn(opening.pgn || '', { sloppy:true })) continue;
-      const sans = parser.history().map(reviewCleanSan);
-      if (sans.length < row.ply) continue;
-      let same = true;
-      for (let i=0;i<row.ply;i++) {
-        if (sans[i] !== gamePrefix[i]) { same=false; break; }
-      }
-      if (same && (!best || sans.length > best.sans.length)) best = { opening, sans };
-    } catch (_) {}
-  }
-  return best?.opening || null;
-}
-
 function reviewAuthoredOpeningTakeaway(row) {
   if (!row?.isBook) return '';
   const cached = String(row.authorTakeaway || '').trim();
   if (cached) return cached;
-  const catalogOpening = reviewOpeningForPly(row.ply) || reviewData?.openingMatch?.opening;
-  const builtInOpening = reviewBuiltInOpeningForPly(row);
-  for (const opening of [catalogOpening, builtInOpening]) {
-    const takeaways = opening?.author_takeaways || opening?.metadata?.author_takeaways || opening?.metadata?.authorTakeaways || {};
-    const result = String(takeaways?.[String(row.ply)] || takeaways?.[row.ply] || '').trim();
-    if (result) return result;
-  }
-  return '';
-}
-
-function reviewPromotionRaceFacts(row, facts) {
-  const move = facts?.moveFacts || {};
-  if (reviewMovePieceCode(move) !== 'p' || !move.to || !row?.fen) return null;
-  if (move.isPromotion) {
-    return {passed:true,distance:0,pawnSquare:move.to,forced:true,forcedLine:row.san,directPromotion:true};
-  }
-  const after = facts?.afterPieces || parseFenBoard(row.fen);
-  const pawn = after?.[move.to];
-  if (!pawn || pawn.type !== 'p' || pawn.color !== row.mover) return null;
-
-  const file = move.to.charCodeAt(0) - 97;
-  const rank = Number(move.to[1]);
-  const dir = row.mover === 'w' ? 1 : -1;
-  const promotionRank = row.mover === 'w' ? 8 : 1;
-  const distance = Math.abs(promotionRank - rank);
-  const enemy = row.mover === 'w' ? 'b' : 'w';
-  let passed = true;
-  for (const [sq,piece] of Object.entries(after || {})) {
-    if (piece?.type !== 'p' || piece.color !== enemy) continue;
-    const enemyFile = sq.charCodeAt(0) - 97;
-    const enemyRank = Number(sq[1]);
-    const ahead = row.mover === 'w' ? enemyRank > rank : enemyRank < rank;
-    if (ahead && Math.abs(enemyFile-file) <= 1) { passed=false; break; }
-  }
-  if (!passed) return {passed:false,distance,pawnSquare:move.to,forced:false};
-
-  const promotionMoveFor = (game, from) => (game.moves({verbose:true}) || []).find(m =>
-    m.from === from && m.piece === 'p' && (m.promotion || Number(m.to[1]) === promotionRank)
-  );
-  const pushFor = (game, from) => (game.moves({verbose:true}) || []).find(m =>
-    m.from === from && m.piece === 'p' && m.to[0] === from[0] && Number(m.to[1]) === Number(from[1]) + dir
-  );
-
-  let forced = false;
-  let forcedLine = '';
-  try {
-    const root = new Chess(row.fen);
-    const replies = root.moves({verbose:true}) || [];
-    if (distance === 1 && replies.length) {
-      forced = replies.every(reply => {
-        const game = new Chess(row.fen);
-        game.move(reply);
-        return Boolean(promotionMoveFor(game, move.to));
-      });
-      if (forced) forcedLine = `${move.to[0]}${promotionRank}=Q`;
-    } else if (distance === 2 && replies.length && replies.length <= 80) {
-      forced = replies.every(reply => {
-        const game = new Chess(row.fen);
-        game.move(reply);
-        const push = pushFor(game, move.to);
-        if (!push) return false;
-        game.move(push);
-        const newSquare = push.to;
-        const replies2 = game.moves({verbose:true}) || [];
-        if (!replies2.length) return false;
-        return replies2.every(reply2 => {
-          const game2 = new Chess(game.fen());
-          game2.move(reply2);
-          return Boolean(promotionMoveFor(game2, newSquare));
-        });
-      });
-      if (forced) forcedLine = `${move.to[0]}${rank+dir}, ${move.to[0]}${promotionRank}=Q`;
-    }
-  } catch (_) {}
-
-  return {passed:true,distance,pawnSquare:move.to,forced,forcedLine};
+  const opening = reviewOpeningForPly(row.ply) || reviewData?.openingMatch?.opening;
+  const takeaways =
+    opening?.author_takeaways ||
+    opening?.metadata?.author_takeaways ||
+    opening?.metadata?.authorTakeaways ||
+    {};
+  return String(takeaways?.[String(row.ply)] || takeaways?.[row.ply] || '').trim();
 }
 
 function reviewOpeningContext(row) {
@@ -7109,7 +7041,6 @@ function reviewOpeningContext(row) {
 
 
 
-// BOZO v4.14.32: concise causal coaching + transferable lessons + automatic board annotations.
 let reviewTeachingGenerationToken = 0;
 
 function reviewTeachingPayload(row, selectedIndex) {
@@ -7125,7 +7056,7 @@ function reviewTeachingPayload(row, selectedIndex) {
   const authored = reviewAuthoredOpeningExplanation(row);
 
   return {
-    mode: 'game_review',
+    mode: 'game_review_auto_teaching',
     gameStatus: 'completed',
     fen: row.fen,
     previousFen: row.previousFen,
@@ -7176,42 +7107,9 @@ function reviewTeachingPayload(row, selectedIndex) {
 }
 
 
-function reviewMoveQualityKind(row) {
-  const label = String(row?.label || row?.cls || '').toLowerCase();
-  if (row?.terminal?.type === 'checkmate') return 'checkmate';
-  if (row?.isBook || label.includes('book')) return 'book';
-  if (label.includes('blunder')) return 'blunder';
-  if (label.includes('mistake')) return 'mistake';
-  if (label.includes('inaccuracy')) return 'inaccuracy';
-  if (row?.wasTop || label.includes('best')) return 'best';
-  if (label.includes('excellent')) return 'excellent';
-  if (label.includes('good')) return 'good';
-  return 'move';
-}
-
-function reviewBestMoveComparison(row) {
-  const best = row?.engineBest && row.engineBest !== ' - ' ? row.engineBest : '';
-  if (!best || best === row.san || row.isBook) return null;
-  const played = reviewMoveFacts(row.previousFen, row.san);
-  const better = reviewMoveFacts(row.previousFen, best);
-  const pv = (row.principalVariationSan || []).slice(0, 6);
-  const continuation = pv[0] === best ? pv.slice(1, 5) : pv.slice(0, 4);
-  return {
-    bestMove: best,
-    playedMove: row.san,
-    playedPurpose: reviewDescribeMovePurpose(played),
-    bestPurpose: reviewDescribeMovePurpose(better),
-    bestFacts: better,
-    continuation,
-    evaluationCost: Math.max(0, Number(row.rawEngineLoss) || 0),
-    evaluationCostLabel: reviewEvaluationCostLabel(row.rawEngineLoss)
-  };
-}
-
 function reviewStructuredMoveAnalysis(row, selectedIndex) {
   const facts = reviewVerifiedTeachingFacts(row, selectedIndex);
   const move = facts?.moveFacts || {};
-  const pieceCode = reviewMovePieceCode(move);
   const exact = reviewOpeningNameForPly(row.ply);
   const before = facts?.beforePieces || {};
   const after = facts?.afterPieces || {};
@@ -7219,13 +7117,12 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
   const pieceName = movedPiece ? COACH_PIECE_NAMES[movedPiece.type] : 'piece';
   const sideName = row.mover === 'w' ? 'White' : 'Black';
   const opponent = row.mover === 'w' ? 'Black' : 'White';
-  const qualityKind = reviewMoveQualityKind(row);
-  const bestMoveComparison = reviewBestMoveComparison(row);
-  const promotionRace = reviewPromotionRaceFacts(row, facts);
 
   const immediateEffects=[], preparedMoves=[], developmentGoals=[], secondaryIdeas=[], gameConnections=[], forbidden=[];
   let primaryIdea='';
 
+  // chess.js calls every geometrically attacked square an "attack". For teaching,
+  // split that into empty squares CONTROLLED and occupied enemy pieces ATTACKED.
   const controlledSquares=[];
   const attackedPieces=[];
   for (const sq of (facts?.movedPieceAttacks || [])) {
@@ -7238,17 +7135,18 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
   }
 
   if (move.from && move.to) immediateEffects.push(`${sideName} moves the ${pieceName} from ${move.from} to ${move.to}.`);
-  if (move.captured) immediateEffects.push(`It captures the ${move.captured || COACH_PIECE_NAMES[reviewCapturedPieceCode(move)] || 'piece'} on ${move.to}.`);
+  if (move.captured) immediateEffects.push(`It captures the ${COACH_PIECE_NAMES[move.captured] || 'piece'} on ${move.to}.`);
   if (move.isCheck) immediateEffects.push(`It gives check.`);
   if (move.isCastle) {
-    primaryIdea=`Castle the king and bring the rook into play.`;
-    developmentGoals.push(`Improve king safety and rook activity.`);
+    primaryIdea=`Castle the king and connect the rook to the game.`;
+    developmentGoals.push(`King safety and rook activation.`);
   }
-  if (controlledSquares.length && pieceCode !== 'b') secondaryIdeas.push(`The ${pieceName} on ${move.to} controls ${controlledSquares.join(', ')}.`);
-  if (controlledSquares.length && pieceCode === 'b') secondaryIdeas.push(`The bishop on ${move.to} is active along its diagonal.`);
+  if (controlledSquares.length && move.piece !== 'b') secondaryIdeas.push(`The ${pieceName} on ${move.to} controls ${controlledSquares.join(', ')}.`);
+  if (controlledSquares.length && move.piece === 'b') secondaryIdeas.push(`The bishop on ${move.to} is active along its diagonal.`);
   if (attackedPieces.length) immediateEffects.push(`It attacks ${attackedPieces.map(x=>`${opponent}'s ${x.piece} on ${x.square}`).join(' and ')}.`);
 
-  if (pieceCode === 'p') {
+  // Pawn moves that free a bishop: this is often the PURPOSE, not a footnote.
+  if (move.piece === 'p') {
     const bishopPrep={
       b3:{bishop:'c1',dest:'b2'}, g3:{bishop:'f1',dest:'g2'},
       b6:{bishop:'c8',dest:'b7'}, g6:{bishop:'f8',dest:'g7'},
@@ -7257,6 +7155,9 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
     }[move.to];
     if (bishopPrep) {
       const bishop=after[bishopPrep.bishop];
+      // Verify the pawn really vacated the bishop's intended development square.
+      // Do NOT use Chess(row.fen).moves() here: after the pawn move it is the
+      // opponent's turn, so chess.js will never list the mover's bishop move.
       const beforeDest=before[bishopPrep.dest];
       const afterDest=after[bishopPrep.dest];
       const pawnVacatedDest = beforeDest?.type==='p' && beforeDest.color===row.mover && !afterDest;
@@ -7269,7 +7170,9 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
     }
   }
 
-  if (pieceCode==='b' && move.from && move.to) {
+  // A bishop leaving its home square is itself a development goal. Describe its
+  // real ray, but don't confuse an empty square with an attacked piece.
+  if (move.piece==='b' && move.from && move.to) {
     const homeBishops=['c1','f1','c8','f8'];
     if (homeBishops.includes(move.from)) {
       developmentGoals.push(`Develop the bishop from ${move.from} to ${move.to}.`);
@@ -7277,42 +7180,15 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
     }
   }
 
-  if (pieceCode==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
+  // Knight development from the back rank: teach development + real central influence.
+  if (move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
     developmentGoals.push(`Develop the knight from ${move.from} to ${move.to}.`);
     const centralKnightSquares=controlledSquares.filter(sq=>['d4','e4','d5','e5'].includes(sq));
     if (!primaryIdea) primaryIdea=`Develop the knight to ${move.to}${centralKnightSquares.length ? ` and influence the center` : ''}.`;
   }
 
-  // Treat promotion as a first-class endgame idea. A passed pawn near the
-  // back rank matters even if the stored PV is short or the game ended here.
-  const pvMoves=(row.principalVariationSan||[]).map(x=>String(x||''));
-  const actualNext=(facts?.actualNextMoves||[]).map(x=>String(x||''));
-  const futureMoves=[...pvMoves.slice(0,10),...actualNext.slice(0,10)];
-  const promotionMove=futureMoves.find(san=>/=([QRBN])/.test(san) || /^[a-h](?:x[a-h])?[18][QRBN][+#]?$/.test(san));
-  let promotionPlan=null;
-  if (promotionRace?.passed && promotionRace.distance <= 3) {
-    const moverEval = Number.isFinite(Number(row.whiteCp)) ? (row.mover === 'w' ? Number(row.whiteCp) : -Number(row.whiteCp)) : null;
-    const continuationProvesPromotion = Boolean(promotionMove);
-    const winningConversion = moverEval !== null && moverEval >= 250 && Boolean(row.wasTop || Math.max(0,Number(row.rawEngineLoss)||0) <= 20);
-    promotionPlan={...promotionRace,move:promotionMove||promotionRace.forcedLine||'',continuationProvesPromotion,winningConversion,moverEval};
-    primaryIdea=`Advance the passed pawn on ${promotionRace.pawnSquare} and make promotion the position's immediate strategic problem.`;
-    if (continuationProvesPromotion) {
-      gameConnections.push(`The supplied continuation reaches promotion, confirming that the pawn advance is the central idea.`);
-    } else if (winningConversion) {
-      gameConnections.push(`The move keeps a clearly winning position while putting the advanced passed pawn only ${promotionRace.distance} push${promotionRace.distance===1?'':'es'} from promotion.`);
-    } else {
-      gameConnections.push(`The pawn is only ${promotionRace.distance} push${promotionRace.distance===1?'':'es'} from the back rank, so promotion must be calculated before slower plans.`);
-    }
-    if (promotionMove) preparedMoves.push(promotionMove);
-  } else if(pieceCode==='p' && promotionMove) {
-    const promotionFile=String(promotionMove)[0];
-    if(promotionFile===String(move.to||'')[0]) {
-      promotionPlan={move:promotionMove,pawnSquare:move.to,distance:promotionRace?.distance ?? null,passed:promotionRace?.passed ?? false,forced:false};
-      primaryIdea=`Advance the pawn toward promotion; the verified continuation reaches ${promotionMove}.`;
-      preparedMoves.push(promotionMove);
-    }
-  }
-
+  // Actual continuation is context. If the very next move realizes a prepared
+  // move, that strongly confirms the teaching priority without claiming causation.
   const next=facts?.actualNextMoves || [];
   if(next.length) gameConnections.push(`The game continued ${next.join(' ')}.`);
   if(preparedMoves.length && next.some(san=>preparedMoves.includes(String(san).replace(/[+#?!]/g,'')))) {
@@ -7322,320 +7198,96 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
   if(exact?.name && exact.name!=='Unknown opening')
     gameConnections.push(`At this exact ply the line is ${exact.name}${exact.variation?`: ${exact.variation}`:''}.`);
 
+  // If no stronger purpose was verified, fall back to the most educational
+  // concrete fact, in priority order.
   if(!primaryIdea && attackedPieces.length) primaryIdea=`Create immediate pressure on ${attackedPieces.map(x=>x.square).join(', ')}.`;
   if(!primaryIdea && move.captured) primaryIdea=`Make the concrete capture on ${move.to}.`;
-  if(!primaryIdea && pieceCode==='b' && controlledSquares.length) primaryIdea=`Develop or reposition the bishop so it works along its diagonal from ${move.to}.`;
-  if(!primaryIdea && pieceCode==='p' && controlledSquares.length) primaryIdea=`Use the pawn on ${move.to} to gain space and control its capture squares.`;
-  if(!primaryIdea && pieceCode==='n' && controlledSquares.length) primaryIdea=`Improve the knight's placement from ${move.to}.`;
-  if(!primaryIdea && move.from && move.to) primaryIdea=`Reposition the ${pieceName} from ${move.from} to ${move.to}.`;
-  if(!primaryIdea) primaryIdea=`Play ${row.san} to change the position.`;
+  if(!primaryIdea && move.piece==='b' && controlledSquares.length) primaryIdea=`Improve the bishop's activity along its diagonal from ${move.to}.`;
+  if(!primaryIdea && controlledSquares.length) {
+    if(move.piece==='p') primaryIdea=`Use the pawn on ${move.to} to claim space and control nearby squares.`;
+    else if(move.piece==='n') primaryIdea=`Improve the knight's placement and influence useful squares from ${move.to}.`;
+    else primaryIdea=`Improve the ${pieceName}'s activity from ${move.to}.`;
+  }
+  if(!primaryIdea) primaryIdea=`Improve the piece placement with ${row.san}.`;
 
-  if(pieceCode==='p' && move.to) {
+  if(move.piece==='p' && move.to) {
     forbidden.push(`Do not say the pawn on ${move.to} attacks a piece unless an enemy piece actually occupies one of its capture squares.`);
     forbidden.push(`Empty pawn capture squares are controlled squares, not attacked pieces.`);
   }
   forbidden.push('Do not invent weak squares, loosened squares, holes, pins, threats, targets, or strategic relationships not present in the structured facts.');
   forbidden.push('Do not infer that one move caused a later move merely because it appears in the continuation.');
-  forbidden.push('Do not describe the best move as stronger for a reason that is not present in bestMoveComparison or the principal variation.');
 
   return {
-    move:reviewMoveNotation(row), classification:row.label, qualityKind,
+    move:reviewMoveNotation(row), classification:row.label,
     openingAtThisPly:exact?.name||'Unknown opening', variationAtThisPly:exact?.variation||'',
-    primaryIdea, secondaryIdeas, developmentGoals, preparedMoves, promotionPlan,
+    primaryIdea, secondaryIdeas, developmentGoals, preparedMoves,
     controlledSquares, attackedPieces,
     immediateEffects, verifiedConnections:gameConnections,
     verifiedNewlyOpenedLines:facts?.newlyOpenedLines||[],
     actualContinuation:next, principalVariation:row.principalVariationSan||[],
-    bestMoveComparison,
-    evaluation:{
-      positionAfter: reviewPositionDescription(row.whiteCp, row.mate),
-      centipawnLoss: Math.max(0, Number(row.rawEngineLoss) || 0),
-      costLabel: reviewEvaluationCostLabel(row.rawEngineLoss),
-      accuracy: Math.round((Number(row.accuracy) || 0) * 10) / 10,
-      wasTop: Boolean(row.wasTop),
-      isBook: Boolean(row.isBook)
-    },
     forbiddenClaims:forbidden, rawVerifiedFacts:facts
   };
-}
-
-function reviewStructureTakeaway(row, s) {
-  const move=s?.rawVerifiedFacts?.moveFacts || {};
-  const pieceCode=reviewMovePieceCode(move);
-  const prep=s?.preparedMoves?.[0] || '';
-  const central=(s?.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
-
-  if(s?.promotionPlan) {
-    const promo=s.promotionPlan;
-    if (promo.continuationProvesPromotion) {
-      return `When a passed pawn is this advanced, calculate the promotion route first. ${row.san} works because the concrete continuation reaches promotion before Black can solve the problem.`;
-    }
-    return `An advanced passed pawn changes the priority of the position. After ${row.san}, calculate a7 and a8=Q before looking for slower improvements.`;
-  }
-  if(pieceCode==='p' && prep) {
-    if (/^(Bb2|Bg2|Bb7|Bg7)$/.test(prep)) {
-      return `${row.san} is a setup move, not the finished idea: its value comes from ${prep}. In the opening, connect pawn moves to the piece development they enable.`;
-    }
-    return `Treat ${row.san} as preparation for ${prep}. The useful lesson is the follow-up the pawn move creates, not the pawn move by itself.`;
-  }
-  if(pieceCode==='b' && ['c1','f1','c8','f8'].includes(move.from)) {
-    if (['b2','g2','b7','g7'].includes(move.to)) {
-      return `${row.san} is the payoff for the earlier pawn move that cleared this square. In flank openings, a pawn advance is most useful when it gives a piece an active route.`;
-    }
-    return `Good development is purposeful: move a bishop off its starting square to a square where it has a real job, not simply to say the piece is developed.`;
-  }
-  if(pieceCode==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
-    return central.length
-      ? `Strong development does two jobs at once: ${row.san} brings the knight into play while influencing ${central.join(' and ')}.`
-      : `Prefer development that improves a new piece without forcing an unnecessary pawn commitment. ${row.san} does that here.`;
-  }
-  if(move.isCastle) return `Castling is strongest when it solves two problems at once: king safety and rook activity.`;
-
-  const cmp=s?.bestMoveComparison;
-  if(cmp && cmp.bestMove && !row.wasTop) {
-    if(cmp.bestPurpose) return `Compare jobs, not labels: ${cmp.bestMove} was stronger because it ${cmp.bestPurpose}. Ask what the stronger candidate accomplishes that your move does not.`;
-    return `When two moves look playable, compare what each one actually solves. Here ${cmp.bestMove} handled the position more completely.`;
-  }
-  if (s?.qualityKind === 'best' || s?.qualityKind === 'excellent' || s?.qualityKind === 'good') {
-    // Do not manufacture a lesson just because the move received a positive label.
-    // If no reusable motif was verified, omit Key Idea instead of showing filler.
-    return '';
-  }
-  return '';
-}
-
-function reviewBookKeyIdea(row, s, authoredTakeaway='') {
-  const move=s?.rawVerifiedFacts?.moveFacts || {};
-  const pieceCode=reviewMovePieceCode(move);
-  const prep=s?.preparedMoves?.[0] || '';
-  const central=(s?.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
-
-  if(pieceCode==='p' && /^(Bb2|Bg2|Bb7|Bg7)$/.test(prep)) {
-    return `${row.san} is preparation, not the finished product. The payoff is ${prep}: the pawn move earns its keep by creating a useful development square.`;
-  }
-  if(pieceCode==='b' && ['b2','g2','b7','g7'].includes(move.to)) {
-    return `${row.san} is the payoff of the earlier pawn move. In a flank setup, make sure the space-gaining pawn move actually improves the piece behind it.`;
-  }
-  if(pieceCode==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
-    const prefix=(reviewData?.rows||[]).slice(0,row.ply).map(item=>reviewCleanSan(item.san));
-    if(row.mover==='b' && reviewCleanSan(row.san)==='Nf6' && prefix[0]==='b4') {
-      return `Against 1.b4, ...Nf6 develops without committing a central pawn and directly controls e4. Black stays flexible while making it harder for White to build the center for free.`;
-    }
-    return central.length
-      ? `${row.san} is efficient development: the knight leaves the back rank, influences ${central.join(' and ')}, and keeps the central pawns flexible.`
-      : `${row.san} develops a new piece while keeping the pawn structure flexible, which is often more valuable than committing the center too early.`;
-  }
-  const structural=reviewStructureTakeaway(row,s);
-  if(structural) return structural;
-  return String(authoredTakeaway||'').trim();
-}
-
-
-function reviewNormalizeTeachingText(value) {
-  return String(value || '')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([,.;:!?])/g, '$1')
-    .trim();
-}
-
-function reviewSentenceKey(value) {
-  return reviewNormalizeTeachingText(value)
-    .toLowerCase()
-    .replace(/\b(?:the|a|an|this|that|move|position|here|now|very|really)\b/g, ' ')
-    .replace(/[^a-z0-9=+#-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function reviewSplitSentences(value) {
-  const text = reviewNormalizeTeachingText(value);
-  if (!text) return [];
-  return (text.match(/[^.!?]+[.!?]?/g) || [text]).map(reviewNormalizeTeachingText).filter(Boolean);
-}
-
-function reviewSentenceAddsMeaning(sentence, chosen) {
-  const key = reviewSentenceKey(sentence);
-  if (!key || key.length < 8) return false;
-  for (const existing of chosen) {
-    const other = reviewSentenceKey(existing);
-    if (!other) continue;
-    if (other === key || other.includes(key) || key.includes(other)) return false;
-    const a = new Set(key.split(' ').filter(x => x.length > 2));
-    const b = new Set(other.split(' ').filter(x => x.length > 2));
-    if (a.size && b.size) {
-      let overlap = 0;
-      a.forEach(token => { if (b.has(token)) overlap++; });
-      if (overlap / Math.min(a.size, b.size) >= 0.72) return false;
-    }
-  }
-  return true;
-}
-
-function reviewComposeCoachSummary(grounded, safeLocal, row, structure) {
-  const candidates = [
-    grounded?.summary,
-    grounded?.whatChanged,
-    grounded?.playedMoveIdea
-  ].filter(Boolean);
-  const chosen = [];
-  for (const candidate of candidates) {
-    for (const sentence of reviewSplitSentences(candidate)) {
-      if (reviewSentenceAddsMeaning(sentence, chosen)) chosen.push(sentence);
-      if (chosen.length >= 3) break;
-    }
-    if (chosen.length >= 3) break;
-  }
-  let result = chosen.join(' ').trim();
-  if (!result) result = reviewNormalizeTeachingText(safeLocal?.summary);
-
-  // The promotion explanation is a regression test: never let verbose generated
-  // prose bury the actual conversion plan under repeated wording.
-  if (structure?.promotionPlan) {
-    const promo = structure.promotionPlan;
-    const route = promo.forcedLine || promo.move || '';
-    const first = `${row.san} makes the passed pawn the immediate problem: from ${promo.pawnSquare} it is only ${promo.distance} push${promo.distance===1?'':'es'} from promotion.`;
-    const second = route
-      ? `The concrete route is ${route}; Black has to spend time stopping the pawn instead of creating counterplay.`
-      : `${row.mover==='w'?'White':'Black'} should calculate the push to the back rank before considering slower improvements.`;
-    result = `${first} ${second}`;
-  }
-
-  // Two useful sentences beat four versions of the same idea.
-  const compact = reviewSplitSentences(result).slice(0, 3).join(' ');
-  return compact.length > 520 ? compact.slice(0, 517).replace(/\s+\S*$/, '') + '…' : compact;
-}
-
-function reviewChooseKeyIdea(row, structure, grounded, localTakeaway) {
-  // Key Idea is deliberately a transferable lesson, not another description of
-  // the move. For highly concrete themes we trust the deterministic lesson first.
-  if (structure?.promotionPlan) return reviewStructureTakeaway(row, structure);
-  if (row?.isBook) return reviewBookKeyIdea(row, structure, reviewAuthoredOpeningTakeaway(row));
-
-  const local = reviewNormalizeTeachingText(localTakeaway || reviewStructureTakeaway(row, structure));
-  const plans = Array.isArray(grounded?.practicalPlan) ? grounded.practicalPlan.filter(Boolean) : [];
-  const generated = reviewNormalizeTeachingText(
-    grounded?.keyIdea || grounded?.keyLesson || grounded?.lesson || plans[0] || ''
-  );
-  const generic = /(?:remember what|focus on the concrete problem|strong label|received a .* label|be precise|play precisely|good move|very precise|keeps the position)/i;
-  const tooSpecific = new RegExp(`^(?:play|push|prepare|move|take|capture)\\s+${String(row?.san||'').replace(/[.*+?^${}()|[\\]\\]/g,'\\$&')}`, 'i');
-  if (generated && !generic.test(generated) && !tooSpecific.test(generated) && reviewSentenceKey(generated) !== reviewSentenceKey(local)) {
-    return generated;
-  }
-  return local;
-}
-
-function reviewAutomaticAnnotations(row, structure, grounded=null) {
-  const arrows=[];
-  const highlights=[];
-  const pushArrow=(from,to,color='green',label='')=>{
-    if(validSquare(from)&&validSquare(to)&&!arrows.some(a=>a.from===from&&a.to===to)) arrows.push({from,to,color,label});
-  };
-  const pushHighlight=(square,color='yellow',label='')=>{
-    if(validSquare(square)&&!highlights.some(h=>h.square===square)) highlights.push({square,color,label});
-  };
-  const move=structure?.rawVerifiedFacts?.moveFacts || {};
-  if(move.from && move.to) pushArrow(move.from,move.to,'green','Played move');
-
-  const promo=structure?.promotionPlan;
-  if(promo?.pawnSquare && promo.distance > 0) {
-    const file=promo.pawnSquare[0];
-    const promotionSquare=`${file}${row.mover==='w'?8:1}`;
-    // A straight pawn race is one idea, so show it as one clean route rather
-    // than chopping a6-a8 (or equivalent) into several short arrows.
-    pushArrow(promo.pawnSquare,promotionSquare,'blue','Promotion route');
-    pushHighlight(promotionSquare,'purple','Promotion square');
-  } else if(structure?.preparedMoves?.length) {
-    // For simple opening prep such as b4 -> Bb2 or ...g6 -> ...Bg7, show the
-    // next move only when we can derive it from the actual current position.
-    try {
-      const game=new Chess(row.fen);
-      const san=structure.preparedMoves[0];
-      const legal=(game.moves({verbose:true})||[]).find(m=>reviewCleanSan(m.san)===reviewCleanSan(san));
-      if(legal) pushArrow(legal.from,legal.to,'blue','Prepared follow-up');
-    } catch(_) {}
-  } else if(structure?.bestMoveComparison && !row.wasTop && !row.isBook) {
-    try {
-      const game=new Chess(row.previousFen);
-      const legal=(game.moves({verbose:true})||[]).find(m=>reviewCleanSan(m.san)===reviewCleanSan(structure.bestMoveComparison.bestMove));
-      if(legal) pushArrow(legal.from,legal.to,'blue','Stronger alternative');
-    } catch(_) {}
-  }
-
-  // If the backend supplied a directly relevant tactical annotation, add at most
-  // one of each after the deterministic teaching arrows.
-  if (grounded) {
-    const ga=Array.isArray(grounded.arrows)?grounded.arrows:[];
-    const gh=Array.isArray(grounded.highlights)?grounded.highlights:[];
-    for(const a of ga.slice(0,1)) pushArrow(a.from,a.to,a.color||'yellow',a.label||'');
-    for(const h of gh.slice(0,1)) pushHighlight(h.square,h.color||'yellow',h.label||'');
-  }
-  return {arrows:arrows.slice(0,3),highlights:highlights.slice(0,3)};
 }
 
 function reviewDeterministicTeachingFromStructure(row, s) {
   const side = row.mover === 'w' ? 'White' : 'Black';
   const move = s?.rawVerifiedFacts?.moveFacts || {};
-  const pieceCode = reviewMovePieceCode(move);
   const piece = s?.rawVerifiedFacts?.afterPieces?.[move.to];
   const pieceName = piece ? (COACH_PIECE_NAMES[piece.type] || 'piece') : 'piece';
   const sentences=[];
-  const prep=s.preparedMoves?.[0] || '';
-  const central=(s.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
 
-  if(s.promotionPlan) {
-    const promo=s.promotionPlan;
-    if (promo.forced) {
-      sentences.push(`${row.san} is about promotion, not generic precision. The passed pawn reaches ${promo.pawnSquare} and the concrete continuation shows that it can reach the back rank.`);
-      if (promo.forcedLine) sentences.push(`The concrete plan is ${promo.forcedLine}. That promotion route is the reason the move matters.`);
-    } else {
-      sentences.push(`${row.san} makes the passed pawn the main feature of the position. On ${promo.pawnSquare} it is only ${promo.distance} push${promo.distance===1?'':'es'} from promotion.`);
-      sentences.push(`White's plan is concrete: keep pushing toward the back rank. Black has to organize the position around stopping that promotion threat.`);
-    }
-  } else if(pieceCode==='p' && prep && /^(Bb2|Bg2|Bb7|Bg7)$/.test(prep)) {
+  // Compose the verified fields into normal annotated-PGN prose. Internal labels
+  // such as "primary idea" or raw fact fragments should never reach the reader.
+  const prep=s.preparedMoves?.[0] || '';
+  const dev=s.developmentGoals?.[0] || '';
+  const central=(s.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
+  const otherControlled=(s.controlledSquares||[]).filter(x=>!central.includes(x));
+
+  // Polish-style flank pawn moves: development is the headline, space is useful context.
+  if(move.piece==='p' && prep && /^(Bb2|Bg2|Bb7|Bg7)$/.test(prep)) {
     const wing=['a','b','c'].includes(String(move.to||'')[0]) ? 'queenside' : 'kingside';
     const bishopFrom=(s.developmentGoals?.[0]?.match(/from ([a-h][1-8])/)||[])[1];
     const bishopTo=(s.developmentGoals?.[0]?.match(/to ([a-h][1-8])/)||[])[1];
     sentences.push(`${side} advances the pawn to ${move.to}, gaining ${wing} space while clearing a development square for the bishop.`);
     if(bishopFrom && bishopTo) sentences.push(`The main idea is ${prep}: the bishop can develop from ${bishopFrom} to ${bishopTo} and become active from there.`);
     else sentences.push(`The main idea is to follow with ${prep} and bring the bishop into the game.`);
-  } else if(pieceCode==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
+  } else if(move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)) {
     let first=`${side} develops the knight from ${move.from} to ${move.to}, bringing a minor piece into the game`;
     if(central.length) first+=` and controlling ${central.join(' and ')}`;
     first+='.';
     sentences.push(first);
-  } else if(pieceCode==='b' && ['c1','f1','c8','f8'].includes(move.from)) {
+    sentences.push(`This is useful early development because ${side} improves a piece without committing another pawn.`);
+  } else if(move.piece==='b' && ['c1','f1','c8','f8'].includes(move.from)) {
     sentences.push(`${side} develops the bishop from ${move.from} to ${move.to}, bringing it off its starting square and into the game.`);
     if(s.attackedPieces?.length) sentences.push(`From ${move.to}, it attacks ${s.attackedPieces.map(x=>`${x.piece} on ${x.square}`).join(' and ')}.`);
-    else if(s.controlledSquares?.length) sentences.push(`From ${move.to}, the bishop becomes active on ${['b2','g2','b7','g7'].includes(move.to) ? 'the long diagonal' : 'its new diagonal'}.`);
+    else if(s.controlledSquares?.length) {
+      const fianchetto=['b2','g2','b7','g7'].includes(move.to);
+      sentences.push(`From ${move.to}, the bishop becomes active on ${fianchetto ? 'the long diagonal' : 'its new diagonal'}.`);
+    }
   } else if(move.isCastle) {
     sentences.push(`${side} castles, improving king safety while bringing the rook closer to the center of the game.`);
   } else {
     if(s.primaryIdea) sentences.push(String(s.primaryIdea).replace(/^Primary idea:\s*/i,'').replace(/\.$/, '')+'.');
     if(s.attackedPieces?.length) sentences.push(`The ${pieceName} on ${move.to} attacks ${s.attackedPieces.map(x=>`${x.piece} on ${x.square}`).join(' and ')}.`);
-    if(central.length) sentences.push(`It also influences the center by controlling ${central.join(' and ')}.`);
+    const usefulCentral=(s.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
+    if(usefulCentral.length) sentences.push(`It also influences the center by controlling ${usefulCentral.join(' and ')}.`);
   }
 
   const realized=s.verifiedConnections?.some(x=>/realized immediately/i.test(x));
   if(realized && prep) sentences.push(`In the game, ${prep} followed immediately, carrying out that development plan.`);
 
-  const summary=sentences.filter(Boolean).slice(0,3).join(' ').trim() || `${row.san} changes the position, but BOZO did not verify enough detail to make a stronger strategic claim.`;
-  const cmp=s.bestMoveComparison;
-  let comparison='';
-  let comparisonLabel='';
-  if(cmp && !row.wasTop && !row.isBook) {
-    comparison=reviewConcreteComparison(row,cmp.bestMove,cmp.continuation||[]) || '';
-    comparisonLabel=`Why ${cmp.bestMove} was stronger`;
-  }
+  const summary=sentences.filter(Boolean).slice(0,4).join(' ').trim() || `${row.san} is best understood from the concrete change it makes to the position; BOZO did not verify enough detail to add a more specific strategic claim.`;
 
-  return {
-    summary,
-    comparison,
-    comparisonLabel,
-    takeaway:reviewStructureTakeaway(row,s),
-    source:'structured-local',
-    structure:s
-  };
+  let takeaway='';
+  if(move.piece==='p' && prep) takeaway=`The main point of ${row.san} is to make room for ${prep} and develop the bishop; the space gained by the pawn is a bonus.`;
+  else if(move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)) takeaway=`Develop the knight to ${move.to}${central.length?` and use it to control ${central.join(' and ')}`:''}.`;
+  else if(move.piece==='b' && ['c1','f1','c8','f8'].includes(move.from)) takeaway=`${row.san} is a development move: bring the bishop into the game and make use of its new diagonal.`;
+  else if(move.isCastle) takeaway=`Castle to improve king safety and activate the rook.`;
+  else takeaway=String(s.primaryIdea||`Remember the main purpose of ${row.san}, not just the destination square.`).replace(/^Primary idea:\s*/i,'').replace(/\.$/,'')+'.';
+
+  return {summary,takeaway,source:'structured-local',structure:s};
 }
+
 function reviewStructuredTeachingIsSafe(explanation,s) {
   if(!explanation) return false;
   const visible=JSON.stringify(explanation);
@@ -7646,222 +7298,103 @@ function reviewStructuredTeachingIsSafe(explanation,s) {
       && !reviewTeachingHasUnsupportedRelationship(explanation,s.rawVerifiedFacts);
 }
 
+async function generateReviewTeachingNote(row, selectedIndex, token) {
+  if (!row || row.generatedTeachingNote || token !== reviewTeachingGenerationToken) return;
 
-function reviewTeachingSpecificityScore(text, row, structure) {
-  const value=String(text||'').toLowerCase();
-  if(!value) return -100;
-  let score=0;
-  const generic=[/very precise/,/keeps the position/,/without giving away anything important/,/strong move/,/good move/,/remember what/,/focus on the concrete problem/,/received a .* label/,/follow the plan/];
-  generic.forEach(pattern=>{ if(pattern.test(value)) score-=4; });
-  const move=structure?.rawVerifiedFacts?.moveFacts || {};
-  [row?.san,move?.from,move?.to,structure?.bestMoveComparison?.bestMove].filter(Boolean).forEach(token=>{
-    if(value.includes(String(token).toLowerCase().replace(/[+#?!]/g,''))) score+=2;
-  });
-  if(structure?.promotionPlan && /promot|back rank|queen|passed pawn/.test(value)) score+=8;
-  if(structure?.bestMoveComparison && new RegExp(String(structure.bestMoveComparison.bestMove||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i').test(value)) score+=3;
-  if(/because|so that|which means|therefore|instead/.test(value)) score+=1;
-  return score;
-}
-
-function reviewAIRespectsMainIdea(explanation, row, structure) {
-  const text=reviewTeachingText(explanation).toLowerCase();
-  if(!text) return false;
-  if(structure?.promotionPlan && !/promot|back rank|queen|passed pawn/.test(text)) return false;
-  const cmp=structure?.bestMoveComparison;
-  if(cmp && !row.wasTop && !row.isBook) {
-    const best=String(cmp.bestMove||'').replace(/[+#?!]/g,'').toLowerCase();
-    if(best && !text.includes(best) && !String(explanation?.comparison||'').toLowerCase().includes(best)) return false;
-  }
-  return true;
-}
-
-function reviewAutomaticCoachPayload(row, selectedIndex, structure) {
-  const exactOpeningContext = reviewOpeningNameForPly(row.ply);
-  const opening = exactOpeningContext.opening || reviewData.openingMatch?.opening;
-  const contextBeforeMoves = reviewData.rows.slice(Math.max(0, selectedIndex - 10), selectedIndex).map(item => item.san);
-  const actualContinuation = reviewData.rows.slice(selectedIndex + 1, selectedIndex + 9).map(item => item.san);
-  const contextWindow = reviewMoveWindow(reviewData.rows, selectedIndex, 6, 6);
-  const gamePhase = row.phase || reviewGamePhase(row.ply, reviewData.rows.length, row.fen, reviewData.phasePlan);
-  const promo=structure?.promotionPlan;
-  const cmp=structure?.bestMoveComparison;
-  const localEvidence=[
-    `Verified local teaching priority: ${structure?.primaryIdea || 'explain the move concretely'}.`,
-    promo ? `Promotion priority: pawn ${promo.pawnSquare}, ${promo.distance} push${promo.distance===1?'':'es'} from promotion${promo.continuationProvesPromotion ? '; supplied continuation reaches promotion' : ''}.` : '',
-    structure?.immediateEffects?.length ? `Immediate effects: ${structure.immediateEffects.join(' ')}` : '',
-    structure?.preparedMoves?.length ? `Prepared/follow-up moves: ${structure.preparedMoves.join(', ')}.` : '',
-    cmp ? `Comparison target: played ${cmp.playedMove}; stronger ${cmp.bestMove}${cmp.bestPurpose ? `, which ${cmp.bestPurpose}` : ''}.` : ''
-  ].filter(Boolean).join(' ').slice(0,950);
-  const conciseQuestion = promo
-    ? `Explain ${reviewMoveNotation(row)} with promotion as the main idea. Explain the pawn's route and why that matters now. Give one transferable passed-pawn lesson; avoid generic praise.`
-    : cmp
-      ? `Explain ${reviewMoveNotation(row)} and compare it with ${cmp.bestMove}. Say what the played move tried to do, what it missed, and what extra job ${cmp.bestMove} did. Give one concrete lesson.`
-      : `Explain ${reviewMoveNotation(row)} by naming the concrete job it performs in this position. Give one transferable lesson. Avoid generic praise such as "very precise" or "good move".`;
-
-  return {
-    mode:'game_review',
-    gameStatus:'completed',
-    fen:row.fen,
-    previousFen:row.previousFen,
-    playedMove:row.san,
-    moveNumber:Math.ceil(row.ply/2),
-    opening:opening?.name || exactOpeningContext.name || 'Unknown opening',
-    variation:opening?.variation || exactOpeningContext.variation || 'Imported game',
-    gamePhase,
-    phaseSummary:reviewPhaseSummary(gamePhase, reviewData.rows.filter(item=>item.phase===gamePhase)),
-    gameStory:reviewData.story || '',
-    importantEvents:(reviewData.events||[]).map(event=>({
-      ply:event.ply,
-      moveNumber:Math.ceil(event.ply/2),
-      phase:reviewGamePhase(event.ply, reviewData.rows.length, reviewData.rows[event.ply-1]?.fen || '', reviewData.phasePlan),
-      type:event.type,
-      title:event.title,
-      detail:event.detail
-    })),
-    selectedMoveImportance: promo?.continuationProvesPromotion ? 'critical' : row.rawEngineLoss >= 180 ? 'turning_point' : row.rawEngineLoss >= 100 ? 'critical' : row.isBook ? 'book' : 'normal',
-    selectedSide:reviewData.playerSide === 'black' ? 'Black' : 'White',
-    selectedMoveNumber:Math.ceil(row.ply/2),
-    contextWindow,
-    contextBeforeText:reviewHistoryToMoveText(contextBeforeMoves),
-    actualContinuation,
-    planContinuityPrompt:localEvidence,
-    question:conciseQuestion,
-    moveHistory:reviewData.rows.slice(0,row.ply).map(item=>item.san),
-    evaluationBefore:selectedIndex>0 ? reviewData.rows[selectedIndex-1].whiteCp : 0,
-    evaluationAfter:row.whiteCp,
-    evaluationUnit:'centipawns from White perspective',
-    bestMove:row.engineBest,
-    bestMoveFen:row.bestMoveFen,
-    principalVariation:row.principalVariation,
-    principalVariationSan:row.principalVariationSan,
-    playedPositionDescription:reviewPositionDescription(row.whiteCp,row.mate),
-    classification:row.label,
-    centipawnLoss:row.rawEngineLoss,
-    moveAccuracy:Math.round(row.accuracy*10)/10,
-    openingAccuracy:reviewPhaseAccuracyFor(reviewData.rows.filter(item=>item.phase==='opening')),
-    middlegameAccuracy:reviewPhaseAccuracyFor(reviewData.rows.filter(item=>item.phase==='middlegame')),
-    endgameAccuracy:reviewPhaseAccuracyFor(reviewData.rows.filter(item=>item.phase==='endgame')),
-    phaseAccuracy:reviewPhaseAccuracyFor(reviewData.rows.filter(item=>item.phase===gamePhase)),
-    whitePhaseAccuracy:reviewPhaseAccuracyFor(reviewData.rows.filter(item=>item.phase===gamePhase && item.mover==='w')),
-    blackPhaseAccuracy:reviewPhaseAccuracyFor(reviewData.rows.filter(item=>item.phase===gamePhase && item.mover==='b')),
-    whitePhaseErrors:reviewErrorCounts(reviewData.rows.filter(item=>item.phase===gamePhase && item.mover==='w')),
-    blackPhaseErrors:reviewErrorCounts(reviewData.rows.filter(item=>item.phase===gamePhase && item.mover==='b')),
-    overallAccuracy:reviewAccuracyFor(reviewData.rows),
-    whiteOverallAccuracy:reviewPhaseAccuracyFor(reviewData.rows.filter(item=>item.mover==='w')),
-    blackOverallAccuracy:reviewPhaseAccuracyFor(reviewData.rows.filter(item=>item.mover==='b')),
-    strictGrounding:true
-  };
-}
-
-function seedReviewTeachingNote(row, selectedIndex, token) {
-  if(!row || token !== reviewTeachingGenerationToken) return null;
-  if(row.reviewTeachingStructure && row.generatedTeachingNote) return row.reviewTeachingStructure;
-  const structure=reviewStructuredMoveAnalysis(row,selectedIndex);
-  row.reviewTeachingStructure=structure;
-  const safeLocal=reviewDeterministicTeachingFromStructure(row,structure);
   const authored=reviewAuthoredOpeningExplanation(row);
   if(authored){
     row.generatedTeachingNote={
       summary:authored,
-      comparison:'',
-      comparisonLabel:'',
-      takeaway:reviewBookKeyIdea(row,structure,reviewAuthoredOpeningTakeaway(row)),
-      source:'authored-opening',
-      structure,
-      annotations:reviewAutomaticAnnotations(row,structure,null)
+      takeaway:reviewAuthoredOpeningTakeaway(row) || `Remember the concrete purpose of ${row.san} and how it fits the opening plan.`,
+      source:'authored-opening'
     };
-    row.reviewTeachingAIState='done';
-  } else {
-    row.generatedTeachingNote={...safeLocal,annotations:reviewAutomaticAnnotations(row,structure,null)};
-    row.reviewTeachingAIState='idle';
-  }
-  return structure;
-}
-
-async function generateReviewTeachingNote(row, selectedIndex, token) {
-  if (!row || token !== reviewTeachingGenerationToken) return;
-
-  const structure=seedReviewTeachingNote(row,selectedIndex,token);
-  if(!structure) return;
-  if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
-  if(row.generatedTeachingNote?.source==='authored-opening' || !state.session?.user) return;
-  if(row.reviewTeachingAIState==='loading' || row.reviewTeachingAIState==='done') return;
-
-  row.reviewTeachingAIState='loading';
-  const safeLocal=row.generatedTeachingNote;
-  try{
-    const payload=reviewAutomaticCoachPayload(row,selectedIndex,structure);
-    const {data,error}=await sb.functions.invoke('explain-move',{body:payload});
-    if(error||data?.error||!data?.explanation||token!==reviewTeachingGenerationToken){
-      row.reviewTeachingAIState='idle';
-      return;
-    }
-    const grounded=sanitizeCoachExplanation(data.explanation,structure.rawVerifiedFacts);
-    if(!reviewStructuredTeachingIsSafe(grounded,structure) || !reviewAIRespectsMainIdea(grounded,row,structure)) {
-      row.reviewTeachingAIState='done';
-      return;
-    }
-
-    const summary=reviewComposeCoachSummary(grounded,safeLocal,row,structure);
-    const takeaway=reviewChooseKeyIdea(row,structure,grounded,safeLocal.takeaway);
-
-    const aiComparison=String(grounded?.comparison||grounded?.betterMoveIdea||grounded?.betterMoveExplanation||grounded?.whyBestMove||'').trim();
-    const comparison=(!row.wasTop && !row.isBook && structure.bestMoveComparison)
-      ? (aiComparison || safeLocal.comparison)
-      : '';
-    const comparisonLabel=comparison
-      ? `Why ${structure.bestMoveComparison?.bestMove || row.engineBest} was stronger`
-      : '';
-
-    const aiScore=reviewTeachingSpecificityScore(`${summary} ${takeaway} ${comparison}`,row,structure);
-    const localScore=reviewTeachingSpecificityScore(`${safeLocal.summary} ${safeLocal.takeaway} ${safeLocal.comparison}`,row,structure);
-    if(summary && aiScore >= localScore){
-      row.generatedTeachingNote={summary,comparison,comparisonLabel,takeaway,source:'game-review-writer',structure,full:grounded,annotations:reviewAutomaticAnnotations(row,structure,grounded)};
-    }
-    row.reviewTeachingAIState='done';
     if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
-  }catch(_){
-    row.reviewTeachingAIState='idle';
+    return;
   }
+
+  // Stage 1: deterministic chess analysis first.
+  const structure=reviewStructuredMoveAnalysis(row,selectedIndex);
+  const safeLocal=reviewDeterministicTeachingFromStructure(row,structure);
+  row.generatedTeachingNote=safeLocal;
+  if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
+  if(!state.session?.user) return;
+
+  try{
+    // Stage 2: AI is only a prose writer over the verified structure.
+    const payload={
+      mode:'game_review_structured_writer',
+      gameStatus:'completed', fen:row.fen, previousFen:row.previousFen,
+      playedMove:row.san, moveNumber:Math.ceil(row.ply/2), classification:row.label,
+      structuredAnalysis:{
+        move:structure.move, openingAtThisPly:structure.openingAtThisPly,
+        variationAtThisPly:structure.variationAtThisPly,
+        primaryIdea:structure.primaryIdea,
+        secondaryIdeas:structure.secondaryIdeas,
+        developmentGoals:structure.developmentGoals,
+        preparedMoves:structure.preparedMoves,
+        controlledSquares:structure.controlledSquares,
+        attackedPieces:structure.attackedPieces,
+        immediateEffects:structure.immediateEffects,
+        verifiedConnections:structure.verifiedConnections,
+        verifiedNewlyOpenedLines:structure.verifiedNewlyOpenedLines,
+        actualContinuation:structure.actualContinuation,
+        principalVariation:structure.principalVariation,
+        forbiddenClaims:structure.forbiddenClaims
+      },
+      question:[
+        `You are the teaching writer, not the chess analyst. structuredAnalysis is authoritative.`,
+        `Write a move-specific coaching note for ${structure.move} in the style of a strong annotated opening course.`,
+        `Lead with primaryIdea. The main purpose must never be buried under secondary geometry.`,
+        `Then naturally connect concrete effects, development, pressure, preparation, or continuation when those fields support them.`,
+        `Model the explanatory rhythm of high-quality annotated PGNs: say what the move does, why that matters here, and what idea it sets up or answers.`,
+        `When a move follows a normal opening principle, name the concrete principle only when supported (development, center, king safety). When a move is unusual, explain the concrete reason only if supplied by the facts.`,
+        `Distinguish chess terminology carefully: an empty square is controlled; an enemy piece on a reachable square is attacked. Never call an empty square an attacked piece.`,
+        `For bishops, do not enumerate every empty square on a diagonal. Describe the bishop as active on the long diagonal (for b2, g2, b7, or g7) or on its diagonal, and only name a square when it contains a real target or is strategically necessary.`,
+        `Do not repeat the same geometric fact in multiple sentences. Prefer one natural chess concept over a comma-separated square list.`,
+        `Use actualContinuation to connect moves when useful, but do not pretend the later move was forced or caused unless the structure explicitly says so.`,
+        `Use only claims explicitly supported by structuredAnalysis. Do not add chess facts from intuition, memory, or generic opening lore.`,
+        `Do not invent support, attacks, weaknesses, diagonals, threats, plans, or causal relationships.`,
+        `Avoid robotic wording such as "the engine preferred", "concrete influence", "verified line", or "the moved piece". Name the pawn, knight, bishop, rook, queen, king, square, or plan directly.`,
+        `Never dump a piece's full move map as a list of squares. Mention central squares only when strategically relevant; for bishops describe the diagonal, and for knights summarize central influence unless a specific occupied target matters.`,
+        `Return 2-4 natural teaching sentences and one practical takeaway. The takeaway should restate primaryIdea in memorable chess language, not a secondary detail.`,
+        `Never mention structuredAnalysis, validation, metadata, prompts, databases, or implementation.`
+      ].join(' '), strictGrounding:true
+    };
+
+    const {data,error}=await sb.functions.invoke('explain-move',{body:payload});
+    if(error||data?.error||!data?.explanation||token!==reviewTeachingGenerationToken) return;
+    const grounded=sanitizeCoachExplanation(data.explanation,structure.rawVerifiedFacts);
+    if(!reviewStructuredTeachingIsSafe(grounded,structure)) return;
+
+    const purpose=Array.isArray(grounded?.purpose)?grounded.purpose.filter(Boolean).join(' '):'';
+    const chunks=[grounded?.summary,purpose,grounded?.whyItWorks,grounded?.connectionToOpening].map(v=>String(v||'').trim()).filter(Boolean);
+    const unique=[];
+    for(const chunk of chunks){
+      const norm=chunk.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+      if(!unique.some(x=>{const n=x.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();return n===norm||n.includes(norm)||norm.includes(n)})) unique.push(chunk);
+    }
+    const summary=unique.slice(0,3).join(' ').trim();
+    const plans=Array.isArray(grounded?.practicalPlan)?grounded.practicalPlan.filter(Boolean):[];
+    const candidateTakeaway=String(plans[0]||grounded?.keyLesson||grounded?.lesson||'').trim();
+    const takeaway=(candidateTakeaway && candidateTakeaway.toLowerCase().includes(String(structure.primaryIdea||'').split(/[,:]/)[0].toLowerCase())) ? candidateTakeaway : safeLocal.takeaway;
+    if(summary){
+      row.generatedTeachingNote={summary,takeaway,source:'structured-writer',structure,full:grounded};
+      if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
+    }
+  }catch(_){}
 }
 
 async function primeReviewTeachingNotes() {
-  if (!reviewData?.rows?.length) return;
+  if (!reviewData?.rows?.length || !state.session?.user) return;
   const token = ++reviewTeachingGenerationToken;
-
-  // First pass is synchronous and deterministic: every move, including the end
-  // of a long game, gets a useful explanation immediately instead of waiting
-  // behind dozens of network requests.
-  reviewData.rows.forEach((row,index)=>seedReviewTeachingNote(row,index,token));
-  if(reviewStepIndex>0) renderReviewAutoExplanation(reviewData.rows[reviewStepIndex-1]);
-  if(!state.session?.user) return;
-
-  // Upgrade the most instructive moves first. This prevents a late-game turning
-  // point from sitting behind 40 routine moves in the AI queue.
-  const order=reviewData.rows.map((row,index)=>({row,index,score:
-    (index===reviewStepIndex-1 ? 100000 : 0) +
-    (row.terminal?.type==='checkmate' ? 9000 : 0) +
-    (Math.max(0,Number(row.rawEngineLoss)||0) * 12) +
-    (row.cls==='blunder' ? 5000 : row.cls==='mistake' ? 3500 : row.cls==='inaccuracy' ? 1800 : 0) +
-    (row.reviewTeachingStructure?.promotionPlan ? 4200 : 0) +
-    (row.wasTop && !row.isBook ? 350 : 0)
-  })).filter(item=>{
-      if(item.row.generatedTeachingNote?.source==='authored-opening') return false;
-      if(item.index===reviewStepIndex-1) return true;
-      if(item.row.reviewTeachingStructure?.promotionPlan) return true;
-      if(item.row.terminal?.type==='checkmate') return true;
-      if(['blunder','mistake','inaccuracy'].includes(item.row.cls)) return true;
-      if(Math.max(0,Number(item.row.rawEngineLoss)||0)>=60) return true;
-      return false;
-    }).sort((a,b)=>b.score-a.score);
-
-  let cursor=0;
-  const worker=async()=>{
-    while(cursor<order.length && token===reviewTeachingGenerationToken){
-      const item=order[cursor++];
-      await generateReviewTeachingNote(item.row,item.index,token);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < reviewData.rows.length && token === reviewTeachingGenerationToken) {
+      const index = cursor++;
+      await generateReviewTeachingNote(reviewData.rows[index], index, token);
     }
   };
-  await Promise.all([worker(),worker()]);
+  await Promise.all([worker(), worker(), worker()]);
 }
 
 function reviewAutoExplanation(row) {
@@ -7872,9 +7405,9 @@ function reviewAutoExplanation(row) {
     return {
       headline: `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san} — ${String(row.label || row.cls || 'Move')}`,
       why: row.generatedTeachingNote.summary,
-      comparison: row.generatedTeachingNote.comparison || '',
-      comparisonLabel: row.generatedTeachingNote.comparisonLabel || '',
-      lesson: row.generatedTeachingNote.takeaway || '',
+      comparison: '',
+      comparisonLabel: '',
+      lesson: row.generatedTeachingNote.takeaway || `Remember what ${row.san} changes in this position and how it connects to the next move.`,
       phase: reviewPhaseLabel(row.phase),
       position: reviewPositionDescription(row.whiteCp, row.mate),
       accuracy: Math.round((Number(row.accuracy) || 0) * 10) / 10,
@@ -7884,35 +7417,6 @@ function reviewAutoExplanation(row) {
       exactOpening: exact.name
     };
   }
-
-  // Emergency deterministic path: even if background priming has not run yet,
-  // never fall back to vague label-only prose. Build the same causal note on demand.
-  try {
-    const emergencyStructure = reviewStructuredMoveAnalysis(row, Math.max(0, Number(row.ply || 1) - 1));
-    const emergencyLocal = reviewDeterministicTeachingFromStructure(row, emergencyStructure);
-    const emergencyAuthored = row.isBook ? reviewAuthoredOpeningExplanation(row) : '';
-    const emergencySummary = emergencyAuthored || emergencyLocal.summary;
-    const emergencyLesson = row.isBook
-      ? reviewBookKeyIdea(row, emergencyStructure, reviewAuthoredOpeningTakeaway(row))
-      : emergencyLocal.takeaway;
-    if (emergencySummary) {
-      const exact = reviewOpeningNameForPly(row.ply);
-      return {
-        headline: `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san} — ${String(row.label || row.cls || 'Move')}`,
-        why: emergencySummary,
-        comparison: emergencyLocal.comparison || '',
-        comparisonLabel: emergencyLocal.comparisonLabel || '',
-        lesson: emergencyLesson || '',
-        phase: reviewPhaseLabel(row.phase),
-        position: reviewPositionDescription(row.whiteCp, row.mate),
-        accuracy: Math.round((Number(row.accuracy) || 0) * 10) / 10,
-        loss: Math.max(0, Number(row.rawEngineLoss) || 0),
-        best: row.engineBest,
-        moveLabel: reviewMoveNotation(row),
-        exactOpening: exact.name
-      };
-    }
-  } catch (_) {}
 
   if (row.autoExplanationV2) return row.autoExplanationV2;
 
@@ -7968,7 +7472,7 @@ function reviewAutoExplanation(row) {
     why = playedPurpose
       ? `${row.san} is very precise because it ${playedPurpose} without giving the opponent a meaningful concession.`
       : `${row.san} is very precise and keeps the position at ${position.toLowerCase()} without giving away anything important.`;
-    lesson = playedPurpose ? `The useful lesson is the concrete job ${row.san} performed: ${playedPurpose}.` : `For a best move, focus on the concrete problem it solves or plan it makes possible; the label alone is not a lesson.`;
+    lesson = 'Remember what the move actually accomplished in the position, not just that it received a strong label.';
   } else {
     const costPhrase =
       loss <= 40 ? 'only a little precision'
@@ -8030,7 +7534,6 @@ function renderReviewAutoExplanation(row) {
         <span class="review-auto-badge">READY WITH THE REVIEW</span>
         <p>Select any analyzed move. BOZO's explanation is already prepared, and Previous/Next will restore each move's explanation instantly.</p>
       </div>`;
-    clearReviewCoachAnnotations();
     return;
   }
 
@@ -8048,27 +7551,20 @@ function renderReviewAutoExplanation(row) {
           <b>${escapeHtml(ex.comparisonLabel || 'Why this works')}</b>
           <span>${escapeHtml(ex.comparison)}</span>
         </div>` : ''}
-      ${ex.lesson ? `<div class="review-auto-lesson">
-        <b>Key idea</b>
+      <div class="review-auto-lesson">
+        <b>What to remember</b>
         <span>${escapeHtml(ex.lesson)}</span>
-      </div>` : ''}
-      <small>${['game-review-writer','structured-writer'].includes(row.generatedTeachingNote?.source)
-        ? 'Built from the position, the game context, and the stronger continuation.'
+      </div>
+      <small>${row.generatedTeachingNote?.source === 'structured-writer'
+        ? 'Built from verified position facts and the game continuation.'
         : row.generatedTeachingNote?.source === 'structured-local'
-          ? (row.reviewTeachingAIState === 'loading'
-              ? 'Position-specific explanation ready; BOZO is checking whether it can make the coaching even sharper.'
-              : 'Built directly from position-specific chess facts.')
-          : row.generatedTeachingNote?.source === 'authored-opening' || row.generatedTeachingNote?.source === 'authored' || (row.isBook && reviewAuthoredOpeningExplanation(row))
+          ? 'Built directly from verified position facts.'
+          : row.generatedTeachingNote?.source === 'authored' || (row.isBook && reviewAuthoredOpeningExplanation(row))
             ? 'Based on BOZO’s move-by-move opening theory.'
             : state.session?.user
-              ? 'Building the position-specific teaching note…'
+              ? 'Checking the position and preparing the teaching note…'
               : 'Sign in to have BOZO automatically prepare richer move-specific teaching notes.'}</small>
     </div>`;
-
-  const annotations = row.generatedTeachingNote?.annotations ||
-    reviewAutomaticAnnotations(row, row.reviewTeachingStructure || reviewStructuredMoveAnalysis(row, Math.max(0,(row.ply||1)-1)), row.generatedTeachingNote?.full || null);
-  reviewCoachExplanation = { arrows: annotations.arrows || [], highlights: annotations.highlights || [] };
-  drawReviewCoachAnnotations(reviewCoachExplanation.arrows, reviewCoachExplanation.highlights);
 }
 
 function updateReviewCoachIdleState(row) {
@@ -8082,8 +7578,7 @@ function updateReviewCoachIdleState(row) {
     primary.dataset.reviewQuestion = 'Why did this move matter?';
     better.textContent = 'Why is the better move stronger?';
     better.dataset.reviewQuestion = 'Why is the better move stronger here?';
-    lesson.textContent = 'What is the key idea?';
-    lesson.dataset.reviewQuestion = 'What is the key idea from this position that I should use in future games?';
+    lesson.dataset.reviewQuestion = 'What is the one lesson I should remember from this position?';
     return;
   }
 
@@ -8121,8 +7616,7 @@ function updateReviewCoachIdleState(row) {
   better.dataset.reviewQuestion = hasBetter
     ? `Why is ${row.engineBest} stronger than ${row.san} here?`
     : `What was the strongest practical alternative to ${move}, and why?`;
-  lesson.textContent = 'What is the key idea?';
-  lesson.dataset.reviewQuestion = `What is the key idea from the position after ${move}, and when should I use it in a future game?`;
+  lesson.dataset.reviewQuestion = `What is the one lesson I should remember from the position after ${move}?`;
 }
 
 function updateReviewSelectedMove() {
@@ -8163,9 +7657,6 @@ function updateReviewSelectedMove() {
     : (row.wasTop ? row.san : (row.engineBest || ' - '));
   $('review-coach-move-label').textContent = moveLabel;
   updateReviewCoachIdleState(row);
-  if(state.session?.user && row.generatedTeachingNote?.source!=='authored-opening' && row.reviewTeachingAIState==='idle') {
-    generateReviewTeachingNote(row, reviewStepIndex - 1, reviewTeachingGenerationToken);
-  }
 }
 
 function clearReviewCoachAnnotations() {
@@ -8448,7 +7939,6 @@ function reviewSquareCenter(square) {
 
 function drawReviewCoachAnnotations(arrows = [], highlights = []) {
   const svg = $('game-review-arrow-layer');
-  if (!svg) return;
   const colors = {
     green: '#78c850',
     yellow: '#f6c945',
@@ -8457,30 +7947,49 @@ function drawReviewCoachAnnotations(arrows = [], highlights = []) {
     purple: '#a855f7'
   };
 
+  const markers = Object.entries(colors).map(([name, color]) => `
+    <marker id="review-arrow-${name}"
+            markerWidth="8" markerHeight="8"
+            refX="6.5" refY="4"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,4 L0,8 Z" fill="${color}"></path>
+    </marker>
+  `).join('');
+
   const squares = highlights
     .filter(item => validSquare(item.square))
     .slice(0, 4)
     .map(item => {
-      const center = annotationSquareGeometry('game-review-board', item.square, reviewOrientation);
-      const width = center.width * .96;
-      const height = center.height * .96;
-      return `<rect x="${center.x-width/2}" y="${center.y-height/2}"
-                    width="${width}" height="${height}" rx="7"
+      const center = reviewSquareCenter(item.square);
+      return `<rect x="${center.x - 48}" y="${center.y - 48}"
+                    width="96" height="96" rx="10"
                     fill="${colors[item.color] || colors.purple}"
-                    opacity=".27"></rect>`;
+                    opacity=".25"></rect>`;
     }).join('');
 
-  const arrowMarkup = arrows
+  const lines = arrows
     .filter(item => validSquare(item.from) && validSquare(item.to))
     .slice(0, 4)
     .map(item => {
-      const from = annotationSquareGeometry('game-review-board', item.from, reviewOrientation);
-      const to = annotationSquareGeometry('game-review-board', item.to, reviewOrientation);
-      const color = colors[item.color] || colors.purple;
-      return bozoBoardArrowMarkup(item.from, item.to, from, to, color, .82);
+      const from = reviewSquareCenter(item.from);
+      const to = reviewSquareCenter(item.to);
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const endX = to.x - dx / length * 23;
+      const endY = to.y - dy / length * 23;
+      const name = colors[item.color] ? item.color : 'purple';
+
+      return `<line x1="${from.x}" y1="${from.y}"
+                    x2="${endX}" y2="${endY}"
+                    stroke="${colors[name]}"
+                    stroke-width="14"
+                    stroke-linecap="round"
+                    opacity=".86"
+                    marker-end="url(#review-arrow-${name})"></line>`;
     }).join('');
 
-  svg.innerHTML = `${squares}${arrowMarkup}`;
+  svg.innerHTML = `<defs>${markers}</defs>${squares}${lines}`;
 }
 
 
@@ -15880,5 +15389,3 @@ $('review-master-search')?.addEventListener('keydown',e=>{if(e.key==='Enter')loa
 $('master-puzzle-find')?.addEventListener('click',()=>findMasterTacticalPuzzle(masterQueryValue('master-puzzle-search')));
 $('master-puzzle-random')?.addEventListener('click',()=>findMasterTacticalPuzzle(''));
 $('master-puzzle-search')?.addEventListener('keydown',e=>{if(e.key==='Enter')findMasterTacticalPuzzle(e.currentTarget.value);});
-
-// BOZO v4.14.30 — Key Idea + Promotion Race Review
