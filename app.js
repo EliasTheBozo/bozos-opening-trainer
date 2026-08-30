@@ -4517,12 +4517,16 @@ function verifiedCoachFacts(fen, previousFen, playedMove) {
           san: verbose.san || playedMove,
           color: verbose.color === 'w' ? 'White' : 'Black',
           piece: COACH_PIECE_NAMES[verbose.piece] || verbose.piece,
+          pieceCode: verbose.piece,
           from: verbose.from,
           to: verbose.to,
           captured: verbose.captured ? (COACH_PIECE_NAMES[verbose.captured] || verbose.captured) : null,
+          capturedCode: verbose.captured || null,
           promotion: verbose.promotion ? (COACH_PIECE_NAMES[verbose.promotion] || verbose.promotion) : null,
+          promotionCode: verbose.promotion || null,
           isCapture: Boolean(verbose.captured),
           isCastle: /O-O/.test(verbose.san || playedMove),
+          isCheck: /[+#]$/.test(verbose.san || playedMove),
           resultingFen: before.fen()
         };
       }
@@ -4614,6 +4618,8 @@ function reviewVerifiedTeachingFacts(row, selectedIndex) {
       beforeFen: row.previousFen,
       afterFen: row.fen,
       changedSquares,
+      beforePieces: beforeBoard,
+      afterPieces: afterBoard,
       movedPieceAttacks,
       newlyOpenedLines: newlyOpenedFromOrigin.slice(0, 30),
       previousMoves,
@@ -7132,6 +7138,9 @@ function reviewTeachingPayload(row, selectedIndex) {
 function reviewStructuredMoveAnalysis(row, selectedIndex) {
   const facts = reviewVerifiedTeachingFacts(row, selectedIndex);
   const move = facts?.moveFacts || {};
+  move.piece = move.pieceCode || ({pawn:'p',knight:'n',bishop:'b',rook:'r',queen:'q',king:'k'})[String(move.piece||'').toLowerCase()] || move.piece;
+  move.captured = move.capturedCode || ({pawn:'p',knight:'n',bishop:'b',rook:'r',queen:'q',king:'k'})[String(move.captured||'').toLowerCase()] || move.captured;
+  move.promotion = move.promotionCode || ({pawn:'p',knight:'n',bishop:'b',rook:'r',queen:'q',king:'k'})[String(move.promotion||'').toLowerCase()] || move.promotion;
   const exact = reviewOpeningNameForPly(row.ply);
   const before = facts?.beforePieces || {};
   const after = facts?.afterPieces || {};
@@ -7252,6 +7261,81 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
 }
 
 
+
+function reviewPassedPawnInfo(row, structure) {
+  const move=structure?.rawVerifiedFacts?.moveFacts||{};
+  const pieceCode=move.pieceCode || move.piece;
+  if(pieceCode!=='p' || !move.to) return null;
+  const pieces=structure?.rawVerifiedFacts?.afterPieces||{};
+  const mover=row.mover;
+  const enemy=mover==='w'?'b':'w';
+  const file=move.to.charCodeAt(0)-97;
+  const rank=Number(move.to[1]);
+
+  for(const [sq,p] of Object.entries(pieces)){
+    if(p?.type!=='p' || p?.color!==enemy) continue;
+    const ef=sq.charCodeAt(0)-97, er=Number(sq[1]);
+    if(Math.abs(ef-file)>1) continue;
+    if(mover==='w' ? er>rank : er<rank) return null;
+  }
+
+  const promotionSquare=move.to[0] + (mover==='w'?'8':'1');
+  const pushesToPromote=mover==='w' ? 8-rank : rank-1;
+  return {square:move.to,promotionSquare,pushesToPromote,advanced:pushesToPromote<=2};
+}
+
+function reviewPvMaterialSwing(row) {
+  try {
+    const pv=Array.isArray(row?.principalVariation)?row.principalVariation.slice(0,8):[];
+    if(!pv.length || !row?.previousFen) return null;
+    const g=new Chess(row.previousFen);
+    const opponent=row.mover==='w'?'b':'w';
+    const countRooks=fen=>{
+      const b=parseFenBoard(fen);
+      return Object.values(b).filter(p=>p.color===opponent && p.type==='r').length;
+    };
+    const opponentRooksBefore=countRooks(row.previousFen);
+    let opponentRooksAfter=opponentRooksBefore;
+    let promoted=false;
+    let promotionMove='';
+    for(const u0 of pv){
+      const u=String(u0||'').toLowerCase();
+      const legal=g.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===u);
+      if(!legal) break;
+      const moved=g.move(legal);
+      if(moved?.promotion && moved.color===row.mover){
+        promoted=true;
+        promotionMove=moved.san;
+      }
+      opponentRooksAfter=Math.min(opponentRooksAfter,countRooks(g.fen()));
+    }
+    return {
+      promoted,
+      promotionMove,
+      opponentRookLost: opponentRooksAfter < opponentRooksBefore
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function reviewPromotionTeaching(row, structure) {
+  const info=reviewPassedPawnInfo(row,structure);
+  if(!info?.advanced) return null;
+
+  const pvEffect=reviewPvMaterialSwing(row);
+  let why=`${row.san} makes the passed pawn the position's most urgent feature. On ${info.square} it is only ${info.pushesToPromote} push${info.pushesToPromote===1?'':'es'} from ${info.promotionSquare}=Q, so Black has to organize everything around stopping promotion.`;
+
+  if(pvEffect?.opponentRookLost){
+    why += ` In Stockfish's winning continuation, stopping the pawn costs Black a rook, so the promotion threat converts directly into decisive material.`;
+  } else if(pvEffect?.promoted){
+    why += ` The principal variation confirms that the pawn reaches promotion, so this is a concrete queening plan rather than a vague space gain.`;
+  }
+
+  const lesson='An advanced passed pawn can become more important than material elsewhere. Calculate its direct promotion route first, then check whether the defender must sacrifice material to stop it.';
+  return {why,lesson,info,pvEffect};
+}
+
 function reviewLessonIsGeneric(text='') {
   const t=String(text||'').trim().toLowerCase();
   if(!t) return true;
@@ -7270,7 +7354,7 @@ function reviewLessonIsGeneric(text='') {
 
 function reviewPawnIsPassedAfterMove(row, structure) {
   const move=structure?.rawVerifiedFacts?.moveFacts||{};
-  if(move.piece!=='p' || !move.to) return false;
+  if((move.pieceCode||move.piece)!=='p' || !move.to) return false;
   const pieces=structure?.rawVerifiedFacts?.afterPieces||{};
   const file=move.to.charCodeAt(0)-97, rank=Number(move.to[1]);
   const enemy=row.mover==='w'?'b':'w';
@@ -7285,6 +7369,7 @@ function reviewPawnIsPassedAfterMove(row, structure) {
 
 function reviewTransferableLesson(row, s) {
   const move=s?.rawVerifiedFacts?.moveFacts||{};
+  move.piece = move.pieceCode || ({pawn:'p',knight:'n',bishop:'b',rook:'r',queen:'q',king:'k'})[String(move.piece||'').toLowerCase()] || move.piece;
   const central=(s?.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
 
   if(row?.terminal?.type==='checkmate')
@@ -7343,6 +7428,17 @@ function reviewLessonCandidateIsUseful(candidate, summary='') {
 }
 
 function reviewDeterministicTeachingFromStructure(row, s) {
+  const promotionTeaching=reviewPromotionTeaching(row,s);
+  if(promotionTeaching){
+    return {
+      summary:promotionTeaching.why,
+      takeaway:promotionTeaching.lesson,
+      source:'structured-local',
+      structure:s,
+      promotionTeaching
+    };
+  }
+
   const side = row.mover === 'w' ? 'White' : 'Black';
   const move = s?.rawVerifiedFacts?.moveFacts || {};
   const piece = s?.rawVerifiedFacts?.afterPieces?.[move.to];
@@ -7496,8 +7592,14 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
       ? candidateTakeaway
       : safeLocal.takeaway;
     if(summary){
-      row.generatedTeachingNote={summary,takeaway,source:'structured-writer',structure,full:grounded};
-      if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
+      const promotionTeaching=reviewPromotionTeaching(row,structure);
+      row.generatedTeachingNote=promotionTeaching
+        ? {summary:promotionTeaching.why,takeaway:promotionTeaching.lesson,source:'structured-local',structure,promotionTeaching}
+        : {summary,takeaway,source:'structured-writer',structure,full:grounded};
+      if(reviewData?.rows?.[reviewStepIndex-1]===row) {
+        renderReviewAutoExplanation(row);
+        drawReviewAutomaticAnnotations(row);
+      }
     }
   }catch(_){}
 }
@@ -7626,6 +7728,15 @@ function reviewAutoExplanation(row) {
     comparison = reviewConcreteComparison(row, best, pv);
   }
 
+  const structureForAuto=row.generatedTeachingNote?.structure || reviewStructuredMoveAnalysis(row,Math.max(0,row.ply-1));
+  const promotionTeaching=reviewPromotionTeaching(row,structureForAuto);
+  if(promotionTeaching){
+    why=promotionTeaching.why;
+    lesson=promotionTeaching.lesson;
+    comparison='';
+    comparisonLabel='';
+  }
+
   row.autoExplanationV2 = {
     headline,
     why,
@@ -7696,6 +7807,7 @@ function updateReviewCoachIdleState(row) {
     primary.dataset.reviewQuestion = 'Why did this move matter?';
     better.textContent = 'Why is the better move stronger?';
     better.dataset.reviewQuestion = 'Why is the better move stronger here?';
+    lesson.textContent = 'What lesson applies elsewhere?';
     lesson.dataset.reviewQuestion = 'What reusable lesson from this position applies to other games?';
     return;
   }
@@ -7734,7 +7846,8 @@ function updateReviewCoachIdleState(row) {
   better.dataset.reviewQuestion = hasBetter
     ? `Why is ${row.engineBest} stronger than ${row.san} here?`
     : `What was the strongest practical alternative to ${move}, and why?`;
-  lesson.dataset.reviewQuestion = `What is the one lesson I should remember from the position after ${move}?`;
+  lesson.textContent = 'What lesson applies elsewhere?';
+  lesson.dataset.reviewQuestion = `What reusable lesson from the position after ${move} applies to other games?`;
 }
 
 function updateReviewSelectedMove() {
@@ -7754,6 +7867,7 @@ function updateReviewSelectedMove() {
     $('review-recommended-line').textContent = '';
     $('review-coach-move-label').textContent = 'Choose a move';
     updateReviewCoachIdleState(null);
+    drawReviewAutomaticAnnotations(null);
     return;
   }
 
@@ -7775,6 +7889,7 @@ function updateReviewSelectedMove() {
     : (row.wasTop ? row.san : (row.engineBest || ' - '));
   $('review-coach-move-label').textContent = moveLabel;
   updateReviewCoachIdleState(row);
+  drawReviewAutomaticAnnotations(row);
 }
 
 function clearReviewCoachAnnotations() {
@@ -7786,6 +7901,7 @@ function clearReviewCoach() {
   clearReviewCoachAnnotations();
   const row = reviewStepIndex === 0 ? null : reviewData?.rows[reviewStepIndex - 1];
   renderReviewAutoExplanation(row);
+  drawReviewAutomaticAnnotations(row);
   $('review-coach-question').value = '';
 }
 
@@ -8055,59 +8171,86 @@ function reviewSquareCenter(square) {
   };
 }
 
-function drawReviewCoachAnnotations(arrows = [], highlights = []) {
-  const svg = $('game-review-arrow-layer');
-  const colors = {
-    green: '#78c850',
-    yellow: '#f6c945',
-    red: '#ef5350',
-    blue: '#42a5f5',
-    purple: '#a855f7'
+
+function reviewArrowMarkup(fromSq,toSq,color='#78c850',opacity=.84) {
+  if(!validSquare(fromSq)||!validSquare(toSq)) return '';
+  const from=annotationSquareGeometry('game-review-board',fromSq,reviewOrientation);
+  const to=annotationSquareGeometry('game-review-board',toSq,reviewOrientation);
+  const fileDelta=Math.abs(toSq.charCodeAt(0)-fromSq.charCodeAt(0));
+  const rankDelta=Math.abs(Number(toSq[1])-Number(fromSq[1]));
+  const isKnightRoute=(fileDelta===1&&rankDelta===2)||(fileDelta===2&&rankDelta===1);
+
+  const geometry=(segmentStart,tip)=>{
+    const dx=tip.x-segmentStart.x,dy=tip.y-segmentStart.y;
+    const length=Math.hypot(dx,dy)||1,ux=dx/length,uy=dy/length,px=-uy,py=ux;
+    const headLength=46,headHalfWidth=29;
+    const base={x:tip.x-ux*headLength,y:tip.y-uy*headLength};
+    const left={x:base.x+px*headHalfWidth,y:base.y+py*headHalfWidth};
+    const right={x:base.x-px*headHalfWidth,y:base.y-py*headHalfWidth};
+    return {shaftEnd:base,points:`${tip.x},${tip.y} ${left.x},${left.y} ${right.x},${right.y}`};
   };
 
-  const markers = Object.entries(colors).map(([name, color]) => `
-    <marker id="review-arrow-${name}"
-            markerWidth="8" markerHeight="8"
-            refX="6.5" refY="4"
-            orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L8,4 L0,8 Z" fill="${color}"></path>
-    </marker>
-  `).join('');
+  if(isKnightRoute){
+    const elbow=fileDelta===2?{x:to.x,y:from.y}:{x:from.x,y:to.y};
+    const g=geometry(elbow,to);
+    return `<path d="M ${from.x} ${from.y} L ${elbow.x} ${elbow.y} L ${g.shaftEnd.x} ${g.shaftEnd.y}"
+      fill="none" stroke="${color}" stroke-width="18" stroke-linecap="square" stroke-linejoin="miter" opacity="${opacity}"></path>
+      <polygon points="${g.points}" fill="${color}" opacity=".92"></polygon>`;
+  }
 
-  const squares = highlights
-    .filter(item => validSquare(item.square))
-    .slice(0, 4)
-    .map(item => {
-      const center = reviewSquareCenter(item.square);
-      return `<rect x="${center.x - 48}" y="${center.y - 48}"
-                    width="96" height="96" rx="10"
-                    fill="${colors[item.color] || colors.purple}"
-                    opacity=".25"></rect>`;
-    }).join('');
+  const g=geometry(from,to);
+  return `<line x1="${from.x}" y1="${from.y}" x2="${g.shaftEnd.x}" y2="${g.shaftEnd.y}"
+      stroke="${color}" stroke-width="18" stroke-linecap="square" opacity="${opacity}"></line>
+      <polygon points="${g.points}" fill="${color}" opacity=".92"></polygon>`;
+}
 
-  const lines = arrows
-    .filter(item => validSquare(item.from) && validSquare(item.to))
-    .slice(0, 4)
-    .map(item => {
-      const from = reviewSquareCenter(item.from);
-      const to = reviewSquareCenter(item.to);
-      const dx = to.x - from.x;
-      const dy = to.y - from.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const endX = to.x - dx / length * 23;
-      const endY = to.y - dy / length * 23;
-      const name = colors[item.color] ? item.color : 'purple';
+function reviewHighlightMarkup(square,color='#a855f7') {
+  if(!validSquare(square)) return '';
+  const c=annotationSquareGeometry('game-review-board',square,reviewOrientation);
+  const w=c.width*.96,h=c.height*.96;
+  return `<rect x="${c.x-w/2}" y="${c.y-h/2}" width="${w}" height="${h}" rx="7" fill="${color}" opacity=".24"></rect>`;
+}
 
-      return `<line x1="${from.x}" y1="${from.y}"
-                    x2="${endX}" y2="${endY}"
-                    stroke="${colors[name]}"
-                    stroke-width="14"
-                    stroke-linecap="round"
-                    opacity=".86"
-                    marker-end="url(#review-arrow-${name})"></line>`;
-    }).join('');
+function reviewAutomaticAnnotations(row) {
+  if(!row) return {arrows:[],highlights:[]};
+  const arrows=[],highlights=[];
 
-  svg.innerHTML = `<defs>${markers}</defs>${squares}${lines}`;
+  // Always show the move being explained.
+  if(validSquare(row.from)&&validSquare(row.to))
+    arrows.push({from:row.from,to:row.to,color:'#78c850'});
+
+  const structure=row.generatedTeachingNote?.structure || reviewStructuredMoveAnalysis(row,Math.max(0,row.ply-1));
+  const promotion=reviewPromotionTeaching(row,structure);
+  if(promotion?.info){
+    // One continuous plan arrow, not a chain of tiny arrows.
+    arrows.push({from:promotion.info.square,to:promotion.info.promotionSquare,color:'#42a5f5'});
+    highlights.push({square:promotion.info.promotionSquare,color:'#42a5f5'});
+  }
+
+  return {arrows:arrows.slice(0,3),highlights:highlights.slice(0,3)};
+}
+
+function drawReviewAutomaticAnnotations(row) {
+  const svg=$('game-review-arrow-layer');
+  if(!svg) return;
+  const auto=reviewAutomaticAnnotations(row);
+  svg.innerHTML=[
+    ...auto.highlights.map(x=>reviewHighlightMarkup(x.square,x.color)),
+    ...auto.arrows.map(x=>reviewArrowMarkup(x.from,x.to,x.color))
+  ].join('');
+  reviewCoachExplanation=null;
+}
+
+function drawReviewCoachAnnotations(arrows = [], highlights = []) {
+  const svg=$('game-review-arrow-layer');
+  if(!svg) return;
+  const colors={green:'#78c850',yellow:'#f6c945',red:'#ef5350',blue:'#42a5f5',purple:'#a855f7'};
+  svg.innerHTML=[
+    ...highlights.filter(x=>validSquare(x.square)).slice(0,4)
+      .map(x=>reviewHighlightMarkup(x.square,colors[x.color]||colors.purple)),
+    ...arrows.filter(x=>validSquare(x.from)&&validSquare(x.to)).slice(0,4)
+      .map(x=>reviewArrowMarkup(x.from,x.to,colors[x.color]||colors.purple))
+  ].join('');
 }
 
 
