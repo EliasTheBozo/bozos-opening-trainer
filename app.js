@@ -5097,6 +5097,53 @@ function annotationSquareGeometry(boardId, square, orientation = 'white') {
   return { ...center, width:100, height:100 };
 }
 
+function bozoBoardArrowMarkup(fromSquare, toSquare, from, to, color, opacity=.82) {
+  const fileDelta = Math.abs(toSquare.charCodeAt(0) - fromSquare.charCodeAt(0));
+  const rankDelta = Math.abs(Number(toSquare[1]) - Number(fromSquare[1]));
+  const isKnightRoute = (fileDelta === 1 && rankDelta === 2) || (fileDelta === 2 && rankDelta === 1);
+
+  // BOZO's canonical arrow: a separate shaft and destination triangle. The
+  // shaft stops at the triangle base so the head stays crisp at every size.
+  const arrowGeometry = (segmentStart, tip) => {
+    const dx = tip.x - segmentStart.x;
+    const dy = tip.y - segmentStart.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const ux = dx / length;
+    const uy = dy / length;
+    const px = -uy;
+    const py = ux;
+    const headLength = 46;
+    const headHalfWidth = 29;
+    const base = { x: tip.x - ux * headLength, y: tip.y - uy * headLength };
+    const left = { x: base.x + px * headHalfWidth, y: base.y + py * headHalfWidth };
+    const right = { x: base.x - px * headHalfWidth, y: base.y - py * headHalfWidth };
+    return {
+      shaftEnd: base,
+      points: `${tip.x},${tip.y} ${left.x},${left.y} ${right.x},${right.y}`
+    };
+  };
+
+  if (isKnightRoute) {
+    const elbow = fileDelta === 2
+      ? { x:to.x, y:from.y }
+      : { x:from.x, y:to.y };
+    const geometry = arrowGeometry(elbow, to);
+    return `
+      <path d="M ${from.x} ${from.y} L ${elbow.x} ${elbow.y} L ${geometry.shaftEnd.x} ${geometry.shaftEnd.y}"
+            fill="none" stroke="${color}" stroke-width="18"
+            stroke-linecap="square" stroke-linejoin="miter" opacity="${opacity}"></path>
+      <polygon points="${geometry.points}" fill="${color}" opacity="${Math.min(1, opacity + .08)}"></polygon>`;
+  }
+
+  const geometry = arrowGeometry(from, to);
+  return `
+    <line x1="${from.x}" y1="${from.y}"
+          x2="${geometry.shaftEnd.x}" y2="${geometry.shaftEnd.y}"
+          stroke="${color}" stroke-width="18"
+          stroke-linecap="square" opacity="${opacity}"></line>
+    <polygon points="${geometry.points}" fill="${color}" opacity="${Math.min(1, opacity + .08)}"></polygon>`;
+}
+
 function paintBoardUserAnnotations(boardId) {
   const layerId = boardAnnotationLayerId(boardId);
   const svg = layerId ? $(layerId) : null;
@@ -5120,50 +5167,7 @@ function paintBoardUserAnnotations(boardId) {
     if (item.type === 'arrow' && validSquare(item.from) && validSquare(item.to)) {
       const from = annotationSquareGeometry(boardId, item.from, orientation);
       const to = annotationSquareGeometry(boardId, item.to, orientation);
-      const fileDelta = Math.abs(item.to.charCodeAt(0) - item.from.charCodeAt(0));
-      const rankDelta = Math.abs(Number(item.to[1]) - Number(item.from[1]));
-      const isKnightRoute = (fileDelta === 1 && rankDelta === 2) || (fileDelta === 2 && rankDelta === 1);
-
-      // Separate shaft + explicit triangle. The shaft stops exactly at the
-      // triangle base, so it can never run underneath or visually cover the head.
-      const arrowGeometry = (segmentStart, tip) => {
-        const dx = tip.x - segmentStart.x;
-        const dy = tip.y - segmentStart.y;
-        const length = Math.hypot(dx, dy) || 1;
-        const ux = dx / length;
-        const uy = dy / length;
-        const px = -uy;
-        const py = ux;
-        const headLength = 46;
-        const headHalfWidth = 29;
-        const base = { x: tip.x - ux * headLength, y: tip.y - uy * headLength };
-        const left = { x: base.x + px * headHalfWidth, y: base.y + py * headHalfWidth };
-        const right = { x: base.x - px * headHalfWidth, y: base.y - py * headHalfWidth };
-        return {
-          shaftEnd: base,
-          points: `${tip.x},${tip.y} ${left.x},${left.y} ${right.x},${right.y}`
-        };
-      };
-
-      if (isKnightRoute) {
-        const elbow = fileDelta === 2
-          ? { x:to.x, y:from.y }
-          : { x:from.x, y:to.y };
-        const geometry = arrowGeometry(elbow, to);
-        return `
-          <path d="M ${from.x} ${from.y} L ${elbow.x} ${elbow.y} L ${geometry.shaftEnd.x} ${geometry.shaftEnd.y}"
-                fill="none" stroke="${color}" stroke-width="18"
-                stroke-linecap="square" stroke-linejoin="miter" opacity=".82"></path>
-          <polygon points="${geometry.points}" fill="${color}" opacity=".90"></polygon>`;
-      }
-
-      const geometry = arrowGeometry(from, to);
-      return `
-        <line x1="${from.x}" y1="${from.y}"
-              x2="${geometry.shaftEnd.x}" y2="${geometry.shaftEnd.y}"
-              stroke="${color}" stroke-width="18"
-              stroke-linecap="square" opacity=".82"></line>
-        <polygon points="${geometry.points}" fill="${color}" opacity=".90"></polygon>`;
+      return bozoBoardArrowMarkup(item.from, item.to, from, to, color, .82);
     }
     return '';
   }).join('');
@@ -6687,24 +6691,24 @@ function renderReviewMoveList() {
   });
 }
 
-function reviewClassificationSymbol(row) {
+function reviewClassificationIcon(row) {
   const cls = String(row?.cls || '').toLowerCase();
-  const symbols = {
-    book: '📖',
-    best: '★',
-    excellent: '!',
-    good: '✓',
-    inaccuracy: '?!',
-    mistake: '?',
-    blunder: '??'
+  const icons = {
+    book: './assets/review-icons/book.svg',
+    best: './assets/review-icons/best.svg',
+    excellent: './assets/review-icons/excellent.svg',
+    good: './assets/review-icons/good.svg',
+    inaccuracy: './assets/review-icons/inaccuracy.svg',
+    mistake: './assets/review-icons/mistake.svg',
+    blunder: './assets/review-icons/blunder.svg'
   };
-  return symbols[cls] || '•';
+  return icons[cls] || './assets/review-icons/good.svg';
 }
 
 function reviewMoveButton(row) {
   if (!row) return '<button disabled></button>';
   const phase = reviewPhaseLabel(row.phase);
-  const symbol = reviewClassificationSymbol(row);
+  const icon = reviewClassificationIcon(row);
   const accessibleLabel = `${row.san}, ${row.label}, ${phase}`;
   return `
     <button data-review-step="${row.ply}"
@@ -6713,7 +6717,7 @@ function reviewMoveButton(row) {
             title="${escapeHtml(row.label)} · ${escapeHtml(phase)}">
       <b>${escapeHtml(row.san)}</b>
       <span class="review-move-meta">
-        <span class="review-move-symbol" aria-hidden="true">${escapeHtml(symbol)}</span>
+        <span class="review-move-symbol" aria-hidden="true"><img src="${icon}" alt=""></span>
         <small>${escapeHtml(phase)}</small>
       </span>
     </button>
@@ -7535,15 +7539,11 @@ function reviewAutomaticAnnotations(row, structure, grounded=null) {
   const promo=structure?.promotionPlan;
   if(promo?.pawnSquare && promo.distance > 0) {
     const file=promo.pawnSquare[0];
-    const rank=Number(promo.pawnSquare[1]);
-    const dir=row.mover==='w'?1:-1;
-    let from=promo.pawnSquare;
-    for(let i=0;i<Math.min(2,promo.distance);i++){
-      const to=`${file}${rank+dir*(i+1)}`;
-      pushArrow(from,to,'blue',i===0?'Promotion route':'Promote');
-      from=to;
-    }
-    pushHighlight(`${file}${row.mover==='w'?8:1}`,'purple','Promotion square');
+    const promotionSquare=`${file}${row.mover==='w'?8:1}`;
+    // A straight pawn race is one idea, so show it as one clean route rather
+    // than chopping a6-a8 (or equivalent) into several short arrows.
+    pushArrow(promo.pawnSquare,promotionSquare,'blue','Promotion route');
+    pushHighlight(promotionSquare,'purple','Promotion square');
   } else if(structure?.preparedMoves?.length) {
     // For simple opening prep such as b4 -> Bb2 or ...g6 -> ...Bg7, show the
     // next move only when we can derive it from the actual current position.
@@ -8448,6 +8448,7 @@ function reviewSquareCenter(square) {
 
 function drawReviewCoachAnnotations(arrows = [], highlights = []) {
   const svg = $('game-review-arrow-layer');
+  if (!svg) return;
   const colors = {
     green: '#78c850',
     yellow: '#f6c945',
@@ -8456,49 +8457,30 @@ function drawReviewCoachAnnotations(arrows = [], highlights = []) {
     purple: '#a855f7'
   };
 
-  const markers = Object.entries(colors).map(([name, color]) => `
-    <marker id="review-arrow-${name}"
-            markerWidth="8" markerHeight="8"
-            refX="6.5" refY="4"
-            orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L8,4 L0,8 Z" fill="${color}"></path>
-    </marker>
-  `).join('');
-
   const squares = highlights
     .filter(item => validSquare(item.square))
     .slice(0, 4)
     .map(item => {
-      const center = reviewSquareCenter(item.square);
-      return `<rect x="${center.x - 48}" y="${center.y - 48}"
-                    width="96" height="96" rx="10"
+      const center = annotationSquareGeometry('game-review-board', item.square, reviewOrientation);
+      const width = center.width * .96;
+      const height = center.height * .96;
+      return `<rect x="${center.x-width/2}" y="${center.y-height/2}"
+                    width="${width}" height="${height}" rx="7"
                     fill="${colors[item.color] || colors.purple}"
-                    opacity=".25"></rect>`;
+                    opacity=".27"></rect>`;
     }).join('');
 
-  const lines = arrows
+  const arrowMarkup = arrows
     .filter(item => validSquare(item.from) && validSquare(item.to))
     .slice(0, 4)
     .map(item => {
-      const from = reviewSquareCenter(item.from);
-      const to = reviewSquareCenter(item.to);
-      const dx = to.x - from.x;
-      const dy = to.y - from.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const endX = to.x - dx / length * 23;
-      const endY = to.y - dy / length * 23;
-      const name = colors[item.color] ? item.color : 'purple';
-
-      return `<line x1="${from.x}" y1="${from.y}"
-                    x2="${endX}" y2="${endY}"
-                    stroke="${colors[name]}"
-                    stroke-width="14"
-                    stroke-linecap="round"
-                    opacity=".86"
-                    marker-end="url(#review-arrow-${name})"></line>`;
+      const from = annotationSquareGeometry('game-review-board', item.from, reviewOrientation);
+      const to = annotationSquareGeometry('game-review-board', item.to, reviewOrientation);
+      const color = colors[item.color] || colors.purple;
+      return bozoBoardArrowMarkup(item.from, item.to, from, to, color, .82);
     }).join('');
 
-  svg.innerHTML = `<defs>${markers}</defs>${squares}${lines}`;
+  svg.innerHTML = `${squares}${arrowMarkup}`;
 }
 
 
