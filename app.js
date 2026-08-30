@@ -5962,20 +5962,37 @@ function reviewMoveUci(move) {
 }
 
 function reviewGreatMoveContext(multiLines = [], playedUci = '') {
-  const lines = (multiLines || []).filter(line => line?.pv?.[0]);
-  if (lines.length < 2 || !playedUci) return { great:false, uniqueGap:0, alternative:null };
+  const lines = (multiLines || []).filter(line => line?.pv?.[0]).sort((a,b)=>(a.rank||99)-(b.rank||99));
+  if (lines.length < 2 || !playedUci) return { great:false, uniqueGap:0, alternative:null, reason:'' };
+
   const top = lines[0], second = lines[1];
-  if (String(top.pv[0]).toLowerCase() !== playedUci.toLowerCase()) return { great:false, uniqueGap:0, alternative:second };
+  if (String(top.pv[0]).toLowerCase() !== playedUci.toLowerCase()) {
+    return { great:false, uniqueGap:0, alternative:second, reason:'' };
+  }
+
   const topScore = reviewScoreForMover(top), secondScore = reviewScoreForMover(second);
-  if (topScore == null || secondScore == null) return { great:false, uniqueGap:0, alternative:second };
+  if (topScore == null || secondScore == null) return { great:false, uniqueGap:0, alternative:second, reason:'' };
+
   const gap = Math.max(0, topScore - secondScore);
-  const topWinning = topScore >= 180;
-  const secondLosesWin = topWinning && secondScore < 80;
-  const onlyDraw = topScore > -80 && secondScore <= -180;
-  const forcedMateOnly = top.mate != null && top.mate > 0 && !(second.mate != null && second.mate > 0);
-  // A large uniqueness gap qualifies; result-state changes qualify even when
-  // centipawn scaling is compressed by a tactical position.
-  return { great: forcedMateOnly || secondLosesWin || onlyDraw || gap >= 140, uniqueGap:gap, alternative:second };
+
+  // Great means necessity, not merely a big engine gap.
+  // If MultiPV #2 already gives away the advantage/game, every lower-ranked
+  // legal move does too.
+  const keepsWinningAdvantage = topScore >= 150 && secondScore < 75;
+  const onlyMoveToHoldGame = topScore > -75 && secondScore <= -150;
+
+  let reason = '';
+  if (keepsWinningAdvantage) reason = 'only move that preserves a clear winning advantage';
+  else if (onlyMoveToHoldGame) reason = 'only move that avoids a clearly losing position';
+
+  return {
+    great: Boolean(reason),
+    uniqueGap: gap,
+    alternative: second,
+    reason,
+    topScore,
+    secondScore
+  };
 }
 
 function reviewSideMaterial(fen, side) {
@@ -5984,18 +6001,23 @@ function reviewSideMaterial(fen, side) {
   return total;
 }
 
-function reviewBrilliantSacrificeEvidence(afterFen, mover, pv = []) {
-  // Look down the concrete engine continuation for an accepted/realized
-  // sacrifice. A mere hanging piece is not enough: the top line must actually
-  // permit the material concession.
+function reviewBrilliantSacrificeEvidence(beforeFen, afterFen, mover, pv = []) {
+  // Compare against material BEFORE the played move so an ordinary capture
+  // followed by a recapture cannot masquerade as a sacrifice.
   try {
-    const startMaterial = reviewSideMaterial(afterFen, mover);
+    const materialBefore = reviewSideMaterial(beforeFen, mover);
+    const materialAfterMove = reviewSideMaterial(afterFen, mover);
     const g = new Chess(afterFen);
-    for (const uci of (pv || []).slice(0, 4)) {
-      const move=g.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci[4]||'q'});
-      if (!move) break;
-      if (reviewSideMaterial(g.fen(), mover) <= startMaterial - 2) return true;
-    }
+
+    if (materialAfterMove <= materialBefore - 1) return true;
+
+    // For an offered sacrifice, Stockfish's best reply must actually accept it.
+    const reply = (pv || [])[0];
+    if (!reply) return false;
+    const accepted = g.move({from:reply.slice(0,2),to:reply.slice(2,4),promotion:reply[4]||'q'});
+    if (!accepted) return false;
+
+    return reviewSideMaterial(g.fen(), mover) <= materialBefore - 1;
   } catch (_) {}
   return false;
 }
@@ -6423,10 +6445,10 @@ async function computeWebsiteReview(sans, depth, bookDepth, onProgress) {
     const playedUci = reviewMoveUci(played);
     const necessity = reviewGreatMoveContext(choiceLines, playedUci);
     const topMove = choiceLines?.[0]?.pv?.[0] ? String(choiceLines[0].pv[0]).toLowerCase() === playedUci : false;
-    const sacrifice = topMove && reviewBrilliantSacrificeEvidence(fen, mover, analysis?.pv || []);
+    const sacrifice = topMove && reviewBrilliantSacrificeEvidence(previousFen, fen, mover, analysis?.pv || []);
     // Brilliant is deliberately stricter than Great: it must be a top move,
     // concretely sound, and involve a real material concession in Stockfish's line.
-    const brilliant = !isBook && topMove && engineLoss <= 20 && sacrifice && (necessity.great || necessity.uniqueGap >= 70);
+    const brilliant = !isBook && topMove && engineLoss <= 20 && sacrifice && necessity.great;
     const classification = isCheckmate
       ? { label: 'Best', cls: 'best' }
       : classifyReviewLoss(engineLoss, isBook, { great: !brilliant && necessity.great, brilliant });
