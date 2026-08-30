@@ -7251,6 +7251,97 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
   };
 }
 
+
+function reviewLessonIsGeneric(text='') {
+  const t=String(text||'').trim().toLowerCase();
+  if(!t) return true;
+  return [
+    /^remember (the|what|that)/,
+    /main purpose of .* and how it fits/,
+    /what the move actually accomplished/,
+    /not just (that|the)/,
+    /connect this move to the next/,
+    /ask what square, pawn break/,
+    /more precise continuation/,
+    /remember the main purpose/,
+    /this move belongs to/
+  ].some(rx=>rx.test(t));
+}
+
+function reviewPawnIsPassedAfterMove(row, structure) {
+  const move=structure?.rawVerifiedFacts?.moveFacts||{};
+  if(move.piece!=='p' || !move.to) return false;
+  const pieces=structure?.rawVerifiedFacts?.afterPieces||{};
+  const file=move.to.charCodeAt(0)-97, rank=Number(move.to[1]);
+  const enemy=row.mover==='w'?'b':'w';
+  for(const [sq,p] of Object.entries(pieces)){
+    if(p?.type!=='p' || p?.color!==enemy) continue;
+    const ef=sq.charCodeAt(0)-97, er=Number(sq[1]);
+    if(Math.abs(ef-file)>1) continue;
+    if(row.mover==='w' ? er>rank : er<rank) return false;
+  }
+  return true;
+}
+
+function reviewTransferableLesson(row, s) {
+  const move=s?.rawVerifiedFacts?.moveFacts||{};
+  const central=(s?.controlledSquares||[]).filter(x=>['d4','e4','d5','e5'].includes(x));
+
+  if(row?.terminal?.type==='checkmate')
+    return 'When a forced finish is available, calculate checks first and verify whether the opponent has any legal escape.';
+
+  if(move.piece==='p' && reviewPawnIsPassedAfterMove(row,s)){
+    const rank=Number(move.to?.[1]||0);
+    const advanced=row.mover==='w' ? rank>=6 : rank<=3;
+    if(advanced)
+      return 'An advanced passed pawn can outweigh slower positional goals. Calculate its direct route to promotion before looking for quieter improvements.';
+    return 'Passed pawns become stronger as they advance. Before choosing a slower plan, calculate whether pushing the passer creates a concrete promotion threat.';
+  }
+
+  if(move.piece==='p' && s?.preparedMoves?.length)
+    return 'A flank pawn move can also help development when advancing it clears a useful square or line for a piece. Judge the pawn move by both jobs, not by space alone.';
+
+  if(move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)){
+    if(central.length)
+      return 'Early development is strongest when one move improves a piece and influences the center while keeping the pawn structure flexible.';
+    return 'In the opening, prefer development that improves a piece without creating an unnecessary pawn commitment.';
+  }
+
+  if(move.piece==='b' && ['c1','f1','c8','f8'].includes(move.from)){
+    if(['b2','g2','b7','g7'].includes(move.to))
+      return 'When a pawn move opens a long diagonal, developing the bishop promptly lets the pawn advance serve a second purpose.';
+    return 'Development is not just leaving the back rank. Put the bishop on a diagonal where it has a useful job in the position.';
+  }
+
+  if(move.isCastle)
+    return 'Castling is most valuable when it solves two jobs at once: king safety and rook activation.';
+
+  if(move.isCapture && move.captured)
+    return 'Before making a capture, compare the resulting piece activity and the opponent’s recaptures, not just the material removed.';
+
+  if(move.isCheck)
+    return 'Checks are forcing moves, but their value comes from what they achieve after the forced reply. Calculate the follow-up before giving the check.';
+
+  // Great/Brilliant have a real transferable decision-making lesson even when
+  // the position does not expose a clean structural motif.
+  if(String(row?.cls||'').toLowerCase()==='great')
+    return 'When one move preserves the advantage and every alternative gives it away, identify the position’s urgent requirement before considering optional improvements.';
+  if(String(row?.cls||'').toLowerCase()==='brilliant')
+    return 'A sound sacrifice is justified by the position after the material is given up. Calculate the compensation concretely instead of judging the move by material alone.';
+
+  // No verified reusable principle is better than filler.
+  return '';
+}
+
+function reviewLessonCandidateIsUseful(candidate, summary='') {
+  const lesson=String(candidate||'').trim();
+  if(!lesson || reviewLessonIsGeneric(lesson) || lesson.length<45) return false;
+  const a=lesson.toLowerCase().replace(/[^a-z0-9 ]/g,' ');
+  const b=String(summary||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ');
+  if(b && (a===b || b.includes(a) || a.includes(b))) return false;
+  return true;
+}
+
 function reviewDeterministicTeachingFromStructure(row, s) {
   const side = row.mover === 'w' ? 'White' : 'Black';
   const move = s?.rawVerifiedFacts?.moveFacts || {};
@@ -7300,12 +7391,9 @@ function reviewDeterministicTeachingFromStructure(row, s) {
 
   const summary=sentences.filter(Boolean).slice(0,4).join(' ').trim() || `${row.san} is best understood from the concrete change it makes to the position; BOZO did not verify enough detail to add a more specific strategic claim.`;
 
-  let takeaway='';
-  if(move.piece==='p' && prep) takeaway=`The main point of ${row.san} is to make room for ${prep} and develop the bishop; the space gained by the pawn is a bonus.`;
-  else if(move.piece==='n' && ['b1','g1','b8','g8'].includes(move.from)) takeaway=`Develop the knight to ${move.to}${central.length?` and use it to control ${central.join(' and ')}`:''}.`;
-  else if(move.piece==='b' && ['c1','f1','c8','f8'].includes(move.from)) takeaway=`${row.san} is a development move: bring the bishop into the game and make use of its new diagonal.`;
-  else if(move.isCastle) takeaway=`Castle to improve king safety and activate the rook.`;
-  else takeaway=String(s.primaryIdea||`Remember the main purpose of ${row.san}, not just the destination square.`).replace(/^Primary idea:\s*/i,'').replace(/\.$/,'')+'.';
+  // The second box is not a recap. It must teach a principle that transfers to
+  // another position. If BOZO cannot verify one, leave it out.
+  const takeaway=reviewTransferableLesson(row,s);
 
   return {summary,takeaway,source:'structured-local',structure:s};
 }
@@ -7325,10 +7413,14 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
 
   const authored=reviewAuthoredOpeningExplanation(row);
   if(authored){
+    const structure=reviewStructuredMoveAnalysis(row,selectedIndex);
+    const authoredLesson=reviewAuthoredOpeningTakeaway(row);
+    const derivedLesson=reviewTransferableLesson(row,structure);
     row.generatedTeachingNote={
       summary:authored,
-      takeaway:reviewAuthoredOpeningTakeaway(row) || `Remember the concrete purpose of ${row.san} and how it fits the opening plan.`,
-      source:'authored-opening'
+      takeaway:reviewLessonCandidateIsUseful(authoredLesson,authored) ? authoredLesson : derivedLesson,
+      source:'authored-opening',
+      structure
     };
     if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
     return;
@@ -7378,7 +7470,7 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
         `Do not invent support, attacks, weaknesses, diagonals, threats, plans, or causal relationships.`,
         `Avoid robotic wording such as "the engine preferred", "concrete influence", "verified line", or "the moved piece". Name the pawn, knight, bishop, rook, queen, king, square, or plan directly.`,
         `Never dump a piece's full move map as a list of squares. Mention central squares only when strategically relevant; for bishops describe the diagonal, and for knights summarize central influence unless a specific occupied target matters.`,
-        `Return 2-4 natural teaching sentences and one practical takeaway. The takeaway should restate primaryIdea in memorable chess language, not a secondary detail.`,
+        `Return 2-4 natural teaching sentences. If there is a genuinely reusable chess principle supported by the facts, also return one practical takeaway. The takeaway must transfer to other positions and must NOT restate this move, its destination, its classification, or the summary. If no reusable lesson is supported, return no takeaway.`,
         `Never mention structuredAnalysis, validation, metadata, prompts, databases, or implementation.`
       ].join(' '), strictGrounding:true
     };
@@ -7397,8 +7489,12 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
     }
     const summary=unique.slice(0,3).join(' ').trim();
     const plans=Array.isArray(grounded?.practicalPlan)?grounded.practicalPlan.filter(Boolean):[];
-    const candidateTakeaway=String(plans[0]||grounded?.keyLesson||grounded?.lesson||'').trim();
-    const takeaway=(candidateTakeaway && candidateTakeaway.toLowerCase().includes(String(structure.primaryIdea||'').split(/[,:]/)[0].toLowerCase())) ? candidateTakeaway : safeLocal.takeaway;
+    const candidateTakeaway=String(grounded?.keyLesson||grounded?.lesson||plans[0]||'').trim();
+    // Prefer the deterministic transferable principle. The writer may improve it
+    // only when the result is genuinely reusable and not a disguised recap.
+    const takeaway=reviewLessonCandidateIsUseful(candidateTakeaway,summary)
+      ? candidateTakeaway
+      : safeLocal.takeaway;
     if(summary){
       row.generatedTeachingNote={summary,takeaway,source:'structured-writer',structure,full:grounded};
       if(reviewData?.rows?.[reviewStepIndex-1]===row) renderReviewAutoExplanation(row);
@@ -7429,7 +7525,7 @@ function reviewAutoExplanation(row) {
       why: row.generatedTeachingNote.summary,
       comparison: '',
       comparisonLabel: '',
-      lesson: row.generatedTeachingNote.takeaway || `Remember what ${row.san} changes in this position and how it connects to the next move.`,
+      lesson: row.generatedTeachingNote.takeaway || '',
       phase: reviewPhaseLabel(row.phase),
       position: reviewPositionDescription(row.whiteCp, row.mate),
       accuracy: Math.round((Number(row.accuracy) || 0) * 10) / 10,
@@ -7473,10 +7569,10 @@ function reviewAutoExplanation(row) {
       // same theory the Study/Trainer side already exposes; Review should not
       // replace it with a vague generated sentence.
       why = authored;
-      lesson = `This move belongs to ${openingContext || 'the detected opening'}. The point is to carry the authored idea forward into the next moves, not merely to remember that the move is "book."`;
+      lesson = reviewTransferableLesson(row, reviewStructuredMoveAnalysis(row, Math.max(0,row.ply-1)));
     } else if (playedPurpose) {
       why = `${row.san} is part of ${openingContext || 'the detected opening'}. Concretely, it ${playedPurpose}.`;
-      lesson = `Connect this move to the next few moves in the opening: ask what square, pawn break, piece placement, or attack it is preparing.`;
+      lesson = reviewTransferableLesson(row, reviewStructuredMoveAnalysis(row, Math.max(0,row.ply-1)));
     } else {
       const exact = reviewOpeningNameForPly(row.ply);
       const openingName = [exact.name, exact.variation].filter(Boolean).join(': ') || 'this opening';
@@ -7494,7 +7590,7 @@ function reviewAutoExplanation(row) {
     why = playedPurpose
       ? `${row.san} is very precise because it ${playedPurpose} without giving the opponent a meaningful concession.`
       : `${row.san} is very precise and keeps the position at ${position.toLowerCase()} without giving away anything important.`;
-    lesson = 'Remember what the move actually accomplished in the position, not just that it received a strong label.';
+    lesson = reviewTransferableLesson(row, reviewStructuredMoveAnalysis(row, Math.max(0,row.ply-1)));
   } else {
     const costPhrase =
       loss <= 40 ? 'only a little precision'
@@ -7573,15 +7669,15 @@ function renderReviewAutoExplanation(row) {
           <b>${escapeHtml(ex.comparisonLabel || 'Why this works')}</b>
           <span>${escapeHtml(ex.comparison)}</span>
         </div>` : ''}
-      <div class="review-auto-lesson">
-        <b>What to remember</b>
+      ${ex.lesson ? `<div class="review-auto-lesson">
+        <b>Lesson from this move</b>
         <span>${escapeHtml(ex.lesson)}</span>
-      </div>
+      </div>` : ''}
       <small>${row.generatedTeachingNote?.source === 'structured-writer'
         ? 'Built from verified position facts and the game continuation.'
         : row.generatedTeachingNote?.source === 'structured-local'
           ? 'Built directly from verified position facts.'
-          : row.generatedTeachingNote?.source === 'authored' || (row.isBook && reviewAuthoredOpeningExplanation(row))
+          : row.generatedTeachingNote?.source === 'authored-opening' || (row.isBook && reviewAuthoredOpeningExplanation(row))
             ? 'Based on BOZO’s move-by-move opening theory.'
             : state.session?.user
               ? 'Checking the position and preparing the teaching note…'
@@ -7600,7 +7696,7 @@ function updateReviewCoachIdleState(row) {
     primary.dataset.reviewQuestion = 'Why did this move matter?';
     better.textContent = 'Why is the better move stronger?';
     better.dataset.reviewQuestion = 'Why is the better move stronger here?';
-    lesson.dataset.reviewQuestion = 'What is the one lesson I should remember from this position?';
+    lesson.dataset.reviewQuestion = 'What reusable lesson from this position applies to other games?';
     return;
   }
 
