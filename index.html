@@ -5627,6 +5627,17 @@ footer a,footer button,.footer-brand{color:#fff!important}
 <style id="bozo-review-classification-icons-v41435">
 .review-move-button small{display:flex;align-items:center;gap:6px}.review-move-type-icon{width:17px;height:17px;display:inline-block;flex:0 0 17px;object-fit:contain}.review-brilliant{--review-accent:#22d3ee}.review-great{--review-accent:#14b8a6}
 </style>
+
+<style id="bozo-opening-elo-v41439">
+.opening-elo-discovery{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr);gap:22px;align-items:center;margin:16px 0 18px;padding:20px 22px;border:1px solid rgba(121,255,226,.18);border-radius:18px;background:linear-gradient(135deg,rgba(121,255,226,.055),rgba(168,85,247,.06))}
+.opening-elo-copy h2{margin:4px 0 7px;font-size:25px}.opening-elo-copy p{margin:0;color:var(--muted);line-height:1.55}
+.opening-elo-controls{display:grid;gap:10px}.opening-elo-input-row{display:grid;grid-template-columns:minmax(110px,1fr) auto;gap:9px}.opening-elo-input-row input{width:100%;min-width:0;padding:13px 14px;border:1px solid rgba(255,255,255,.13);border-radius:12px;background:rgba(0,0,0,.17);color:var(--text);font:inherit;font-weight:800}
+.opening-elo-quick{display:flex;gap:7px;flex-wrap:wrap}.opening-elo-quick button{border:1px solid rgba(121,255,226,.22);border-radius:999px;padding:7px 11px;background:rgba(121,255,226,.045);color:#b9fff1;font:inherit;font-size:10px;font-weight:900;cursor:pointer}.opening-elo-quick button:hover{background:rgba(121,255,226,.11);border-color:rgba(121,255,226,.48)}
+.opening-elo-fit{display:inline-grid;gap:2px;margin-top:9px;padding:7px 10px;border-radius:11px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.13)}.opening-elo-fit span{font-size:10px;font-weight:950;color:#f4e9ff}.opening-elo-fit small{font-size:8px;color:var(--muted)}.opening-elo-fit.recommended{border-color:rgba(121,255,226,.35);background:rgba(121,255,226,.07)}.opening-elo-fit.recommended span{color:#98ffe9}
+.opening-elo-reason{display:grid;gap:4px;margin:10px 0 0;padding:10px 11px;border-left:3px solid rgba(121,255,226,.55);border-radius:0 10px 10px 0;background:rgba(121,255,226,.045)}.opening-elo-reason b{font-size:9px;color:#98ffe9;text-transform:uppercase;letter-spacing:.04em}.opening-elo-reason span{font-size:9px;color:var(--muted);line-height:1.5}
+@media(max-width:800px){.opening-elo-discovery{grid-template-columns:1fr}.opening-elo-input-row{grid-template-columns:1fr}.opening-elo-input-row .button{width:100%}}
+</style>
+
 </head>
 <body>
   <div class="background-glow glow-one"></div>
@@ -5872,6 +5883,28 @@ footer a,footer button,.footer-brand{color:#fff!important}
           <button id="opening-search-button" class="button primary">Search</button>
         </div>
       </div>
+
+      <section class="opening-elo-discovery" aria-labelledby="opening-elo-title">
+        <div class="opening-elo-copy">
+          <span class="eyebrow">FIND AN OPENING FOR YOUR LEVEL</span>
+          <h2 id="opening-elo-title">What should I play at my Elo?</h2>
+          <p>Enter a rating and BOZO will rank openings by learning fit, theory load, tactical demand, positional complexity, and plan clarity. The range is a recommendation, not a restriction.</p>
+        </div>
+        <div class="opening-elo-controls">
+          <div class="opening-elo-input-row">
+            <input id="opening-elo-input" type="number" min="300" max="3000" step="50" inputmode="numeric" placeholder="e.g. 500" aria-label="Chess rating">
+            <button id="opening-elo-recommend" class="button primary" type="button">Recommend openings</button>
+          </div>
+          <div class="opening-elo-quick" aria-label="Quick rating choices">
+            <button type="button" data-opening-elo="500">500</button>
+            <button type="button" data-opening-elo="800">800</button>
+            <button type="button" data-opening-elo="1200">1200</button>
+            <button type="button" data-opening-elo="1600">1600</button>
+            <button type="button" data-opening-elo="2000">2000</button>
+          </div>
+        </div>
+      </section>
+
       <section class="master-entry-card" aria-label="Master games for openings">
         <div><span class="eyebrow">MASTER DATABASE</span><h2>See how masters actually played it.</h2><p>Search real master games by player, event, ECO, or opening. Opening cards below also link directly to matching games.</p></div>
         <div class="master-entry-actions"><button id="library-master-games" class="button secondary" type="button">Browse master games</button></div>

@@ -1837,6 +1837,7 @@ $('announcement-dismiss')?.addEventListener('click', () => {
 const OPENING_DISCOVERY_TAGS = new Set(['white','black','positional','tactical','aggressive','gambit','system']);
 const openingBrowserFilters = new Set();
 let openingLibraryRows = [];
+let openingTargetElo = null;
 
 $('opening-search-button').addEventListener('click', () => searchOpenings($('opening-search-input').value));
 $('opening-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') searchOpenings(e.target.value); });
@@ -1854,8 +1855,32 @@ document.querySelectorAll('[data-opening-filter]').forEach(button => {
   });
 });
 
+
+$('opening-elo-recommend')?.addEventListener('click', () => {
+  const value=Number($('opening-elo-input')?.value);
+  if(!Number.isFinite(value) || value<300 || value>3000) return toast('Enter a rating from 300 to 3000.');
+  openingTargetElo=Math.round(value);
+  $('opening-search-input').value = String(openingTargetElo);
+  searchOpenings(String(openingTargetElo));
+});
+
+$('opening-elo-input')?.addEventListener('keydown', e => {
+  if(e.key==='Enter') $('opening-elo-recommend')?.click();
+});
+
+document.querySelectorAll('[data-opening-elo]').forEach(button => {
+  button.addEventListener('click', () => {
+    openingTargetElo=Number(button.dataset.openingElo);
+    if($('opening-elo-input')) $('opening-elo-input').value=String(openingTargetElo);
+    $('opening-search-input').value=String(openingTargetElo);
+    searchOpenings(String(openingTargetElo));
+  });
+});
+
 $('opening-filter-clear')?.addEventListener('click', () => {
   openingBrowserFilters.clear();
+  openingTargetElo = null;
+  if($('opening-elo-input')) $('opening-elo-input').value='';
   $('opening-search-input').value = '';
   syncOpeningFilterChips();
   searchOpenings('');
@@ -1871,12 +1896,24 @@ function parseOpeningDiscoveryQuery(query = '') {
   const words = String(query).trim().split(/\s+/).filter(Boolean);
   const textWords = [];
   const tags = new Set(openingBrowserFilters);
-  words.forEach(word => {
+  let elo = openingTargetElo;
+
+  for (let i=0;i<words.length;i++) {
+    const word=words[i];
+    const cleaned=word.toLowerCase().replace(/[,]/g,'');
+    const numeric=/^(\d{3,4})(?:elo)?$/.exec(cleaned);
+    if (numeric) {
+      const value=Number(numeric[1]);
+      if(value>=300 && value<=3000) { elo=value; continue; }
+    }
+    if (/^elo$/i.test(word) && i>0 && /^\d{3,4}$/.test(words[i-1])) continue;
+
     const normalized = word.toLowerCase().replace(/[^a-z-]/g, '');
     if (OPENING_DISCOVERY_TAGS.has(normalized)) tags.add(normalized);
     else textWords.push(word);
-  });
-  return { text: textWords.join(' ').trim(), tags };
+  }
+
+  return { text: textWords.join(' ').trim(), tags, elo };
 }
 
 function openingMoveSans(pgn = '') {
@@ -1925,6 +1962,110 @@ function openingDiscoveryTags(opening = {}) {
   return tags;
 }
 
+
+function openingMetadataNumber(opening,keyVariants=[]) {
+  for(const key of keyVariants){
+    const raw=opening?.metadata?.[key];
+    const n=Number(raw);
+    if(Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function openingLearningProfile(opening={}) {
+  const text=`${opening.name||''} ${opening.variation||''} ${opening.notes||''}`.toLowerCase();
+  const tags=openingDiscoveryTags(opening);
+
+  const metaMin=openingMetadataNumber(opening,['min_recommended_elo','recommended_min_elo','minElo','min_elo']);
+  const metaMax=openingMetadataNumber(opening,['max_recommended_elo','recommended_max_elo','maxElo','max_elo']);
+  const metaTheory=openingMetadataNumber(opening,['theory_load','theoryLoad']);
+  const metaTactical=openingMetadataNumber(opening,['tactical_demand','tacticalDemand']);
+  const metaPositional=openingMetadataNumber(opening,['positional_demand','positionalDemand']);
+  const metaClarity=openingMetadataNumber(opening,['plan_clarity','planClarity']);
+
+  let min=700,max=1900,theory=3,tactical=3,positional=3,clarity=3;
+  let reason='Balanced theory and plans make this suitable for a broad range of improving players.';
+
+  const set=(a,b,t,ta,po,c,r)=>{min=a;max=b;theory=t;tactical=ta;positional=po;clarity=c;reason=r;};
+
+  if(/italian game|giuoco piano/.test(text))
+    set(400,1800,2,3,2,5,'Natural development and clear king-safety ideas make the Italian a strong place to learn opening fundamentals.');
+  else if(/london system/.test(text))
+    set(400,1800,2,2,3,5,'A repeatable setup and clear piece placement reduce the amount of theory a developing player must memorize.');
+  else if(/scotch game/.test(text))
+    set(600,1800,3,4,2,4,'The Scotch teaches central play in open positions with plans that are easier to see than in many closed openings.');
+  else if(/vienna game/.test(text))
+    set(600,1800,3,4,2,4,'The Vienna combines normal development with direct attacking chances without requiring the heaviest theory.');
+  else if(/queen'?s gambit/.test(text))
+    set(800,2300,4,2,5,4,'The Queen’s Gambit rewards understanding of the center and pawn structure, making it especially useful once basic principles are comfortable.');
+  else if(/caro-kann/.test(text))
+    set(600,2100,3,2,4,4,'The Caro-Kann gives Black a reliable structure and clear development plans while avoiding some of the sharpest early theory.');
+  else if(/scandinavian/.test(text))
+    set(400,1600,2,3,2,4,'The Scandinavian gives Black an immediate central plan and relatively easy-to-recognize positions.');
+  else if(/french defen[sc]e/.test(text))
+    set(800,2200,4,3,5,3,'The French is sound and thematic, but its pawn chains and piece-placement problems reward some prior positional experience.');
+  else if(/king'?s indian/.test(text))
+    set(1200,2500,5,5,5,2,'The King’s Indian is powerful but demands comfort with closed centers, pawn breaks, and attacks where timing matters.');
+  else if(/sicilian/.test(text))
+    set(1100,2600,5,5,4,2,'The Sicilian creates rich winning chances, but the asymmetrical structures and large theory tree make it harder as a first defense.');
+  else if(/gr[uü]nfeld/.test(text))
+    set(1500,2700,5,5,5,2,'The Grünfeld relies on concrete theory and dynamic pressure against the center, so it fits stronger players better.');
+  else if(/nimzo-indian/.test(text))
+    set(1200,2500,5,3,5,3,'The Nimzo-Indian is strategically rich and rewards players who already understand structure, development, and long-term imbalances.');
+  else if(/english opening|r[ée]ti/.test(text))
+    set(900,2300,4,2,5,3,'Flexible move orders are valuable, but they ask the player to understand several structures rather than follow one fixed setup.');
+  else if(/polish opening|sokolsky|1\\.b4/.test(text))
+    set(600,1900,3,3,3,4,'The Polish gives a clear queenside idea and unusual positions, while still teaching development and long-diagonal play.');
+  else if(tags.has('system'))
+    set(400,1700,2,2,3,5,'A system opening offers repeatable development plans and a lower early theory burden.');
+  else if(tags.has('gambit'))
+    set(700,1900,3,5,2,4,'Gambits are useful for learning initiative and development, but they reward accurate calculation when material is invested.');
+  else if(tags.has('tactical') || tags.has('aggressive'))
+    set(800,2100,4,5,2,3,'This opening creates tactical chances early, which is valuable once the player is comfortable calculating forcing lines.');
+  else if(tags.has('positional'))
+    set(700,2200,3,2,5,4,'This opening emphasizes structure and piece placement, making it useful for players building positional habits.');
+
+  if(metaMin!=null) min=metaMin;
+  if(metaMax!=null) max=metaMax;
+  if(metaTheory!=null) theory=metaTheory;
+  if(metaTactical!=null) tactical=metaTactical;
+  if(metaPositional!=null) positional=metaPositional;
+  if(metaClarity!=null) clarity=metaClarity;
+
+  const difficulty =
+    theory>=5 || tactical>=5 || positional>=5 ? 'Advanced'
+    : theory<=2 && tactical<=3 && clarity>=4 ? 'Beginner friendly'
+    : 'Intermediate';
+
+  return {min,max,theory,tactical,positional,clarity,difficulty,reason};
+}
+
+function openingEloFit(opening,elo) {
+  if(!Number.isFinite(Number(elo))) return {score:1,profile:openingLearningProfile(opening),distance:0};
+  const target=Number(elo), profile=openingLearningProfile(opening);
+  let distance=0;
+  if(target<profile.min) distance=profile.min-target;
+  else if(target>profile.max) distance=target-profile.max;
+
+  // Full score inside the recommended range, then decay gradually rather than
+  // pretending an opening becomes unplayable at a hard boundary.
+  const score=distance===0 ? 1 : Math.max(0,1-distance/900);
+  return {score,profile,distance};
+}
+
+function openingEloBadgeMarkup(opening,targetElo=null) {
+  const fit=openingEloFit(opening,targetElo);
+  const p=fit.profile;
+  const target=Number(targetElo);
+  const fitLabel=Number.isFinite(target)
+    ? (fit.distance===0 ? `Strong fit for ${target}` : `Possible at ${target}`)
+    : `BOZO range ${p.min}–${p.max}`;
+  return `<div class="opening-elo-fit ${fit.distance===0?'recommended':''}">
+    <span>${escapeHtml(fitLabel)}</span>
+    <small>${p.min}–${p.max} Elo · ${escapeHtml(p.difficulty)}</small>
+  </div>`;
+}
+
 function openingMatchesDiscovery(opening, tags) {
   if (!tags?.size) return true;
   const openingTags = openingDiscoveryTags(opening);
@@ -1934,21 +2075,42 @@ function openingMatchesDiscovery(opening, tags) {
 function renderOpeningBrowserRows(rows, query = '') {
   const target = $('opening-results');
   const parsed = parseOpeningDiscoveryQuery(query);
-  const filtered = rows.filter(opening => openingMatchesDiscovery(opening, parsed.tags));
+  let filtered = rows.filter(opening => openingMatchesDiscovery(opening, parsed.tags));
+
+  // A rating search is recommendation discovery, not a claim that other openings
+  // are unplayable. Keep close fits and sort strongest fits first.
+  if(Number.isFinite(Number(parsed.elo))){
+    const targetElo=Number(parsed.elo);
+    filtered=filtered
+      .map(opening=>({opening,fit:openingEloFit(opening,targetElo)}))
+      .filter(x=>x.fit.score>=.45)
+      .sort((a,b)=>b.fit.score-a.fit.score || b.fit.profile.clarity-a.fit.profile.clarity || a.opening.name.localeCompare(b.opening.name))
+      .map(x=>x.opening);
+  }
+
   const summary = $('opening-filter-summary');
   if (summary) {
     const active = [...parsed.tags];
+    const eloText=Number.isFinite(Number(parsed.elo)) ? ` · recommended around ${Number(parsed.elo)} Elo` : '';
     summary.textContent = active.length
-      ? `${filtered.length.toLocaleString()} matching lines · ${active.map(tag => tag[0].toUpperCase() + tag.slice(1)).join(' + ')}`
-      : `${filtered.length.toLocaleString()} published lines available.`;
+      ? `${filtered.length.toLocaleString()} matching lines · ${active.map(tag => tag[0].toUpperCase() + tag.slice(1)).join(' + ')}${eloText}`
+      : `${filtered.length.toLocaleString()} published lines${eloText}.`;
   }
 
   if (!filtered.length) {
-    target.innerHTML = `<div class="empty-state"><div>♟</div><b>No openings match those filters</b><span>Try removing a style, switching sides, or searching a broader name.</span></div>`;
+    target.innerHTML = `<div class="empty-state"><div>♟</div><b>No openings match those filters</b><span>Try a nearby rating, remove a style filter, or search a broader opening name.</span></div>`;
     return;
   }
 
-  const families = groupOpeningFamilies(filtered);
+  let families = groupOpeningFamilies(filtered);
+  if(Number.isFinite(Number(parsed.elo))){
+    const targetElo=Number(parsed.elo);
+    families=families.sort((a,b)=>{
+      const af=openingEloFit(a.preview,targetElo),bf=openingEloFit(b.preview,targetElo);
+      return bf.score-af.score || bf.profile.clarity-af.profile.clarity || a.name.localeCompare(b.name);
+    });
+  }
+  target.dataset.targetElo = Number.isFinite(Number(parsed.elo)) ? String(Number(parsed.elo)) : '';
   target.innerHTML = families.map(renderOpeningFamily).join('');
   window.BozoMastery?.refreshAll?.();
 
@@ -2169,6 +2331,7 @@ function renderOpeningFamily(family) {
           </span>
           <h3>${escapeHtml(family.name)}</h3>
           <div class="opening-style-tags">${openingTagMarkup(preview)}</div>
+          ${openingEloBadgeMarkup(preview, Number($('opening-results')?.dataset?.targetElo)||null)}
           <p>
             ${single ? '1 published line' : `${lineCount.toLocaleString()} variations`}
             ${officialCount ? ` · ${officialCount} official` : ''}
@@ -2186,6 +2349,9 @@ function renderOpeningFamily(family) {
         <span>${escapeHtml(preview.displayVariation)}</span>
         <code>${formatPreviewMoves(preview.pgn || '', 4)}</code>
       </div>
+      ${Number($('opening-results')?.dataset?.targetElo)
+        ? `<div class="opening-elo-reason"><b>Why BOZO recommends it here</b><span>${escapeHtml(openingLearningProfile(preview).reason)}</span></div>`
+        : ''}
 
       <div class="opening-action-dock ${single ? 'single' : 'family'}">
         <div class="opening-primary-actions">
@@ -6484,12 +6650,14 @@ async function computeWebsiteReview(sans, depth, bookDepth, onProgress) {
       isBook,
       engineBest: isCheckmate ? played.san : engineBestBefore,
       bestMoveFen: reviewBestMovePosition(previousFen, isCheckmate ? played.san : engineBestBefore),
-      principalVariation: isCheckmate ? [] : pvBefore.slice(0, 8),
-      principalVariationSan: isCheckmate ? [] : reviewPvToSan(previousFen, pvBefore, 6),
+      principalVariation: isCheckmate ? [] : pvBefore.slice(0, 10),
+      principalVariationSan: isCheckmate ? [] : reviewPvToSan(previousFen, pvBefore, 8),
+      replyVariation: isCheckmate ? [] : (analysis.pv || []).slice(0, 10),
+      replyVariationSan: isCheckmate ? [] : reviewPvToSan(fen, analysis.pv || [], 8),
       wasTop: isCheckmate || reviewCleanSan(engineBestBefore) === reviewCleanSan(played.san),
       choiceLines,
       uniqueMoveGap: necessity.uniqueGap || 0,
-      greatReason: necessity.great ? 'Only or near-only move that preserves the position' : '',
+      greatReason: necessity.reason || '',
       brilliantSacrifice: Boolean(brilliant)
     });
 
@@ -7319,16 +7487,103 @@ function reviewPvMaterialSwing(row) {
   }
 }
 
+
+function reviewMaterialVector(fen, side) {
+  const board=parseFenBoard(fen);
+  const out={p:0,n:0,b:0,r:0,q:0,k:0};
+  for(const p of Object.values(board)) if(p.color===side && out[p.type]!=null) out[p.type]++;
+  return out;
+}
+
+function reviewContinuationConsequences(row,{fromBefore=false,maxPlies=10}={}) {
+  try {
+    const startFen=fromBefore ? row.previousFen : row.fen;
+    const pv=fromBefore ? (row.principalVariation||[]) : (row.replyVariation||[]);
+    if(!startFen || !pv.length) return null;
+
+    const g=new Chess(startFen);
+    const mine=row.mover, enemy=mine==='w'?'b':'w';
+    const beforeMine=reviewMaterialVector(startFen,mine);
+    const beforeEnemy=reviewMaterialVector(startFen,enemy);
+    let promoted=false, deliveredMate=false;
+    let lastSan='';
+    for(const u0 of pv.slice(0,maxPlies)){
+      const u=String(u0||'').toLowerCase();
+      const legal=g.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===u);
+      if(!legal) break;
+      const moved=g.move(legal);
+      lastSan=moved?.san||lastSan;
+      if(moved?.promotion && moved.color===mine) promoted=true;
+      if(reviewIsCheckmate(g)) { deliveredMate=true; break; }
+    }
+    const afterMine=reviewMaterialVector(g.fen(),mine);
+    const afterEnemy=reviewMaterialVector(g.fen(),enemy);
+    const lost=(before,after)=>({
+      q:Math.max(0,before.q-after.q),
+      r:Math.max(0,before.r-after.r),
+      b:Math.max(0,before.b-after.b),
+      n:Math.max(0,before.n-after.n),
+      p:Math.max(0,before.p-after.p)
+    });
+    return {
+      mineLost:lost(beforeMine,afterMine),
+      enemyLost:lost(beforeEnemy,afterEnemy),
+      promoted,
+      deliveredMate,
+      lastSan,
+      finalFen:g.fen()
+    };
+  } catch (_) { return null; }
+}
+
+function reviewMaterialLossPhrase(loss={}) {
+  const pieces=[];
+  const add=(count,name)=>{for(let i=0;i<count;i++)pieces.push(name)};
+  add(loss.q||0,'queen');add(loss.r||0,'rook');add(loss.b||0,'bishop');add(loss.n||0,'knight');add(loss.p||0,'pawn');
+  if(!pieces.length) return '';
+  if(pieces.length===1) return `a ${pieces[0]}`;
+  if(pieces.length===2) return `a ${pieces[0]} and a ${pieces[1]}`;
+  return pieces.map((x,i)=>`${i===pieces.length-1?'and ':''}a ${x}`).join(', ').replace(', and ',' and ');
+}
+
+function reviewGreatBrilliantTeaching(row,structure) {
+  const cls=String(row?.cls||'').toLowerCase();
+  if(cls!=='great' && cls!=='brilliant') return null;
+  const second=row.choiceLines?.[1];
+  let secondSan='';
+  try {
+    if(second?.pv?.[0]) secondSan=reviewUciToSan(row.previousFen,second.pv[0]);
+  } catch(_) {}
+
+  if(cls==='brilliant'){
+    const consequence=reviewContinuationConsequences(row,{fromBefore:true,maxPlies:8});
+    const myLoss=reviewMaterialLossPhrase(consequence?.mineLost||{});
+    return {
+      why:`${row.san} is brilliant because it is not only the move that preserves the position, it also allows a sound material sacrifice${myLoss?` involving ${myLoss}`:''}. ${secondSan?`Even the next-best alternative, ${secondSan}, gives away the advantage.`:'The alternatives fail to preserve the same result.'}`,
+      lesson:'A brilliant sacrifice is not justified by surprise. Verify that the position after the material is given up still gives you concrete compensation or a forced result.'
+    };
+  }
+
+  return {
+    why:`${row.san} is a Great move because it is the only move that preserves the advantage or saves the game. ${secondSan?`Stockfish's second choice, ${secondSan}, already gives away that result.`:'The strongest alternative already gives away that result.'}`,
+    lesson:'In critical positions, first identify what must be solved immediately. A move can be “Great” because every reasonable-looking alternative fails that requirement.'
+  };
+}
+
 function reviewPromotionTeaching(row, structure) {
   const info=reviewPassedPawnInfo(row,structure);
   if(!info?.advanced) return null;
 
   const pvEffect=reviewPvMaterialSwing(row);
-  let why=`${row.san} makes the passed pawn the position's most urgent feature. On ${info.square} it is only ${info.pushesToPromote} push${info.pushesToPromote===1?'':'es'} from ${info.promotionSquare}=Q, so Black has to organize everything around stopping promotion.`;
+  const consequence=reviewContinuationConsequences(row,{fromBefore:true,maxPlies:10});
+  const enemyLoss=reviewMaterialLossPhrase(consequence?.enemyLost||{});
+  let why=`${row.san} makes the passed pawn the position's most urgent feature. On ${info.square} it is only ${info.pushesToPromote} push${info.pushesToPromote===1?'':'es'} from ${info.promotionSquare}=Q, so the defender has to organize everything around stopping promotion.`;
 
-  if(pvEffect?.opponentRookLost){
-    why += ` In Stockfish's winning continuation, stopping the pawn costs Black a rook, so the promotion threat converts directly into decisive material.`;
-  } else if(pvEffect?.promoted){
+  if(consequence?.enemyLost?.r>0 || pvEffect?.opponentRookLost){
+    why += ` The threat cannot be stopped cleanly: in Stockfish's winning continuation the defending rook is lost while trying to contain the pawn, so the passer converts into decisive material even if it does not queen immediately.`;
+  } else if(enemyLoss){
+    why += ` The principal variation shows the defender giving up ${enemyLoss} to contain the pawn, so the promotion threat converts directly into material.`;
+  } else if(consequence?.promoted || pvEffect?.promoted){
     why += ` The principal variation confirms that the pawn reaches promotion, so this is a concrete queening plan rather than a vague space gain.`;
   }
 
@@ -7436,6 +7691,17 @@ function reviewDeterministicTeachingFromStructure(row, s) {
       source:'structured-local',
       structure:s,
       promotionTeaching
+    };
+  }
+
+  const specialTeaching=reviewGreatBrilliantTeaching(row,s);
+  if(specialTeaching){
+    return {
+      summary:specialTeaching.why,
+      takeaway:specialTeaching.lesson,
+      source:'structured-local',
+      structure:s,
+      specialTeaching
     };
   }
 
@@ -7593,9 +7859,12 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
       : safeLocal.takeaway;
     if(summary){
       const promotionTeaching=reviewPromotionTeaching(row,structure);
+      const specialTeaching=reviewGreatBrilliantTeaching(row,structure);
       row.generatedTeachingNote=promotionTeaching
         ? {summary:promotionTeaching.why,takeaway:promotionTeaching.lesson,source:'structured-local',structure,promotionTeaching}
-        : {summary,takeaway,source:'structured-writer',structure,full:grounded};
+        : specialTeaching
+          ? {summary:specialTeaching.why,takeaway:specialTeaching.lesson,source:'structured-local',structure,specialTeaching}
+          : {summary,takeaway,source:'structured-writer',structure,full:grounded};
       if(reviewData?.rows?.[reviewStepIndex-1]===row) {
         renderReviewAutoExplanation(row);
         drawReviewAutomaticAnnotations(row);
@@ -7723,6 +7992,17 @@ function reviewAutoExplanation(row) {
     }
   }
 
+
+  if(!row.isBook && !row.wasTop && loss>=80){
+    const consequence=reviewContinuationConsequences(row,{fromBefore:false,maxPlies:8});
+    const myLoss=reviewMaterialLossPhrase(consequence?.mineLost||{});
+    if(consequence?.deliveredMate){
+      why += ` The concrete problem is that the opponent's best continuation leads to forced mate.`;
+    } else if(myLoss){
+      why += ` In the engine continuation, this allows the loss of ${myLoss}.`;
+    }
+  }
+
   if (!row.isBook && !comparison && best && best !== row.san) {
     comparisonLabel = `More precise: ${best}`;
     comparison = reviewConcreteComparison(row, best, pv);
@@ -7730,9 +8010,15 @@ function reviewAutoExplanation(row) {
 
   const structureForAuto=row.generatedTeachingNote?.structure || reviewStructuredMoveAnalysis(row,Math.max(0,row.ply-1));
   const promotionTeaching=reviewPromotionTeaching(row,structureForAuto);
+  const specialTeaching=reviewGreatBrilliantTeaching(row,structureForAuto);
   if(promotionTeaching){
     why=promotionTeaching.why;
     lesson=promotionTeaching.lesson;
+    comparison='';
+    comparisonLabel='';
+  } else if(specialTeaching){
+    why=specialTeaching.why;
+    lesson=specialTeaching.lesson;
     comparison='';
     comparisonLabel='';
   }
