@@ -5657,6 +5657,10 @@ let reviewStepIndex = 0;
 let reviewOrientation = 'white';
 let reviewCoachExplanation = null;
 let reviewOpeningCatalog = null;
+// Hoisted state: these are referenced by Review setup/reset code before the later bot/voice implementation blocks run.
+let webBotMoveEngine = null;
+let reviewVoiceEnabled = false;
+let reviewVoiceId = 'daniel';
 
 function prepareReviewPage() {
   const label = $('review-engine-state');
@@ -5703,7 +5707,6 @@ $('ask-review-coach').addEventListener('click', askReviewCoach);
 $('clear-review-coach').addEventListener('click', clearReviewCoach);
 $('review-voice-toggle')?.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
 $('review-voice-select')?.addEventListener('change',event=>{setReviewVoiceId(event.target.value);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
-updateReviewVoiceButton();
 $('review-coach-question').addEventListener('keydown', event => {
   if (event.key === 'Enter') askReviewCoach();
 });
@@ -8122,9 +8125,10 @@ const REVIEW_COACH_VOICES={
   daniel:{label:'Daniel',requested:'bm_daniel',fallback:'bm_daniel'},
   george:{label:'George',requested:'bm_v0george',fallback:'bm_george'}
 };
-let reviewVoiceEnabled=localStorage.getItem(REVIEW_VOICE_PREF_KEY)==='1';
-let reviewVoiceId=localStorage.getItem(REVIEW_VOICE_ID_KEY)||'daniel';
+reviewVoiceEnabled=localStorage.getItem(REVIEW_VOICE_PREF_KEY)==='1';
+reviewVoiceId=localStorage.getItem(REVIEW_VOICE_ID_KEY)||'daniel';
 if(!REVIEW_COACH_VOICES[reviewVoiceId])reviewVoiceId='daniel';
+queueMicrotask(()=>updateReviewVoiceButton());
 let reviewVoicePlayback=null;
 let reviewVoiceObjectUrl='';
 let reviewKokoroPromise=null;
@@ -10381,7 +10385,8 @@ const BOT_STRENGTHS = {
 let webBotSession = null;
 let webBotSelectedSquare = null;
 let webBotAnalysisToken = 0;
-let webBotMoveEngine = null;
+// webBotMoveEngine is declared with Review state above to avoid TDZ errors.
+webBotMoveEngine = null;
 let webBotTurnWatchdog = null;
 let webBotTurnMonitor = null;
 let webBotMovePromise = null;
