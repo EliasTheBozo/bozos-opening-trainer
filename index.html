@@ -4859,6 +4859,11 @@ html[data-music-active="true"][data-music-collapsed="false"][data-music-dock="ri
 @media(max-width:850px){.contact-hero{grid-template-columns:1fr}.contact-info-card{grid-template-columns:1fr}.owner-contact-card{grid-template-columns:1fr}.owner-contact-details{grid-template-columns:1fr}}
 @media(max-width:600px){.contact-form-row,.contact-purpose-grid{grid-template-columns:1fr}.contact-intro,.contact-form-card{padding:22px}}
 
+
+/* BOZO v4.14.40: owner Elo editor + provider-neutral Review voice */
+.owner-elo-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:10px;max-width:760px;margin:14px 0}.owner-elo-toolbar input{width:100%;box-sizing:border-box}.owner-elo-legend{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}.owner-elo-legend span{font-size:9px;color:var(--muted);padding:5px 8px;border:1px solid rgba(255,255,255,.08);border-radius:999px}.owner-elo-list{display:grid;gap:10px}.owner-elo-row{padding:15px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(255,255,255,.025)}.owner-elo-opening{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.owner-elo-opening span,.owner-elo-opening small{color:var(--muted);font-size:9px}.owner-elo-opening h3{margin:3px 0 0;font-size:15px}.owner-elo-controls{display:grid;grid-template-columns:130px 130px auto auto auto;gap:9px;align-items:end;margin-top:12px}.owner-elo-controls label{display:grid;gap:5px;color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase}.owner-elo-controls input[type=number]{width:100%;box-sizing:border-box}.owner-elo-reviewed{display:flex!important;grid-auto-flow:column;align-items:center;justify-content:start;padding-bottom:9px;text-transform:none!important}.owner-elo-reviewed input{width:auto}.owner-elo-status{font-size:9px;color:var(--muted);margin-top:8px}.review-coach-heading-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.review-voice-toggle{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);color:var(--muted);border-radius:999px;padding:6px 9px;font:inherit;font-size:9px;font-weight:900;cursor:pointer}.review-voice-toggle.active{color:#79ffe2;border-color:rgba(121,255,226,.4);background:rgba(121,255,226,.08)}
+@media(max-width:760px){.owner-elo-toolbar{grid-template-columns:1fr}.owner-elo-controls{grid-template-columns:1fr 1fr}.owner-elo-controls button{width:100%}.owner-elo-opening{display:block}.review-coach-heading-actions{justify-content:flex-start}}
+
 </style>
   <style id="bozo-library-action-critical">
     .opening-family-card .train-opening-button,.opening-family-card .line-train-button{background:rgba(56,211,159,.065)!important;color:#79ffe2!important;border:1px solid rgba(56,211,159,.45)!important;appearance:none!important;-webkit-appearance:none!important}
@@ -6698,7 +6703,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
                   <span class="eyebrow">BOZO COACH</span>
                   <h3>Move explanation</h3>
                 </div>
-                <span id="review-coach-move-label" class="coach-move-label">Choose a move</span>
+                <div class="review-coach-heading-actions"><button id="review-voice-toggle" class="review-voice-toggle" type="button" aria-pressed="false">🔇 Coach voice off</button><span id="review-coach-move-label" class="coach-move-label">Choose a move</span></div>
               </div>
               <div id="review-coach-answer" class="coach-answer">
                 Select any analyzed move. BOZO's explanation is already prepared.
@@ -7616,6 +7621,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
           <button data-owner-panel="announcements"><span>📣</span><b>Announcements</b><small>Publish a bulletin</small></button>
           <button data-owner-panel="daily"><span>🧩</span><b>Daily Puzzle Studio</b><small>Author & schedule handcrafted puzzles</small></button>
           <button data-owner-panel="mastergames"><span>♜</span><b>Master Game Import</b><small>Import public PGNs into BOZO</small></button>
+          <button data-owner-panel="openingelo"><span>🎯</span><b>Opening Elo Manager</b><small>Edit Library recommendation ranges</small></button>
           <button data-owner-panel="submissions"><span>📖</span><b>Opening Review</b><small>Pending community theory</small></button>
           <button data-owner-panel="reports"><span>🚩</span><b>Reports</b><small>Open moderation cases</small></button>
           <button data-owner-panel="contact"><span>✉</span><b>Help & Contact</b><small>Disputes, privacy, billing & legal requests</small></button>

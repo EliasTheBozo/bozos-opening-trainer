@@ -1976,8 +1976,10 @@ function openingLearningProfile(opening={}) {
   const text=`${opening.name||''} ${opening.variation||''} ${opening.notes||''}`.toLowerCase();
   const tags=openingDiscoveryTags(opening);
 
-  const metaMin=openingMetadataNumber(opening,['min_recommended_elo','recommended_min_elo','minElo','min_elo']);
-  const metaMax=openingMetadataNumber(opening,['max_recommended_elo','recommended_max_elo','maxElo','max_elo']);
+  const columnMin=Number(opening?.recommended_min_elo);
+  const columnMax=Number(opening?.recommended_max_elo);
+  const metaMin=Number.isFinite(columnMin) ? columnMin : openingMetadataNumber(opening,['min_recommended_elo','recommended_min_elo','minElo','min_elo']);
+  const metaMax=Number.isFinite(columnMax) ? columnMax : openingMetadataNumber(opening,['max_recommended_elo','recommended_max_elo','maxElo','max_elo']);
   const metaTheory=openingMetadataNumber(opening,['theory_load','theoryLoad']);
   const metaTactical=openingMetadataNumber(opening,['tactical_demand','tacticalDemand']);
   const metaPositional=openingMetadataNumber(opening,['positional_demand','positionalDemand']);
@@ -2133,7 +2135,7 @@ async function searchOpenings(query) {
   target.innerHTML = '<div class="empty-state"><div>⌛</div><b>Searching theory…</b></div>';
   const parsed = parseOpeningDiscoveryQuery(query);
 
-  let req = sb.from('openings').select('id,eco,name,variation,pgn,source_type,notes,metadata').eq('status','published').limit(10000);
+  let req = sb.from('openings').select('id,eco,name,variation,pgn,source_type,notes,metadata,recommended_min_elo,recommended_max_elo,elo_reviewed,elo_updated_at').eq('status','published').limit(10000);
   if (parsed.text) req = req.or(`name.ilike.%${parsed.text}%,variation.ilike.%${parsed.text}%,eco.ilike.%${parsed.text}%`);
   const { data, error } = await req.order('name');
 
@@ -2431,7 +2433,7 @@ async function openResponseRepertoire(openingId) {
   let selected = openingLibraryRows.find(row => String(row.id) === String(openingId));
   if (!selected) {
     const { data, error } = await sb.from('openings')
-      .select('id,eco,name,variation,pgn,source_type,notes,metadata')
+      .select('id,eco,name,variation,pgn,source_type,notes,metadata,recommended_min_elo,recommended_max_elo,elo_reviewed,elo_updated_at')
       .eq('id', openingId).maybeSingle();
     if (error || !data) {
       root.innerHTML = `<div class="response-empty">Could not load this opening.<br>${escapeHtml(readableError(error || new Error('Opening not found')))}</div>`;
@@ -2452,7 +2454,7 @@ async function openResponseRepertoire(openingId) {
   copy.textContent = `Train as ${trainingSide} against this ${effectiveOwnerSide === 'white' ? 'White' : 'Black'} repertoire. Starting from ${prefix.join(' ') || 'the opening position'}.`;
 
   const { data: candidates, error } = await sb.from('openings')
-    .select('id,eco,name,variation,pgn,source_type,notes,metadata')
+    .select('id,eco,name,variation,pgn,source_type,notes,metadata,recommended_min_elo,recommended_max_elo,elo_reviewed,elo_updated_at')
     .eq('status','published')
     .limit(10000);
   if (error) {
@@ -3042,6 +3044,15 @@ async function loadOwnerPanel(panel) {
   }
 
 
+  if (panel === 'openingelo') {
+    if (state.role !== 'owner') return ownerError({message:'Owner access required.'});
+    target.innerHTML = ownerOpeningEloMarkup();
+    $('owner-opening-elo-search-button').addEventListener('click',()=>ownerLoadOpeningElo($('owner-opening-elo-search').value.trim()));
+    $('owner-opening-elo-search').addEventListener('keydown',e=>{if(e.key==='Enter')ownerLoadOpeningElo(e.currentTarget.value.trim());});
+    await ownerLoadOpeningElo('');
+    return;
+  }
+
   if (panel === 'community') {
     const { data, error } = await sb.rpc('staff_list_community_objects');
     if (error) return ownerError(error);
@@ -3321,6 +3332,66 @@ async function updateCommunityCase(table, id, status, panel) {
   if (error) return toast(readableError(error));
   toast(`Case marked ${status.replace('_',' ')}.`);
   loadOwnerPanel(panel);
+}
+
+
+let ownerOpeningEloRows=[];
+
+function ownerOpeningEloMarkup(){
+  return `<div class="panel-heading"><div><span>OPENING LIBRARY</span><h2>Opening Elo Manager</h2></div></div>
+    <p class="profile-repertoire-help">Search any published opening or variation, then override the Elo range BOZO uses for rating-specific discovery. Saved owner ranges take priority over the automatic recommendation. Reset removes the override and returns that line to BOZO's calculated fallback.</p>
+    <div class="owner-elo-toolbar"><input id="owner-opening-elo-search" placeholder="Search opening, variation, or ECO"><button id="owner-opening-elo-search-button" class="button primary" type="button">Search</button></div>
+    <div class="owner-elo-legend"><span>300–3000 Elo</span><span>✓ Reviewed marks your manual decision</span><span>Up to 250 results per search</span></div>
+    <div id="owner-opening-elo-results" class="owner-elo-list"></div>`;
+}
+
+async function ownerLoadOpeningElo(query=''){
+  const out=$('owner-opening-elo-results'); if(!out)return;
+  out.innerHTML='<div class="empty-state"><div>⌛</div><b>Loading opening ranges…</b></div>';
+  const {data,error}=await sb.rpc('owner_search_opening_elo',{search_text:String(query||''),row_limit:250});
+  if(error){out.innerHTML=`<div class="empty-state"><div>⚠</div><b>Could not load Elo ranges</b><span>${escapeHtml(readableError(error))}</span></div>`;return;}
+  ownerOpeningEloRows=data||[];
+  if(!ownerOpeningEloRows.length){out.innerHTML='<div class="empty-state"><div>♟</div><b>No openings found</b><span>Try an opening name, variation, or ECO code.</span></div>';return;}
+  out.innerHTML=ownerOpeningEloRows.map(r=>{
+    const fallback=openingLearningProfile({...r,recommended_min_elo:null,recommended_max_elo:null});
+    const hasOverride=Number.isFinite(Number(r.recommended_min_elo))&&Number.isFinite(Number(r.recommended_max_elo));
+    const min=hasOverride?Number(r.recommended_min_elo):fallback.min;
+    const max=hasOverride?Number(r.recommended_max_elo):fallback.max;
+    return `<article class="owner-elo-row" data-owner-elo-row="${escapeHtml(r.id)}">
+      <div class="owner-elo-opening"><div><span>${escapeHtml(r.eco||'—')} · ${escapeHtml(r.source_type==='bozo'?'BOZO Custom':'Library')}</span><h3>${escapeHtml(r.name||'Opening')}</h3></div><small>${hasOverride?'OWNER OVERRIDE':'BOZO FALLBACK'}${r.elo_reviewed?' · ✓ REVIEWED':''}</small></div>
+      <div class="owner-elo-controls">
+        <label>Minimum Elo<input data-owner-elo-min type="number" min="300" max="3000" step="100" value="${min}"></label>
+        <label>Maximum Elo<input data-owner-elo-max type="number" min="300" max="3000" step="100" value="${max}"></label>
+        <label class="owner-elo-reviewed"><input data-owner-elo-reviewed type="checkbox" ${r.elo_reviewed?'checked':''}> Reviewed</label>
+        <button class="button primary small" data-owner-elo-save type="button">Save range</button>
+        <button class="button ghost small" data-owner-elo-reset type="button" ${hasOverride?'':'disabled'}>Reset</button>
+      </div>
+      <div class="owner-elo-status">${hasOverride?`Saved ${min}–${max}`:`Calculated fallback ${min}–${max}`}</div>
+    </article>`;
+  }).join('');
+  out.querySelectorAll('[data-owner-elo-save]').forEach(b=>b.addEventListener('click',()=>ownerSaveOpeningElo(b.closest('[data-owner-elo-row]'))));
+  out.querySelectorAll('[data-owner-elo-reset]').forEach(b=>b.addEventListener('click',()=>ownerResetOpeningElo(b.closest('[data-owner-elo-row]'))));
+}
+
+async function ownerSaveOpeningElo(card){
+  if(!card)return; const id=card.dataset.ownerEloRow;
+  const min=Number(card.querySelector('[data-owner-elo-min]')?.value),max=Number(card.querySelector('[data-owner-elo-max]')?.value);
+  const reviewed=Boolean(card.querySelector('[data-owner-elo-reviewed]')?.checked);
+  if(!Number.isFinite(min)||!Number.isFinite(max)||min<300||max>3000||min>max)return toast('Use a valid Elo range from 300 to 3000.');
+  const save=card.querySelector('[data-owner-elo-save]'); if(save){save.disabled=true;save.textContent='Saving…';}
+  const {error}=await sb.rpc('owner_set_opening_elo',{p_opening_id:id,p_min_elo:Math.round(min),p_max_elo:Math.round(max),p_reviewed:reviewed});
+  if(error){if(save){save.disabled=false;save.textContent='Save range';}return toast(readableError(error));}
+  toast(`Opening range saved: ${Math.round(min)}–${Math.round(max)} Elo.`);
+  await ownerLoadOpeningElo($('owner-opening-elo-search')?.value||'');
+}
+
+async function ownerResetOpeningElo(card){
+  if(!card)return; const id=card.dataset.ownerEloRow;
+  if(!confirm('Remove this owner Elo override and return to BOZO\'s calculated recommendation?'))return;
+  const {error}=await sb.rpc('owner_reset_opening_elo',{p_opening_id:id});
+  if(error)return toast(readableError(error));
+  toast('Owner Elo override removed.');
+  await ownerLoadOpeningElo($('owner-opening-elo-search')?.value||'');
 }
 
 function analyticsStat(value,label){return `<div class="analytics-stat"><b>${Number(value||0).toLocaleString()}</b><span>${label}</span></div>`}
@@ -5630,6 +5701,8 @@ $('review-flip').addEventListener('click', () => {
 });
 $('ask-review-coach').addEventListener('click', askReviewCoach);
 $('clear-review-coach').addEventListener('click', clearReviewCoach);
+$('review-voice-toggle')?.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
+updateReviewVoiceButton();
 $('review-coach-question').addEventListener('keydown', event => {
   if (event.key === 'Enter') askReviewCoach();
 });
@@ -8039,6 +8112,48 @@ function reviewAutoExplanation(row) {
   return row.autoExplanationV2;
 }
 
+
+const REVIEW_VOICE_PREF_KEY='bozo-review-voice-enabled';
+let reviewVoiceEnabled=localStorage.getItem(REVIEW_VOICE_PREF_KEY)==='1';
+let reviewVoicePlayback=null;
+
+function reviewVoiceText(row){
+  if(!row)return '';
+  const ex=reviewAutoExplanation(row);
+  return [ex.why,ex.comparison,ex.lesson].filter(Boolean).join(' ');
+}
+function reviewStopVoice(){
+  try{reviewVoicePlayback?.pause?.();}catch{}
+  reviewVoicePlayback=null;
+}
+function updateReviewVoiceButton(){
+  const b=$('review-voice-toggle');if(!b)return;
+  b.classList.toggle('active',reviewVoiceEnabled);
+  b.setAttribute('aria-pressed',String(reviewVoiceEnabled));
+  b.textContent=reviewVoiceEnabled?'🔊 Coach voice on':'🔇 Coach voice off';
+}
+function setReviewVoiceEnabled(enabled){
+  reviewVoiceEnabled=Boolean(enabled);localStorage.setItem(REVIEW_VOICE_PREF_KEY,reviewVoiceEnabled?'1':'0');
+  if(!reviewVoiceEnabled)reviewStopVoice();
+  updateReviewVoiceButton();
+}
+async function requestReviewCoachAudio(text,row){
+  // Provider-neutral hook for v4.14.40. The next patch can connect OpenAI, ElevenLabs,
+  // browser speech, recorded coach clips, or another source without touching Review logic.
+  // Expected future return: {url} or {blob}; null means no source is configured.
+  return null;
+}
+async function speakCurrentReviewExplanation(row,{manual=false}={}){
+  reviewStopVoice(); if(!reviewVoiceEnabled||!row)return;
+  const text=reviewVoiceText(row);if(!text)return;
+  const audio=await requestReviewCoachAudio(text,row);
+  if(!audio){if(manual)toast('Coach voice is ready for a source. We have not connected a TTS provider yet.');return;}
+  try{
+    const src=audio.url||(audio.blob?URL.createObjectURL(audio.blob):'');if(!src)return;
+    reviewVoicePlayback=new Audio(src);await reviewVoicePlayback.play();
+  }catch(error){if(manual)toast('Coach voice could not play on this device.');}
+}
+
 function renderReviewAutoExplanation(row) {
   const answer = $('review-coach-answer');
   if (!answer) return;
@@ -8138,6 +8253,7 @@ function updateReviewCoachIdleState(row) {
 
 function updateReviewSelectedMove() {
   const row = reviewStepIndex === 0 ? null : reviewData?.rows[reviewStepIndex - 1];
+  reviewStopVoice();
 
   if (!row) {
     $('review-selected-move').textContent = 'Starting position';
@@ -8176,6 +8292,7 @@ function updateReviewSelectedMove() {
   $('review-coach-move-label').textContent = moveLabel;
   updateReviewCoachIdleState(row);
   drawReviewAutomaticAnnotations(row);
+  if(reviewVoiceEnabled) speakCurrentReviewExplanation(row);
 }
 
 function clearReviewCoachAnnotations() {
@@ -13286,7 +13403,7 @@ async function searchTrainOpenings(query = '') {
   if (!root) return;
   const text = query.trim();
   root.innerHTML = '<div class="empty-state"><div>⌛</div><b>Searching theory…</b></div>';
-  let req = sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('status','published').limit(60);
+  let req = sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type,recommended_min_elo,recommended_max_elo,elo_reviewed,elo_updated_at').eq('status','published').limit(60);
   if (text) req = req.or(`name.ilike.%${text}%,variation.ilike.%${text}%,eco.ilike.%${text}%`);
   const { data, error } = await req.order('name');
   if (error) { root.innerHTML = `<div class="empty-state"><div>⚠</div><b>Could not load openings</b><span>${escapeHtml(readableError(error))}</span></div>`; return; }
@@ -13301,7 +13418,7 @@ async function searchTrainOpenings(query = '') {
 
 async function startTrainingOpening(openingId) {
   route('train');
-  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('id', openingId).maybeSingle();
+  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type,recommended_min_elo,recommended_max_elo,elo_reviewed,elo_updated_at').eq('id', openingId).maybeSingle();
   if (error || !data) return toast(readableError(error || new Error('Opening not found')));
   const parser = new Chess();
   if (!parser.load_pgn(data.pgn, { sloppy: true })) return toast('This opening line could not be loaded.');
@@ -14291,7 +14408,7 @@ async function searchPuzzleOpenings(query = '') {
   if (!root) return;
   const text = query.trim();
   root.innerHTML = '<div class="empty-state"><div>⌛</div><b>Building puzzles…</b></div>';
-  let req = sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('status','published').limit(60);
+  let req = sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type,recommended_min_elo,recommended_max_elo,elo_reviewed,elo_updated_at').eq('status','published').limit(60);
   if (text) req = req.or(`name.ilike.%${text}%,variation.ilike.%${text}%,eco.ilike.%${text}%`);
   const { data, error } = await req.order('name');
   if (error) { root.innerHTML = `<div class="empty-state"><div>⚠</div><b>Could not load openings</b><span>${escapeHtml(readableError(error))}</span></div>`; return; }
@@ -14314,7 +14431,7 @@ function openingSupportsPuzzles(row) {
 }
 
 async function fetchPuzzleOpening(openingId) {
-  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('id',openingId).maybeSingle();
+  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type,recommended_min_elo,recommended_max_elo,elo_reviewed,elo_updated_at').eq('id',openingId).maybeSingle();
   if (error || !data) throw error || new Error('Opening not found');
   return data;
 }
@@ -14335,7 +14452,7 @@ async function startRandomOpeningPuzzles() {
   setTrainMode('puzzles');
   const root = $('puzzle-opening-results');
   if (root) root.innerHTML = '<div class="empty-state"><div>🎲</div><b>BOZO is shuffling the library…</b><span>Finding five puzzle-ready positions.</span></div>';
-  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type').eq('status','published').limit(120);
+  const { data, error } = await sb.from('openings').select('id,eco,name,variation,pgn,notes,metadata,source_type,recommended_min_elo,recommended_max_elo,elo_reviewed,elo_updated_at').eq('status','published').limit(120);
   if (error) { showPuzzlePicker(); return toast(readableError(error)); }
   puzzleOpening = null;
   puzzlePool = shuffleArray((data || []).filter(openingSupportsPuzzles)).slice(0,25);
