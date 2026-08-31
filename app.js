@@ -5702,6 +5702,7 @@ $('review-flip').addEventListener('click', () => {
 $('ask-review-coach').addEventListener('click', askReviewCoach);
 $('clear-review-coach').addEventListener('click', clearReviewCoach);
 $('review-voice-toggle')?.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
+$('review-voice-select')?.addEventListener('change',event=>{setReviewVoiceId(event.target.value);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
 updateReviewVoiceButton();
 $('review-coach-question').addEventListener('keydown', event => {
   if (event.key === 'Enter') askReviewCoach();
@@ -8114,46 +8115,137 @@ function reviewAutoExplanation(row) {
 
 
 const REVIEW_VOICE_PREF_KEY='bozo-review-voice-enabled';
+const REVIEW_VOICE_ID_KEY='bozo-review-voice-id';
+const REVIEW_KOKORO_MODEL='onnx-community/Kokoro-82M-v1.0-ONNX';
+const REVIEW_KOKORO_ESM='https://cdn.jsdelivr.net/npm/kokoro-js/+esm';
+const REVIEW_COACH_VOICES={
+  daniel:{label:'Daniel',requested:'bm_daniel',fallback:'bm_daniel'},
+  george:{label:'George',requested:'bm_v0george',fallback:'bm_george'}
+};
 let reviewVoiceEnabled=localStorage.getItem(REVIEW_VOICE_PREF_KEY)==='1';
+let reviewVoiceId=localStorage.getItem(REVIEW_VOICE_ID_KEY)||'daniel';
+if(!REVIEW_COACH_VOICES[reviewVoiceId])reviewVoiceId='daniel';
 let reviewVoicePlayback=null;
+let reviewVoiceObjectUrl='';
+let reviewKokoroPromise=null;
+let reviewVoiceRequestToken=0;
+const reviewVoiceCache=new Map();
 
 function reviewVoiceText(row){
   if(!row)return '';
   const ex=reviewAutoExplanation(row);
   return [ex.why,ex.comparison,ex.lesson].filter(Boolean).join(' ');
 }
+function reviewVoiceStatus(text,state=''){
+  const el=$('review-voice-status');if(!el)return;
+  el.textContent=text||'';
+  el.dataset.state=state;
+}
 function reviewStopVoice(){
+  reviewVoiceRequestToken++;
   try{reviewVoicePlayback?.pause?.();}catch{}
   reviewVoicePlayback=null;
+  if(reviewVoiceObjectUrl){try{URL.revokeObjectURL(reviewVoiceObjectUrl);}catch{}reviewVoiceObjectUrl='';}
+  try{window.speechSynthesis?.cancel?.();}catch{}
 }
 function updateReviewVoiceButton(){
-  const b=$('review-voice-toggle');if(!b)return;
-  b.classList.toggle('active',reviewVoiceEnabled);
-  b.setAttribute('aria-pressed',String(reviewVoiceEnabled));
-  b.textContent=reviewVoiceEnabled?'🔊 Coach voice on':'🔇 Coach voice off';
+  const b=$('review-voice-toggle');if(b){
+    b.classList.toggle('active',reviewVoiceEnabled);
+    b.setAttribute('aria-pressed',String(reviewVoiceEnabled));
+    b.textContent=reviewVoiceEnabled?'🔊 Coach voice on':'🔇 Coach voice off';
+  }
+  const select=$('review-voice-select');if(select)select.value=reviewVoiceId;
 }
 function setReviewVoiceEnabled(enabled){
-  reviewVoiceEnabled=Boolean(enabled);localStorage.setItem(REVIEW_VOICE_PREF_KEY,reviewVoiceEnabled?'1':'0');
-  if(!reviewVoiceEnabled)reviewStopVoice();
+  reviewVoiceEnabled=Boolean(enabled);
+  localStorage.setItem(REVIEW_VOICE_PREF_KEY,reviewVoiceEnabled?'1':'0');
+  if(!reviewVoiceEnabled){reviewStopVoice();reviewVoiceStatus('');}
   updateReviewVoiceButton();
 }
+function setReviewVoiceId(id){
+  if(!REVIEW_COACH_VOICES[id])return;
+  reviewStopVoice();
+  reviewVoiceId=id;
+  localStorage.setItem(REVIEW_VOICE_ID_KEY,id);
+  updateReviewVoiceButton();
+  reviewVoiceStatus(`${REVIEW_COACH_VOICES[id].label} selected.`,'ready');
+}
+async function loadReviewKokoro(){
+  if(reviewKokoroPromise)return reviewKokoroPromise;
+  reviewVoiceStatus(`Loading local ${REVIEW_COACH_VOICES[reviewVoiceId].label} voice for the first time…`,'loading');
+  reviewKokoroPromise=(async()=>{
+    const mod=await import(REVIEW_KOKORO_ESM);
+    const {KokoroTTS}=mod;
+    if(!KokoroTTS)throw new Error('KokoroTTS module unavailable');
+    const tts=await KokoroTTS.from_pretrained(REVIEW_KOKORO_MODEL,{dtype:'q8',device:'wasm'});
+    reviewVoiceStatus('Local coach voice ready.','ready');
+    return tts;
+  })().catch(error=>{
+    reviewKokoroPromise=null;
+    reviewVoiceStatus('Local voice could not load. Browser fallback will be used.','error');
+    throw error;
+  });
+  return reviewKokoroPromise;
+}
+function reviewSpeechFallback(text){
+  if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance)return false;
+  try{
+    speechSynthesis.cancel();
+    const utterance=new SpeechSynthesisUtterance(text);
+    utterance.lang='en-GB';utterance.rate=.96;utterance.pitch=1;
+    const voices=speechSynthesis.getVoices?.()||[];
+    const british=voices.find(v=>/^en-GB/i.test(v.lang)&&/male|daniel|george|oliver|ryan/i.test(v.name))||voices.find(v=>/^en-GB/i.test(v.lang));
+    if(british)utterance.voice=british;
+    reviewVoicePlayback={pause:()=>speechSynthesis.cancel()};
+    speechSynthesis.speak(utterance);
+    reviewVoiceStatus('Using this device’s British voice fallback.','fallback');
+    return true;
+  }catch{return false;}
+}
 async function requestReviewCoachAudio(text,row){
-  // Provider-neutral hook for v4.14.40. The next patch can connect OpenAI, ElevenLabs,
-  // browser speech, recorded coach clips, or another source without touching Review logic.
-  // Expected future return: {url} or {blob}; null means no source is configured.
-  return null;
+  const tts=await loadReviewKokoro();
+  const voiceConfig=REVIEW_COACH_VOICES[reviewVoiceId];
+  let voice=voiceConfig.requested;
+  try{
+    const available=typeof tts.list_voices==='function'?await tts.list_voices():tts.voices;
+    const has=id=>Array.isArray(available)
+      ?available.some(v=>(typeof v==='string'?v:v?.id||v?.name)===id)
+      :Boolean(available&&Object.prototype.hasOwnProperty.call(available,id));
+    if(!has(voice)&&voiceConfig.fallback)voice=voiceConfig.fallback;
+  }catch{voice=voiceConfig.fallback||voice;}
+  const cacheKey=`${voice}|${text}`;
+  if(reviewVoiceCache.has(cacheKey))return {blob:reviewVoiceCache.get(cacheKey),voice};
+  reviewVoiceStatus(`Generating ${voiceConfig.label} locally…`,'loading');
+  const generated=await tts.generate(text,{voice,speed:1});
+  const blob=generated?.toBlob?.();
+  if(!blob)throw new Error('Kokoro returned no playable audio');
+  if(reviewVoiceCache.size>24){const first=reviewVoiceCache.keys().next().value;reviewVoiceCache.delete(first);}
+  reviewVoiceCache.set(cacheKey,blob);
+  reviewVoiceStatus(`${voiceConfig.label} ready${voice!==voiceConfig.requested?' (current George model)':''}.`,'ready');
+  return {blob,voice};
 }
 async function speakCurrentReviewExplanation(row,{manual=false}={}){
-  reviewStopVoice(); if(!reviewVoiceEnabled||!row)return;
+  reviewStopVoice();
+  if(!reviewVoiceEnabled||!row)return;
+  const token=reviewVoiceRequestToken;
   const text=reviewVoiceText(row);if(!text)return;
-  const audio=await requestReviewCoachAudio(text,row);
-  if(!audio){if(manual)toast('Coach voice is ready for a source. We have not connected a TTS provider yet.');return;}
   try{
+    const audio=await requestReviewCoachAudio(text,row);
+    if(token!==reviewVoiceRequestToken)return;
     const src=audio.url||(audio.blob?URL.createObjectURL(audio.blob):'');if(!src)return;
-    reviewVoicePlayback=new Audio(src);await reviewVoicePlayback.play();
-  }catch(error){if(manual)toast('Coach voice could not play on this device.');}
+    reviewVoiceObjectUrl=audio.blob?src:'';
+    reviewVoicePlayback=new Audio(src);
+    reviewVoicePlayback.addEventListener('ended',()=>{
+      if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl='';}
+    },{once:true});
+    await reviewVoicePlayback.play();
+  }catch(error){
+    console.warn('Kokoro Review voice failed:',error);
+    if(token!==reviewVoiceRequestToken)return;
+    const fallbackWorked=reviewSpeechFallback(text);
+    if(manual&&!fallbackWorked)toast('Coach voice could not play on this device.');
+  }
 }
-
 function renderReviewAutoExplanation(row) {
   const answer = $('review-coach-answer');
   if (!answer) return;
