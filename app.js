@@ -7501,6 +7501,12 @@ function reviewStructuredMoveAnalysis(row, selectedIndex) {
     immediateEffects, verifiedConnections:gameConnections,
     verifiedNewlyOpenedLines:facts?.newlyOpenedLines||[],
     actualContinuation:next, principalVariation:row.principalVariationSan||[],
+    alternativeAnalysis:(()=>{
+      const second=row.choiceLines?.[1];
+      let san='';
+      try{if(second?.pv?.[0]) san=reviewUciToSan(row.previousFen,second.pv[0]);}catch(_){}
+      return san ? {move:san,whyItFails:reviewExplainWhyAlternativeFails(row,san,second?.pv||[])} : null;
+    })(),
     forbiddenClaims:forbidden, rawVerifiedFacts:facts
   };
 }
@@ -7623,28 +7629,179 @@ function reviewMaterialLossPhrase(loss={}) {
   return pieces.map((x,i)=>`${i===pieces.length-1?'and ':''}a ${x}`).join(', ').replace(', and ',' and ');
 }
 
+
+// Review is allowed to USE engine analysis, but the learner should only see chess.
+// This final presentation guard prevents implementation vocabulary from leaking out
+// of local templates or AI-written upgrades.
+function reviewCoachFacingText(value='') {
+  let text=String(value||'');
+  text=text
+    .replace(/Stockfish(?:'s|’s)\s+second choice/gi,'The strongest alternative')
+    .replace(/Stockfish(?:'s|’s)\s+(?:winning\s+)?continuation/gi,'the forcing continuation')
+    .replace(/(?:the\s+)?engine(?:'s|’s)?\s+(?:best\s+)?continuation/gi,'the best continuation')
+    .replace(/(?:the\s+)?engine\s+(?:preferred|prefers|recommends|recommended)/gi,'the position favors')
+    .replace(/(?:the\s+)?principal variation\s+shows/gi,'The continuation shows')
+    .replace(/(?:the\s+)?principal variation\s+confirms/gi,'The continuation confirms')
+    .replace(/(?:the\s+)?principal variation\s+demonstrates/gi,'The continuation demonstrates')
+    .replace(/\bprincipal variation\b/gi,'continuation')
+    .replace(/\bengine line\b/gi,'continuation')
+    .replace(/\bengine evaluation\b/gi,'evaluation')
+    .replace(/\bStockfish\b/gi,'the analysis');
+  // The replacements above are a safety net. No coach-facing template should rely
+  // on them as its primary explanation.
+  return text.replace(/\s{2,}/g,' ').trim();
+}
+
+function reviewPositionKey(fen='') {
+  return String(fen||'').split(' ').slice(0,4).join(' ');
+}
+
+function reviewHalfmoveClock(fen='') {
+  const n=Number(String(fen||'').split(' ')[4]||0);
+  return Number.isFinite(n)?n:0;
+}
+
+function reviewAttackersOfSquare(board, square, color) {
+  const out=[];
+  for(const [from,piece] of Object.entries(board||{})){
+    if(piece.color!==color) continue;
+    if(attackedSquaresForPiece(from,piece,board).includes(square)) out.push({from,piece:piece.type});
+  }
+  return out;
+}
+
+function reviewLoosePieces(fen, side) {
+  const board=parseFenBoard(fen);
+  const enemy=side==='w'?'b':'w';
+  const values={p:1,n:3,b:3,r:5,q:9,k:100};
+  const loose=[];
+  for(const [square,piece] of Object.entries(board)){
+    if(piece.color!==side || piece.type==='k') continue;
+    const attackers=reviewAttackersOfSquare(board,square,enemy);
+    if(!attackers.length) continue;
+    const defenders=reviewAttackersOfSquare(board,square,side).filter(x=>x.from!==square);
+    if(!defenders.length) loose.push({square,piece:piece.type,value:values[piece.type]||0,attackers});
+  }
+  return loose.sort((a,b)=>b.value-a.value);
+}
+
+function reviewBranchHistoryCounts(row) {
+  const counts=new Map();
+  const add=fen=>{const k=reviewPositionKey(fen);if(k)counts.set(k,(counts.get(k)||0)+1)};
+  add(reviewData?.initialFen || new Chess().fen());
+  for(const r of reviewData?.rows||[]){
+    if(r.ply>=row.ply) break;
+    add(r.fen);
+  }
+  return counts;
+}
+
+function reviewAnalyzeAlternative(row, alternativeSan='', lineUci=[]) {
+  if(!row?.previousFen || !alternativeSan) return null;
+  try{
+    const g=new Chess(row.previousFen);
+    const alt=g.move(alternativeSan,{sloppy:true});
+    if(!alt) return null;
+    const altFen=g.fen();
+    const mover=row.mover, enemy=mover==='w'?'b':'w';
+    const altFacts=reviewMoveFacts(row.previousFen,alt.san);
+    const playedFacts=reviewMoveFacts(row.previousFen,row.san);
+    const counts=reviewBranchHistoryCounts(row);
+    const addRep=()=>{const k=reviewPositionKey(g.fen());counts.set(k,(counts.get(k)||0)+1);return counts.get(k)};
+    let repetitionCount=addRep();
+    let forcedDraw='';
+    let deliveredMate=false;
+    let mateWinner='';
+    let plies=0;
+    const beforeMine=reviewMaterialVector(row.previousFen,mover);
+    const beforeEnemy=reviewMaterialVector(row.previousFen,enemy);
+    const pv=Array.isArray(lineUci)?lineUci.slice():[];
+    // MultiPV includes the alternative itself as pv[0]. We already played it.
+    if(pv.length && String(pv[0]).toLowerCase()===reviewMoveUci(alt).toLowerCase()) pv.shift();
+    for(const u0 of pv.slice(0,12)){
+      const u=String(u0||'').toLowerCase();
+      const legal=g.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===u);
+      if(!legal) break;
+      const moved=g.move(legal); plies++;
+      repetitionCount=Math.max(repetitionCount,addRep());
+      if(reviewIsCheckmate(g)){deliveredMate=true;mateWinner=moved.color;break;}
+      if(reviewIsStalemate(g)){forcedDraw='stalemate';break;}
+      if(reviewIsInsufficient(g)){forcedDraw='insufficient material';break;}
+      if(repetitionCount>=3){forcedDraw='threefold repetition';break;}
+      if(reviewHalfmoveClock(g.fen())>=100){forcedDraw='fifty-move rule';break;}
+    }
+    const afterMine=reviewMaterialVector(g.fen(),mover), afterEnemy=reviewMaterialVector(g.fen(),enemy);
+    const lost=(a,b)=>({q:Math.max(0,a.q-b.q),r:Math.max(0,a.r-b.r),b:Math.max(0,a.b-b.b),n:Math.max(0,a.n-b.n),p:Math.max(0,a.p-b.p)});
+    const chosenLoose=reviewLoosePieces(row.fen,mover);
+    const altLoose=reviewLoosePieces(altFen,mover);
+    const newlyLoose=altLoose.filter(x=>!chosenLoose.some(y=>y.square===x.square&&y.piece===x.piece));
+    return {
+      san:alt.san, altFen, playedFacts, altFacts, plies, deliveredMate, mateWinner, forcedDraw,
+      repetitionCount, fiftyMoveDormant:reviewHalfmoveClock(altFen)>=90,
+      mineLost:lost(beforeMine,afterMine), enemyLost:lost(beforeEnemy,afterEnemy),
+      newlyLoose, finalFen:g.fen()
+    };
+  }catch(_){return null;}
+}
+
+function reviewExplainWhyAlternativeFails(row, alternativeSan='', lineUci=[]) {
+  const a=reviewAnalyzeAlternative(row,alternativeSan,lineUci);
+  if(!a) return '';
+  const parts=[];
+  const myLoss=reviewMaterialLossPhrase(a.mineLost||{});
+  const enemyLoss=reviewMaterialLossPhrase(a.enemyLost||{});
+  const played=a.playedFacts, alt=a.altFacts;
+
+  if(a.deliveredMate && a.mateWinner && a.mateWinner!==row.mover){
+    parts.push(`${a.san} fails concretely because the opponent can force checkmate.`);
+  } else if(a.forcedDraw){
+    parts.push(`${a.san} allows a forced draw by ${a.forcedDraw}, so it gives up the winning chances that ${row.san} preserves.`);
+  } else if(myLoss){
+    parts.push(`${a.san} allows the opponent to win ${myLoss} in the forcing continuation.`);
+  } else if(a.newlyLoose?.length){
+    const x=a.newlyLoose[0];
+    parts.push(`${a.san} leaves the ${COACH_PIECE_NAMES[x.piece]} on ${x.square} attacked without a defender, giving the opponent an immediate target.`);
+  }
+
+  if(played?.isCheck && !alt?.isCheck){
+    parts.push(`${row.san} comes with check, so the opponent must answer the king threat first; ${a.san} gives up that forcing tempo and lets the opponent act immediately.`);
+  } else if(played?.isCapture && !alt?.isCapture && played?.captured){
+    parts.push(`${row.san} immediately removes the ${played.captured} on ${played.to}, while ${a.san} leaves that resource on the board.`);
+  }
+
+  if(a.repetitionCount===2 && !a.forcedDraw){
+    parts.push(`The repetition is also dormant rather than claimable: this branch has reached the same position twice, so another recurrence would create a threefold draw.`);
+  }
+  if(a.fiftyMoveDormant && !a.forcedDraw){
+    parts.push(`The fifty-move counter is already close to the draw threshold, so wasting tempi also carries a concrete draw risk.`);
+  }
+  if(!parts.length && enemyLoss && !myLoss){
+    parts.push(`${a.san} does not create the same forcing sequence; ${row.san} is the move that converts the position before the opponent can reorganize.`);
+  }
+  return parts.slice(0,3).join(' ');
+}
+
 function reviewGreatBrilliantTeaching(row,structure) {
   const cls=String(row?.cls||'').toLowerCase();
   if(cls!=='great' && cls!=='brilliant') return null;
   const second=row.choiceLines?.[1];
   let secondSan='';
-  try {
-    if(second?.pv?.[0]) secondSan=reviewUciToSan(row.previousFen,second.pv[0]);
-  } catch(_) {}
+  try { if(second?.pv?.[0]) secondSan=reviewUciToSan(row.previousFen,second.pv[0]); } catch(_) {}
+  const alternativeWhy=secondSan ? reviewExplainWhyAlternativeFails(row,secondSan,second?.pv||[]) : '';
 
   if(cls==='brilliant'){
-    const consequence=reviewContinuationConsequences(row,{fromBefore:true,maxPlies:8});
+    const consequence=reviewContinuationConsequences(row,{fromBefore:true,maxPlies:10});
     const myLoss=reviewMaterialLossPhrase(consequence?.mineLost||{});
-    return {
-      why:`${row.san} is brilliant because it is not only the move that preserves the position, it also allows a sound material sacrifice${myLoss?` involving ${myLoss}`:''}. ${secondSan?`Even the next-best alternative, ${secondSan}, gives away the advantage.`:'The alternatives fail to preserve the same result.'}`,
-      lesson:'A brilliant sacrifice is not justified by surprise. Verify that the position after the material is given up still gives you concrete compensation or a forced result.'
-    };
+    let why=`${row.san} is brilliant because it preserves the position while allowing a sound material sacrifice${myLoss?` involving ${myLoss}`:''}.`;
+    if(alternativeWhy) why+=` ${alternativeWhy}`;
+    else if(secondSan) why+=` The strongest alternative, ${secondSan}, does not preserve the same result.`;
+    return {why:reviewCoachFacingText(why),lesson:'A sound sacrifice is justified by what remains after the material is given up. Calculate the forcing replies, compensation, and final result rather than judging the move by material alone.'};
   }
 
-  return {
-    why:`${row.san} is a Great move because it is the only move that preserves the advantage or saves the game. ${secondSan?`Stockfish's second choice, ${secondSan}, already gives away that result.`:'The strongest alternative already gives away that result.'}`,
-    lesson:'In critical positions, first identify what must be solved immediately. A move can be “Great” because every reasonable-looking alternative fails that requirement.'
-  };
+  let why=`${row.san} is a Great move because it is the only move that preserves the advantage or saves the game.`;
+  if(alternativeWhy) why+=` ${alternativeWhy}`;
+  else if(secondSan) why+=` The strongest alternative, ${secondSan}, gives away that result, although this short continuation does not expose a single simpler tactical cause.`;
+  return {why:reviewCoachFacingText(why),lesson:'In critical positions, identify the position’s urgent requirement, then compare what the natural alternatives actually allow after the opponent’s forcing reply.'};
 }
 
 function reviewPromotionTeaching(row, structure) {
@@ -7657,11 +7814,11 @@ function reviewPromotionTeaching(row, structure) {
   let why=`${row.san} makes the passed pawn the position's most urgent feature. On ${info.square} it is only ${info.pushesToPromote} push${info.pushesToPromote===1?'':'es'} from ${info.promotionSquare}=Q, so the defender has to organize everything around stopping promotion.`;
 
   if(consequence?.enemyLost?.r>0 || pvEffect?.opponentRookLost){
-    why += ` The threat cannot be stopped cleanly: in Stockfish's winning continuation the defending rook is lost while trying to contain the pawn, so the passer converts into decisive material even if it does not queen immediately.`;
+    why += ` The threat cannot be stopped cleanly: in the forcing continuation the defending rook is lost while trying to contain the pawn, so the passer converts into decisive material even if it does not queen immediately.`;
   } else if(enemyLoss){
-    why += ` The principal variation shows the defender giving up ${enemyLoss} to contain the pawn, so the promotion threat converts directly into material.`;
+    why += ` The continuation shows the defender giving up ${enemyLoss} to contain the pawn, so the promotion threat converts directly into material.`;
   } else if(consequence?.promoted || pvEffect?.promoted){
-    why += ` The principal variation confirms that the pawn reaches promotion, so this is a concrete queening plan rather than a vague space gain.`;
+    why += ` The continuation confirms that the pawn reaches promotion, so this is a concrete queening plan rather than a vague space gain.`;
   }
 
   const lesson='An advanced passed pawn can become more important than material elsewhere. Calculate its direct promotion route first, then check whether the defender must sacrifice material to stop it.';
@@ -7892,6 +8049,7 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
         verifiedNewlyOpenedLines:structure.verifiedNewlyOpenedLines,
         actualContinuation:structure.actualContinuation,
         principalVariation:structure.principalVariation,
+        alternativeAnalysis:structure.alternativeAnalysis,
         forbiddenClaims:structure.forbiddenClaims
       },
       question:[
@@ -7907,6 +8065,8 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
         `Use actualContinuation to connect moves when useful, but do not pretend the later move was forced or caused unless the structure explicitly says so.`,
         `Use only claims explicitly supported by structuredAnalysis. Do not add chess facts from intuition, memory, or generic opening lore.`,
         `Do not invent support, attacks, weaknesses, diagonals, threats, plans, or causal relationships.`,
+        `Never mention Stockfish, an engine, principal variations, MultiPV, centipawns, or internal analysis. Translate the evidence into chess causes.`,
+        `For Great/Brilliant/critical moves, if alternativeAnalysis supplies whyItFails, explicitly explain WHY that alternative fails: material, mate, draw mechanism, hanging piece, lost tempo, or another verified consequence. Do not merely say it is worse.`,
         `Avoid robotic wording such as "the engine preferred", "concrete influence", "verified line", or "the moved piece". Name the pawn, knight, bishop, rook, queen, king, square, or plan directly.`,
         `Never dump a piece's full move map as a list of squares. Mention central squares only when strategically relevant; for bishops describe the diagonal, and for knights summarize central influence unless a specific occupied target matters.`,
         `Return 2-4 natural teaching sentences. If there is a genuinely reusable chess principle supported by the facts, also return one practical takeaway. The takeaway must transfer to other positions and must NOT restate this move, its destination, its classification, or the summary. If no reusable lesson is supported, return no takeaway.`,
@@ -7926,7 +8086,7 @@ async function generateReviewTeachingNote(row, selectedIndex, token) {
       const norm=chunk.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
       if(!unique.some(x=>{const n=x.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();return n===norm||n.includes(norm)||norm.includes(n)})) unique.push(chunk);
     }
-    const summary=unique.slice(0,3).join(' ').trim();
+    const summary=reviewCoachFacingText(unique.slice(0,3).join(' ').trim());
     const plans=Array.isArray(grounded?.practicalPlan)?grounded.practicalPlan.filter(Boolean):[];
     const candidateTakeaway=String(grounded?.keyLesson||grounded?.lesson||plans[0]||'').trim();
     // Prefer the deterministic transferable principle. The writer may improve it
@@ -7970,10 +8130,10 @@ function reviewAutoExplanation(row) {
     const exact = reviewOpeningNameForPly(row.ply);
     return {
       headline: `${Math.ceil(row.ply / 2)}${row.mover === 'w' ? '.' : '...'} ${row.san} — ${String(row.label || row.cls || 'Move')}`,
-      why: row.generatedTeachingNote.summary,
+      why: reviewCoachFacingText(row.generatedTeachingNote.summary),
       comparison: '',
       comparisonLabel: '',
-      lesson: row.generatedTeachingNote.takeaway || '',
+      lesson: reviewCoachFacingText(row.generatedTeachingNote.takeaway || ''),
       phase: reviewPhaseLabel(row.phase),
       position: reviewPositionDescription(row.whiteCp, row.mate),
       accuracy: Math.round((Number(row.accuracy) || 0) * 10) / 10,
@@ -8076,7 +8236,7 @@ function reviewAutoExplanation(row) {
     if(consequence?.deliveredMate){
       why += ` The concrete problem is that the opponent's best continuation leads to forced mate.`;
     } else if(myLoss){
-      why += ` In the engine continuation, this allows the loss of ${myLoss}.`;
+      why += ` With best play, this allows the loss of ${myLoss}.`;
     }
   }
 
@@ -8099,6 +8259,10 @@ function reviewAutoExplanation(row) {
     comparison='';
     comparisonLabel='';
   }
+
+  why=reviewCoachFacingText(why);
+  comparison=reviewCoachFacingText(comparison);
+  lesson=reviewCoachFacingText(lesson);
 
   row.autoExplanationV2 = {
     headline,
