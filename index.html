@@ -5643,6 +5643,13 @@ footer a,footer button,.footer-brand{color:#fff!important}
 @media(max-width:800px){.opening-elo-discovery{grid-template-columns:1fr}.opening-elo-input-row{grid-template-columns:1fr}.opening-elo-input-row .button{width:100%}}
 </style>
 
+
+<style id="bozo-endgames-v4150">
+.endgame-toolbar{display:grid;grid-template-columns:minmax(220px,1fr) 180px 180px auto;gap:10px;align-items:center;margin-bottom:16px}.endgame-toolbar input,.endgame-toolbar select,.scholar-coach-controls select{border:1px solid var(--border);background:rgba(0,0,0,.22);color:var(--text);border-radius:11px;padding:11px 12px;font:inherit}.endgame-toolbar span{color:var(--muted);font-size:.82rem;font-weight:800}.endgame-roadmap{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:16px}.endgame-roadmap h2{margin:4px 0}.endgame-roadmap p{margin:0;color:var(--muted)}.endgame-roadmap-steps{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.endgame-roadmap-steps span,.endgame-meta span,.endgame-card-top span{border:1px solid var(--border);border-radius:999px;padding:6px 9px;color:var(--muted);font-size:.72rem}.endgame-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}.endgame-card{border:1px solid var(--border);border-radius:17px;padding:16px;background:rgba(255,255,255,.025)}.endgame-card h3{margin:10px 0 6px}.endgame-card p{min-height:44px;color:var(--muted);line-height:1.45}.endgame-card-top,.endgame-meta,.endgame-card-actions,.endgame-study-topbar,.endgame-study-stats,.scholar-coach-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.endgame-card-top{justify-content:space-between}.endgame-card-actions{margin-top:14px}.endgame-study-topbar{justify-content:space-between;margin-bottom:16px}.endgame-study-topbar h2{margin:3px 0}.endgame-study-topbar p{margin:0;color:var(--muted)}.endgame-study-stats span{padding:8px 10px;border:1px solid var(--border);border-radius:11px;color:var(--muted)}.endgame-study-stats b{color:var(--text)}.endgame-study-layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(290px,.7fr);gap:18px}.endgame-board-shell{max-width:720px}.scholar-coach-card{align-self:start;position:sticky;top:88px}.scholar-coach-head{display:flex;gap:12px;align-items:center}.scholar-coach-head img{width:86px;height:86px;object-fit:contain}.scholar-coach-head h3{margin:3px 0}.scholar-coach-dialogue{position:relative;margin:14px 0;padding:15px;border-radius:15px;background:#fff;color:#151515;line-height:1.5;font-weight:750}.scholar-coach-dialogue:before{content:"";position:absolute;left:24px;top:-10px;border:10px solid transparent;border-bottom-color:#fff;border-top:0}.scholar-coach-controls button{border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--muted);border-radius:11px;padding:10px 12px;font:inherit;font-weight:850;cursor:pointer}.scholar-coach-controls button.active{color:#79ffe2;border-color:rgba(121,255,226,.4)}.scholar-coach-principles{display:grid;gap:7px;margin-top:14px;color:var(--muted);font-size:.82rem}.scholar-coach-principles b{color:var(--text)}.train-scholar-strip{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:14px;align-items:center;margin-bottom:16px}.train-scholar-strip img{width:70px;height:70px;object-fit:contain}.train-scholar-strip p{margin:3px 0;color:var(--muted)}
+@media(max-width:900px){.endgame-toolbar{grid-template-columns:1fr 1fr}.endgame-study-layout{grid-template-columns:1fr}.scholar-coach-card{position:static}.train-scholar-strip{grid-template-columns:60px 1fr}.train-scholar-strip .scholar-coach-controls{grid-column:1/-1}.endgame-roadmap{align-items:flex-start;flex-direction:column}.endgame-roadmap-steps{justify-content:flex-start}}
+@media(max-width:600px){.endgame-toolbar{grid-template-columns:1fr}.endgame-grid{grid-template-columns:1fr}}
+.scholar-review-identity{display:flex;align-items:center;gap:9px}.scholar-review-identity img{width:52px;height:52px;object-fit:contain}.daily-scholar-card{position:static}.daily-scholar-card .scholar-coach-head img{width:66px;height:66px}
+</style>
 </head>
 <body>
   <div class="background-glow glow-one"></div>
@@ -5660,6 +5667,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
     <nav class="desktop-nav" aria-label="Main navigation">
       <button data-route="home">Home</button>
       <button data-route="library">Opening Library</button>
+      <button data-route="endgames">Endgames</button>
       <button data-route="train">Train</button>
       <button class="daily-nav-button" data-route="daily">Daily Puzzle</button>
       <button data-route="dashboard">Dashboard</button>
@@ -5704,6 +5712,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
   <div id="mobile-nav" class="mobile-nav" hidden>
     <button data-route="home">Home</button>
     <button data-route="library">Opening Library</button>
+    <button data-route="endgames">Endgames</button>
     <button data-route="train">Train</button>
     <button class="daily-nav-button" data-route="daily">Daily Puzzle</button>
     <button data-route="dashboard">Dashboard</button>
@@ -5940,6 +5949,35 @@ footer a,footer button,.footer-brand{color:#fff!important}
       </div>
     </section>
 
+    <section id="view-endgames" class="view">
+      <div class="page-heading endgame-heading">
+        <div><div class="eyebrow">BOZO ENDGAMES</div><h1>Learn the position. Prove the result.</h1><p>Study real tablebase-eligible endgames, practice against best defense, and test yourself without a memorized single line.</p></div>
+        <button id="endgame-random" class="button primary" type="button">Random endgame test</button>
+      </div>
+      <section id="endgame-library">
+        <div class="endgame-toolbar panel"><input id="endgame-search" placeholder="Search endgames, concepts, categories…"><select id="endgame-category"><option value="all">All categories</option><option>Pawn</option><option>Minor Piece</option><option>Rook</option><option>Queen</option><option>Checkmates</option></select><select id="endgame-level"><option value="all">All levels</option><option>Fundamental</option><option>Essential</option><option>Intermediate</option><option>Advanced</option></select><span id="endgame-count">Loading…</span></div>
+        <div class="endgame-roadmap panel"><div><span class="eyebrow">ROADMAP</span><h2>Fundamentals → Essential → Intermediate → Advanced</h2><p>Nothing is locked. The roadmap only tells you what BOZO thinks is useful next.</p></div><div class="endgame-roadmap-steps"><span>Basic conversion</span><span>Pawn technique</span><span>Minor pieces</span><span>Rook endings</span><span>Queen endings</span></div></div>
+        <div id="endgame-grid" class="endgame-grid"></div>
+      </section>
+      <section id="endgame-study" hidden>
+        <div class="endgame-study-topbar"><button id="endgame-back" class="button secondary" type="button">← Endgame Library</button><div><span id="endgame-study-mode" class="eyebrow">LEARN</span><h2 id="endgame-title">Endgame</h2><p id="endgame-source"></p></div><div class="endgame-study-stats"><span>Objective <b id="endgame-objective">—</b></span><span>Mistakes <b id="endgame-mistakes">0</b></span><span>Hints <b id="endgame-hints-used">0</b></span></div></div>
+        <div class="endgame-study-layout">
+          <div>
+            <div class="study-board-shell endgame-board-shell"><div id="endgame-board" class="web-duel-board train-board"></div><svg id="endgame-user-arrow-layer" class="board-arrow-layer board-user-arrow-layer" viewBox="0 0 800 800" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+            <div id="endgame-status" class="train-feedback" data-state="neutral">Loading theoretical result…</div>
+            <div class="train-actions"><button id="endgame-hint" class="button secondary" type="button">Hint</button><button id="endgame-restart" class="button secondary" type="button">Restart</button></div>
+            <p id="endgame-learn-note" class="study-tip"></p>
+          </div>
+          <aside class="panel scholar-coach-card">
+            <div class="scholar-coach-head"><img src="./scholar-bozo.png" alt="Scholar BOZO"><div><span class="eyebrow">SCHOLAR BOZO</span><h3>Your endgame coach</h3></div></div>
+            <div id="endgame-coach-text" class="scholar-coach-dialogue">Choose an endgame and I’ll guide you through it.</div>
+            <div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="daniel">Daniel</option><option value="george">George</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div>
+            <div class="scholar-coach-principles"><b>What I watch for</b><span>Checks and forcing tempi</span><span>Loose or hanging pieces</span><span>King activity and key squares</span><span>Passed-pawn races and promotion</span><span>Stalemate, repetition and 50-move drawing resources</span></div>
+          </aside>
+        </div>
+      </section>
+    </section>
+
     <section id="view-train" class="view">
       <div class="page-heading train-heading">
         <div>
@@ -5964,7 +6002,14 @@ footer a,footer button,.footer-brand{color:#fff!important}
         <button id="train-mode-puzzles" type="button" role="tab" aria-selected="false">Opening Puzzles</button>
         <button id="train-mode-bozo-puzzles" type="button" role="tab" aria-selected="false">BOZO Puzzles</button>
         <button id="train-mode-master-puzzles" type="button" role="tab" aria-selected="false">Master Game Puzzles</button>
+        <button id="train-mode-endgames" type="button" role="tab" aria-selected="false">Endgame Puzzles</button>
       </div>
+
+      <section class="panel train-scholar-strip">
+        <img src="./scholar-bozo.png" alt="Scholar BOZO">
+        <div><span class="eyebrow">SCHOLAR BOZO</span><p id="train-scholar-text">I’ll step in for hints, mistakes, and explanatory moments across BOZO training.</p></div>
+        <div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="daniel">Daniel</option><option value="george">George</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div>
+      </section>
 
       <div id="train-master-puzzles-mode" hidden>
         <section class="panel">
@@ -6698,11 +6743,11 @@ footer a,footer button,.footer-brand{color:#fff!important}
             </div>
 
             <section class="bozo-coach-panel review-coach-panel">
-              <div class="coach-heading">
-                <div>
-                  <span class="eyebrow">BOZO COACH</span>
+              <div class="coach-heading scholar-review-heading">
+                <div class="scholar-review-identity"><img src="./scholar-bozo.png" alt="Scholar BOZO"><div>
+                  <span class="eyebrow">SCHOLAR BOZO</span>
                   <h3>Move explanation</h3>
-                </div>
+                </div></div>
                 <div class="review-coach-heading-actions"><select id="review-voice-select" class="review-voice-select" aria-label="Coach voice"><option value="daniel">Daniel</option><option value="george">George</option></select><button id="review-voice-toggle" class="review-voice-toggle" type="button" aria-pressed="false">🔇 Coach voice off</button><span id="review-coach-move-label" class="coach-move-label">Choose a move</span></div>
               </div>
               <div id="review-voice-status" class="review-voice-status" aria-live="polite"></div>
@@ -7585,6 +7630,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
             <div class="daily-actions"><button id="daily-hint" class="button secondary" type="button">Hint <span id="daily-hints-left">3</span></button><button id="daily-reset" class="button secondary" type="button">Reset</button><button id="daily-analyze" class="button secondary" type="button" hidden>Analyze position</button></div>
           </section>
           <aside class="daily-side">
+            <section class="panel scholar-coach-card daily-scholar-card"><div class="scholar-coach-head"><img src="./scholar-bozo.png" alt="Scholar BOZO"><div><span class="eyebrow">SCHOLAR BOZO</span><h3>Puzzle coach</h3></div></div><div id="daily-scholar-text" class="scholar-coach-dialogue">I’ll guide hints and explain important moments after you solve.</div><div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="daniel">Daniel</option><option value="george">George</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div></section>
             <section class="panel daily-progress-card"><span class="eyebrow">TODAY'S RUN</span><div class="daily-streak-row"><div><b id="daily-streak">0</b><span>day streak</span></div><div><b id="daily-solved-total">0</b><span>Daily BOZOs solved</span></div></div><div id="daily-line-progress" class="daily-line-progress"></div></section>
             <section id="daily-explanation-card" class="panel" hidden><span class="eyebrow">BOZO'S TAKE</span><h3>Why the line works</h3><p id="daily-explanation"></p><div id="daily-solution-line" class="daily-solution-line"></div><button id="daily-replay" class="button secondary" type="button">Replay solution</button></section>
             <section class="panel daily-archive-card"><div class="panel-heading"><div><span>ARCHIVE</span><h3 id="daily-archive-month">This month</h3></div></div><div class="daily-archive-controls"><button id="daily-month-prev" type="button">←</button><button id="daily-month-next" type="button">→</button></div><div id="daily-calendar" class="daily-calendar"></div></section>
@@ -7623,6 +7669,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
           <button data-owner-panel="daily"><span>🧩</span><b>Daily Puzzle Studio</b><small>Author & schedule handcrafted puzzles</small></button>
           <button data-owner-panel="mastergames"><span>♜</span><b>Master Game Import</b><small>Import public PGNs into BOZO</small></button>
           <button data-owner-panel="openingelo"><span>🎯</span><b>Opening Elo Manager</b><small>Edit Library recommendation ranges</small></button>
+          <button data-owner-panel="endgames"><span>♚</span><b>Endgame Manager</b><small>Edit the 360-position curriculum</small></button>
           <button data-owner-panel="submissions"><span>📖</span><b>Opening Review</b><small>Pending community theory</small></button>
           <button data-owner-panel="reports"><span>🚩</span><b>Reports</b><small>Open moderation cases</small></button>
           <button data-owner-panel="contact"><span>✉</span><b>Help & Contact</b><small>Disputes, privacy, billing & legal requests</small></button>

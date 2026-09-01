@@ -332,7 +332,8 @@ function route(name) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   if (name === 'library') searchOpenings('');
-  if (name === 'train') prepareTrainPage();
+  if (name === 'endgames') loadEndgames();
+  if (name === 'train') { prepareTrainPage(); setTimeout(bindScholarControls,0); }
   if (name === 'daily') loadDailyPuzzle();
   if (name === 'dashboard') renderDashboard();
   if (name === 'play') renderPlay();
@@ -2853,7 +2854,7 @@ function dailyBoardClick(sq){
   let move=null; try{move=dailyGame.move({from,to:sq,promotion:'q'});}catch{}
   if(!move){paintDailyBoard();return;}
   const uci=(move.from+move.to+(move.promotion||'')).toLowerCase();
-  if(uci!==expected){ dailyGame.undo(); paintDailyBoard(); const f=$('daily-feedback'); f.dataset.state='error'; f.innerHTML='<b>Not quite.</b><span>Try another continuation.</span>'; return; }
+  if(uci!==expected){ dailyGame.undo(); paintDailyBoard(); const f=$('daily-feedback'); f.dataset.state='error'; f.innerHTML='<b>Not quite.</b><span>Try another continuation.</span>'; bozoCoachSetDialogue('Not quite. Look again at checks, captures, threats, and what changed on the last move.',{speak:true}); return; }
   dailyLineIndex++; paintDailyBoard(); paintDailyProgress();
   if(dailyLineIndex>=dailyLine.length){ finishDailyPuzzle(); return; }
   setTimeout(()=>{ if(dailySolved)return; const reply=(dailyLine[dailyLineIndex]||'').toLowerCase(); const legal=dailyGame.moves({verbose:true}); const found=legal.find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===reply); if(found){dailyGame.move(found);dailyLineIndex++;paintDailyBoard();paintDailyProgress(); if(dailyLineIndex>=dailyLine.length) finishDailyPuzzle();} },450);
@@ -2870,7 +2871,7 @@ async function loadDailyPuzzle(dateValue){
   paintDailyBoard(); paintDailyProgress(); await loadDailyStats(); await paintDailyArchive();
   if(dailySolved) unlockDailySolved(); else { $('daily-explanation-card').hidden=true; $('daily-discussion').hidden=true; $('daily-analyze').hidden=true; const f=$('daily-feedback'); f.dataset.state='neutral'; f.innerHTML='<b>Your move.</b><span>Find the authored continuation.</span>'; }
 }
-async function finishDailyPuzzle(){ dailySolved=true; const f=$('daily-feedback'); f.dataset.state='success'; f.innerHTML='<b>Solved!</b><span>You found the complete Daily BOZO continuation.</span>'; let mistakes=0; const {error}=await sb.rpc('record_daily_puzzle_solve',{p_puzzle_id:dailyPuzzle.id,p_hints_used:dailyHintsUsed,p_mistakes:mistakes,p_seconds:null}); if(error) console.warn('Daily solve sync failed',error); await loadDailyStats(); unlockDailySolved(); }
+async function finishDailyPuzzle(){ dailySolved=true; const f=$('daily-feedback'); f.dataset.state='success'; f.innerHTML='<b>Solved!</b><span>You found the complete Daily BOZO continuation.</span>'; bozoCoachSetDialogue('Solved. Nice work. Now compare the solution with the explanation and focus on the idea you can reuse in another position.',{speak:true}); let mistakes=0; const {error}=await sb.rpc('record_daily_puzzle_solve',{p_puzzle_id:dailyPuzzle.id,p_hints_used:dailyHintsUsed,p_mistakes:mistakes,p_seconds:null}); if(error) console.warn('Daily solve sync failed',error); await loadDailyStats(); unlockDailySolved(); }
 function dailyLineToSan(fen,line){
   try{
     const g=new Chess(fen), out=[];
@@ -2892,7 +2893,7 @@ $('daily-prev')?.addEventListener('click',()=>loadDailyPuzzle(dailyShiftDate(dai
 $('daily-next')?.addEventListener('click',()=>{const n=dailyShiftDate(dailySelectedDate||dailyToday(),1); if(n<=dailyToday())loadDailyPuzzle(n);});
 $('daily-today')?.addEventListener('click',()=>loadDailyPuzzle(dailyToday()));
 $('daily-reset')?.addEventListener('click',()=>loadDailyPuzzle(dailySelectedDate));
-$('daily-hint')?.addEventListener('click',()=>{ if(!dailyPuzzle||dailySolved)return; const hints=[dailyPuzzle.hint1,dailyPuzzle.hint2,dailyPuzzle.hint3].filter(Boolean); if(dailyHintsUsed>=hints.length)return toast('No hints left.'); const text=hints[dailyHintsUsed++]; $('daily-hints-left').textContent=Math.max(0,3-dailyHintsUsed); const f=$('daily-feedback'); f.dataset.state='neutral'; f.innerHTML=`<b>Hint ${dailyHintsUsed}</b><span>${escapeHtml(text)}</span>`; });
+$('daily-hint')?.addEventListener('click',()=>{ if(!dailyPuzzle||dailySolved)return; const hints=[dailyPuzzle.hint1,dailyPuzzle.hint2,dailyPuzzle.hint3].filter(Boolean); if(dailyHintsUsed>=hints.length)return toast('No hints left.'); const text=hints[dailyHintsUsed++]; $('daily-hints-left').textContent=Math.max(0,3-dailyHintsUsed); const f=$('daily-feedback'); f.dataset.state='neutral'; f.innerHTML=`<b>Hint ${dailyHintsUsed}</b><span>${escapeHtml(text)}</span>`; bozoCoachSetDialogue(text,{speak:true}); });
 $('daily-analyze')?.addEventListener('click',()=>{ if(!dailyPuzzle)return; route('review'); setTimeout(()=>{document.querySelector('[data-review-mode="position"]')?.click(); $('position-fen').value=dailyPuzzle.fen; try{positionLoadFen(dailyPuzzle.fen);}catch{} $('analyze-position')?.click();},120); });
 $('daily-replay')?.addEventListener('click',()=>{dailySolved=false;dailyLineIndex=0;dailyGame=new Chess(dailyPuzzle.fen);paintDailyBoard();paintDailyProgress(); setTimeout(()=>replayDailyLine(),300);});
 async function replayDailyLine(){ if(!dailyGame||dailyLineIndex>=dailyLine.length){dailySolved=true;paintDailyBoard();return;} const u=dailyLine[dailyLineIndex]; const found=dailyGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===String(u).toLowerCase()); if(found){dailyGame.move(found);dailyLineIndex++;paintDailyBoard();paintDailyProgress();setTimeout(replayDailyLine,600);} }
@@ -3014,6 +3015,7 @@ $$('[data-owner-panel]').forEach(button => {
 });
 
 async function loadOwnerPanel(panel) {
+  if (panel === 'endgames') { await ownerEndgameManager(); return; }
   const target = $('owner-panel');
   target.innerHTML = '<div class="empty-state"><div>⌛</div><b>Loading…</b></div>';
 
@@ -16370,3 +16372,136 @@ $('review-master-search')?.addEventListener('keydown',e=>{if(e.key==='Enter')loa
 $('master-puzzle-find')?.addEventListener('click',()=>findMasterTacticalPuzzle(masterQueryValue('master-puzzle-search')));
 $('master-puzzle-random')?.addEventListener('click',()=>findMasterTacticalPuzzle(''));
 $('master-puzzle-search')?.addEventListener('keydown',e=>{if(e.key==='Enter')findMasterTacticalPuzzle(e.currentTarget.value);});
+
+// BOZO v4.15.0 — Endgame Study + universal Scholar BOZO coach
+const BOZO_TABLEBASE_ENDPOINT='https://tablebase.lichess.ovh/standard';
+let endgameCatalog=[],endgameCurrent=null,endgameGame=null,endgameSelected=null,endgameMode='learn',endgameUserColor='w',endgameTarget='draw',endgameStartFen='',endgameMistakes=0,endgameHints=0,endgameBusy=false;
+const endgameTbCache=new Map();
+
+function bozoCoachSetDialogue(text,{speak=true,title='Scholar BOZO'}={}){
+  const targets=[$('endgame-coach-text'),$('train-scholar-text'),$('daily-scholar-text')].filter(Boolean);
+  targets.forEach(el=>{el.textContent=text||'';});
+  document.querySelectorAll('[data-scholar-voice-toggle]').forEach(b=>{b.textContent=reviewVoiceEnabled?'🔊 Voice on':'🔇 Voice off';b.classList.toggle('active',reviewVoiceEnabled)});
+  document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>s.value=reviewVoiceId);
+  if(speak&&reviewVoiceEnabled&&text)bozoCoachSpeakText(text);
+}
+async function bozoCoachSpeakText(text){
+  reviewStopVoice();
+  if(!reviewVoiceEnabled||!text)return;
+  const token=reviewVoiceRequestToken;
+  const spoken=reviewChessTextForSpeech(String(text));
+  try{
+    const audio=await requestReviewCoachAudio(spoken,null);
+    if(token!==reviewVoiceRequestToken)return;
+    const src=audio.blob?URL.createObjectURL(audio.blob):audio.url;if(!src)return;
+    reviewVoiceObjectUrl=audio.blob?src:'';reviewVoicePlayback=new Audio(src);
+    reviewVoicePlayback.addEventListener('ended',()=>{if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl=''}},{once:true});
+    await reviewVoicePlayback.play();
+  }catch(error){if(token===reviewVoiceRequestToken)reviewSpeechFallback(spoken);}
+}
+function bindScholarControls(){
+  document.querySelectorAll('[data-scholar-voice-toggle]').forEach(b=>{if(b.dataset.bound)return;b.dataset.bound='1';b.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);bozoCoachSetDialogue('',{speak:false})})});
+  document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>{if(s.dataset.bound)return;s.dataset.bound='1';s.value=reviewVoiceId;s.addEventListener('change',()=>setReviewVoiceId(s.value))});
+}
+
+async function loadEndgames(){
+  const root=$('endgame-grid');if(!root)return;
+  bindScholarControls();root.innerHTML='<div class="empty-state"><div>♟</div><b>Loading endgames…</b><span>Building your tablebase-backed study library.</span></div>';
+  let q=sb.from('endgame_positions').select('*').eq('published',true).order('min_elo',{ascending:true}).limit(500);
+  const {data,error}=await q;if(error){root.innerHTML=`<div class="empty-state"><b>Could not load Endgames</b><span>${escapeHtml(readableError(error))}</span></div>`;return;}
+  endgameCatalog=data||[];renderEndgameCatalog();
+}
+function endgamePieceCount(fen){return (String(fen).split(' ')[0].match(/[prnbqk]/gi)||[]).length;}
+function endgameMaterialLabel(fen){
+  try{const g=new Chess(fen),v={p:0,n:0,b:0,r:0,q:0};for(const s of ['a','b','c','d','e','f','g','h'])for(let r=1;r<=8;r++){const p=g.get(`${s}${r}`);if(p&&p.type!=='k')v[p.type]++;}return Object.entries(v).filter(x=>x[1]).map(([p,n])=>`${n}${({p:'P',n:'N',b:'B',r:'R',q:'Q'})[p]}`).join(' · ')||'Kings only';}catch{return 'Endgame';}
+}
+function renderEndgameCatalog(){
+  const root=$('endgame-grid');if(!root)return;
+  const search=($('endgame-search')?.value||'').trim().toLowerCase(),cat=$('endgame-category')?.value||'all',level=$('endgame-level')?.value||'all';
+  const rows=endgameCatalog.filter(r=>(cat==='all'||r.category===cat)&&(level==='all'||r.difficulty===level)&&(!search||`${r.title} ${r.category} ${r.subcategory||''} ${r.concept||''}`.toLowerCase().includes(search)));
+  $('endgame-count').textContent=`${endgameCatalog.length} tablebase-eligible studies`;
+  root.innerHTML=rows.map(r=>`<article class="endgame-card"><div class="endgame-card-top"><span class="endgame-category">${escapeHtml(r.category)}</span><span>${endgamePieceCount(r.fen)} pieces</span></div><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.concept||r.subcategory||'Technical endgame')}</p><div class="endgame-meta"><span>${escapeHtml(r.difficulty)}</span><span>${r.min_elo}+ Elo</span><span>${escapeHtml(endgameMaterialLabel(r.fen))}</span></div><div class="endgame-card-actions"><button class="button secondary" data-endgame-open="${r.id}" data-mode="learn">Learn</button><button class="button secondary" data-endgame-open="${r.id}" data-mode="practice">Practice</button><button class="button primary" data-endgame-open="${r.id}" data-mode="test">Test</button></div></article>`).join('')||'<div class="empty-state"><b>No matches</b><span>Try another category or search.</span></div>';
+  root.querySelectorAll('[data-endgame-open]').forEach(b=>b.addEventListener('click',()=>startEndgameStudy(b.dataset.endgameOpen,b.dataset.mode)));
+}
+function tbSimple(category){if(['win','syzygy-win','maybe-win'].includes(category))return'win';if(category==='cursed-win'||category==='blessed-loss'||category==='draw')return'draw';if(['loss','syzygy-loss','maybe-loss'].includes(category))return'loss';return'unknown';}
+function tbInvert(v){return v==='win'?'loss':v==='loss'?'win':v;}
+function tbRank(v){return v==='win'?2:v==='draw'?1:v==='loss'?0:-1;}
+async function endgameTablebase(fen){
+  const key=fen;if(endgameTbCache.has(key))return endgameTbCache.get(key);
+  const response=await fetch(`${BOZO_TABLEBASE_ENDPOINT}?fen=${encodeURIComponent(fen)}`);if(!response.ok)throw new Error('Tablebase unavailable for this position.');const json=await response.json();endgameTbCache.set(key,json);return json;
+}
+function endgameUserResult(tb){const side=endgameGame?.turn?.();const raw=tbSimple(tb.category);return side===endgameUserColor?raw:tbInvert(raw);}
+async function startEndgameStudy(id,mode='learn'){
+  const row=endgameCatalog.find(x=>String(x.id)===String(id));if(!row)return;
+  endgameCurrent=row;endgameMode=mode;endgameSelected=null;endgameMistakes=0;endgameHints=0;endgameStartFen=row.fen;
+  try{endgameGame=new Chess(row.fen);}catch{return toast('This endgame FEN could not be loaded.');}
+  endgameUserColor=endgameGame.turn();
+  $('endgame-library').hidden=true;$('endgame-study').hidden=false;$('endgame-title').textContent=row.title;$('endgame-study-mode').textContent=mode.toUpperCase();$('endgame-source').textContent=row.source_type==='master_game'?'From the Master Games database':'BOZO Endgame';
+  paintEndgameBoard();
+  try{const tb=await endgameTablebase(endgameGame.fen());endgameTarget=endgameUserResult(tb);updateEndgameStatus(tb);const intro=endgameIntroDialogue(row,tb);bozoCoachSetDialogue(intro,{speak:true});if(mode==='learn')await showEndgameTeachingLine(tb);}catch(e){$('endgame-status').textContent=readableError(e);bozoCoachSetDialogue('I can still show the position, but the perfect-play tablebase is unavailable right now.',{speak:true});}
+}
+function endgameIntroDialogue(row,tb){const r=endgameUserResult(tb);const objective=r==='win'?'win this position':r==='draw'?'hold the draw':'make the defense as difficult as possible';return `This is a ${row.category.toLowerCase()} endgame from a real master game. Your job is to ${objective}. Before moving, check forcing moves, king activity, passed pawns, loose pieces, and promotion threats.`;}
+function paintEndgameBoard(){
+  const board=$('endgame-board');if(!board||!endgameGame)return;const orientation=endgameUserColor==='w'?'white':'black';const ranks=orientation==='white'?[8,7,6,5,4,3,2,1]:[1,2,3,4,5,6,7,8],files=orientation==='white'?['a','b','c','d','e','f','g','h']:['h','g','f','e','d','c','b','a'];
+  board.innerHTML=ranks.flatMap(rank=>files.map(file=>{const sq=`${file}${rank}`,p=endgameGame.get(sq),symbol=p?`${p.color}${p.type.toUpperCase()}`:'';return `<button type="button" data-endgame-square="${sq}" data-piece-color="${p?.color==='w'?'white':p?.color==='b'?'black':''}" class="${endgameSelected===sq?'selected':''}">${webPiece(symbol)}</button>`})).join('');
+  syncBoardUserAnnotationPosition('endgame-board',`${endgameGame.fen()}|${orientation}`);board.querySelectorAll('[data-endgame-square]').forEach(b=>b.addEventListener('click',()=>clickEndgameSquare(b.dataset.endgameSquare)));
+}
+async function clickEndgameSquare(square){
+  if(endgameBusy||!endgameGame||endgameGame.turn()!==endgameUserColor||endgameGame.game_over())return;const p=endgameGame.get(square);
+  if(!endgameSelected){if(p&&p.color===endgameUserColor){endgameSelected=square;paintEndgameBoard();}return;}
+  if(p&&p.color===endgameUserColor){endgameSelected=square;paintEndgameBoard();return;}
+  const from=endgameSelected;endgameSelected=null;let move=null;try{move=endgameGame.move({from,to:square,promotion:'q'});}catch{}if(!move){paintEndgameBoard();return;}
+  endgameBusy=true;paintEndgameBoard();
+  try{
+    const tb=await endgameTablebase(endgameGame.fen()),result=endgameUserResult(tb),preserved=tbRank(result)>=tbRank(endgameTarget);
+    if(!preserved){endgameMistakes++;const reason=endgameFailureDialogue(move,tb,result);bozoCoachSetDialogue(reason,{speak:true});if(endgameMode==='test'){endgameGame.undo();endgameSelected=null;paintEndgameBoard();endgameBusy=false;return;} }
+    else bozoCoachSetDialogue(endgameSuccessDialogue(move,tb,result),{speak:true});
+    updateEndgameStatus(tb);if(endgameGame.game_over()){await finishEndgame(result);endgameBusy=false;return;}
+    await playEndgameDefense();
+  }catch(e){bozoCoachSetDialogue('I could not verify that move against the tablebase. Try again in a moment.',{speak:true});}
+  endgameBusy=false;
+}
+function endgameFailureDialogue(move,tb,result){
+  if(tb.checkmate)return `${move.san} allows checkmate. In an endgame, a forcing check can change everything, so always verify the king's escape squares first.`;
+  if(tb.stalemate)return `${move.san} allows stalemate. The opponent has no legal move, so the winning chances disappear immediately.`;
+  if(result==='draw'&&endgameTarget==='win')return `${move.san} gives away the win. The position is now a theoretical draw. Look for the move that keeps your king active or preserves the passed pawn without allowing counterplay.`;
+  if(result==='loss')return `${move.san} changes the position into a theoretical loss. Check whether you surrendered a key square, a tempo, a pawn race, or a forcing check.`;
+  return `${move.san} does not preserve the result. Compare the king positions and forcing moves before trying again.`;
+}
+function endgameSuccessDialogue(move,tb,result){
+  const check=/\+/.test(move.san);if(check)return `${move.san} works. The check gains a forcing tempo, so the opponent has to answer the king threat before pursuing their own plan.`;
+  if(move.captured)return `${move.san} preserves the ${endgameTarget}. The capture changes the material while keeping the theoretical result intact.`;
+  return `${move.san} is sound. It preserves the theoretical ${endgameTarget}. Keep looking for the opponent's most stubborn defense rather than assuming the rest is automatic.`;
+}
+async function playEndgameDefense(){
+  if(!endgameGame||endgameGame.turn()===endgameUserColor||endgameGame.game_over())return;const tb=await endgameTablebase(endgameGame.fen());if(!tb.moves?.length)return;
+  let choices=tb.moves.map(m=>({m,user:tbSimple(m.category),rank:tbRank(tbSimple(m.category))}));choices.sort((a,b)=>a.rank-b.rank||Math.abs(a.m.dtz||999)-Math.abs(b.m.dtz||999));const chosen=choices[0].m;
+  const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,420));endgameGame.move(legal);paintEndgameBoard();const next=await endgameTablebase(endgameGame.fen());updateEndgameStatus(next);bozoCoachSetDialogue(`The defense chooses ${legal.san}. Your turn again. Re-check checks, captures, passed pawns, and the activity of both kings.`,{speak:endgameMode!=='test'});}
+}
+function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=result==='win'?'WIN':result==='draw'?'DRAW':'DEFEND';$('endgame-status').textContent=`Current theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;}
+async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0];const text=`Start by considering ${best.san}. In Learn mode I can reveal a tablebase-perfect move, but the goal is to understand why it preserves the result, not memorize one sequence.`;$('endgame-learn-note').textContent=text;}
+async function endgameHint(){if(!endgameGame||endgameBusy)return;endgameHints++;const tb=await endgameTablebase(endgameGame.fen());const ranked=(tb.moves||[]).map(m=>({m,result:tbInvert(tbSimple(m.category))})).sort((a,b)=>tbRank(b.result)-tbRank(a.result));const best=ranked[0]?.m;if(!best)return;const stage=Math.min(endgameHints,3);const text=stage===1?`Look first for forcing moves and moves that improve king activity. The best move begins from the ${best.uci[0]}-file.`:stage===2?`Focus on the piece on ${best.uci.slice(0,2)}. Its best move preserves the theoretical result.`:`The move is ${best.san}. Before playing it, ask what square, tempo, check, capture, or promotion threat makes it work.`;bozoCoachSetDialogue(text,{speak:true});$('endgame-hints-used').textContent=endgameHints;}
+async function finishEndgame(result){const won=(endgameTarget==='win'&&result==='win')||(endgameTarget==='draw'&&result!=='loss');bozoCoachSetDialogue(won?'You proved the result. Good technique. The next step is recognizing the same idea when the pieces are arranged differently.':'The position is finished, but the target result was lost. Replay it and look for the first moment the theoretical result changed.',{speak:true});await saveEndgameProgress(won);}
+async function saveEndgameProgress(success){if(!state?.session?.user?.id||!endgameCurrent)return;const uid=state.session.user.id;const {data}=await sb.from('endgame_progress').select('*').eq('user_id',uid).eq('endgame_id',endgameCurrent.id).maybeSingle();const patch={user_id:uid,endgame_id:endgameCurrent.id,last_practiced_at:new Date().toISOString()};if(endgameMode==='learn')patch.learn_completed=true;else if(endgameMode==='practice'){patch.practice_attempts=(data?.practice_attempts||0)+1;patch.practice_wins=(data?.practice_wins||0)+(success?1:0);}else{patch.test_attempts=(data?.test_attempts||0)+1;patch.test_wins=(data?.test_wins||0)+(success?1:0);}patch.mastery=Math.min(100,(patch.learn_completed||data?.learn_completed?25:0)+Math.min(35,(patch.practice_wins??data?.practice_wins??0)*7)+Math.min(40,(patch.test_wins??data?.test_wins??0)*10));await sb.from('endgame_progress').upsert(patch,{onConflict:'user_id,endgame_id'});}
+function resetEndgame(){if(!endgameCurrent)return;startEndgameStudy(endgameCurrent.id,endgameMode);}
+function closeEndgameStudy(){$('endgame-study').hidden=true;$('endgame-library').hidden=false;reviewStopVoice();}
+
+// Broad coach hooks for existing training/puzzle feedback.
+const _bozoSetTrainFeedback=setTrainFeedback;setTrainFeedback=function(stateName,title,copy){_bozoSetTrainFeedback(stateName,title,copy);if(['wrong','hint','answer','correct'].includes(stateName))bozoCoachSetDialogue(`${title}. ${copy}`,{speak:stateName!=='correct'||reviewVoiceEnabled});};
+const _bozoSetPuzzleFeedback=setPuzzleFeedback;setPuzzleFeedback=function(stateName,title,copy){_bozoSetPuzzleFeedback(stateName,title,copy);if(['wrong','hint','answer','correct'].includes(stateName)||/not quite|correct|hint/i.test(title))bozoCoachSetDialogue(`${title}. ${copy}`,{speak:true});};
+
+$('endgame-search')?.addEventListener('input',renderEndgameCatalog);$('endgame-category')?.addEventListener('change',renderEndgameCatalog);$('endgame-level')?.addEventListener('change',renderEndgameCatalog);$('endgame-back')?.addEventListener('click',closeEndgameStudy);$('endgame-hint')?.addEventListener('click',endgameHint);$('endgame-restart')?.addEventListener('click',resetEndgame);$('endgame-random')?.addEventListener('click',()=>{if(!endgameCatalog.length)return;const r=endgameCatalog[Math.floor(Math.random()*endgameCatalog.length)];startEndgameStudy(r.id,'test')});
+$('train-mode-endgames')?.addEventListener('click',()=>{route('endgames');setTimeout(()=>{if(endgameCatalog.length){const r=endgameCatalog[Math.floor(Math.random()*endgameCatalog.length)];startEndgameStudy(r.id,'test');}},250)});
+
+async function ownerEndgameManager(query=''){
+  const target=$('owner-panel');if(!target)return;
+  target.innerHTML=`<div class="panel-heading"><div><span>ENDGAME LIBRARY</span><h2>Endgame Manager</h2><p>Edit titles, categories, concepts, Elo guidance, publishing, and verification for the live endgame catalog.</p></div></div><div class="owner-elo-toolbar"><input id="owner-endgame-search" placeholder="Search title, category, concept…" value="${escapeHtml(query)}"><button id="owner-endgame-search-button" class="button primary" type="button">Search</button></div><div id="owner-endgame-results" class="owner-elo-list"></div>`;
+  $('owner-endgame-search-button')?.addEventListener('click',()=>ownerLoadEndgames($('owner-endgame-search').value));$('owner-endgame-search')?.addEventListener('keydown',e=>{if(e.key==='Enter')ownerLoadEndgames(e.currentTarget.value)});await ownerLoadEndgames(query);
+}
+async function ownerLoadEndgames(query=''){
+  const out=$('owner-endgame-results');if(!out)return;out.innerHTML='<div class="empty-state"><b>Loading endgames…</b></div>';let req=sb.from('endgame_positions').select('*').order('title').limit(250);const q=String(query||'').trim();if(q)req=req.or(`title.ilike.%${q}%,category.ilike.%${q}%,concept.ilike.%${q}%`);const {data,error}=await req;if(error){out.innerHTML=escapeHtml(readableError(error));return;}out.innerHTML=(data||[]).map(r=>`<article class="owner-elo-row" data-owner-endgame="${r.id}"><div class="owner-elo-opening"><div><span>${escapeHtml(r.category)} · ${escapeHtml(r.difficulty)} · ${endgamePieceCount(r.fen)} pieces</span><h3>${escapeHtml(r.title)}</h3></div><small>${r.owner_verified?'✓ VERIFIED':'UNVERIFIED'}${r.published?' · LIVE':' · HIDDEN'}</small></div><div class="owner-elo-controls"><label>Min Elo<input data-eg-min type="number" min="300" max="3000" step="100" value="${r.min_elo}"></label><label>Max Elo<input data-eg-max type="number" min="300" max="3000" step="100" value="${r.max_elo}"></label><label class="owner-elo-reviewed"><input data-eg-verified type="checkbox" ${r.owner_verified?'checked':''}> Verified</label><label class="owner-elo-reviewed"><input data-eg-published type="checkbox" ${r.published?'checked':''}> Published</label><button class="button primary small" data-eg-save type="button">Save</button></div><label style="display:grid;gap:5px;margin-top:8px">Concept<input data-eg-concept value="${escapeHtml(r.concept||'')}"></label><div class="owner-elo-status">${escapeHtml(r.fen)}</div></article>`).join('')||'<div class="empty-state"><b>No matches.</b></div>';out.querySelectorAll('[data-eg-save]').forEach(b=>b.addEventListener('click',()=>ownerSaveEndgame(b.closest('[data-owner-endgame]'))));
+}
+async function ownerSaveEndgame(card){const id=card?.dataset.ownerEndgame;if(!id)return;const row=endgameCatalog.find(r=>r.id===id);const {error}=await sb.rpc('owner_update_endgame_position',{p_id:id,p_title:row?.title||card.querySelector('h3')?.textContent||'Endgame',p_category:row?.category||card.querySelector('.owner-elo-opening span')?.textContent?.split(' · ')[0]||'Mixed',p_concept:card.querySelector('[data-eg-concept]')?.value||'',p_min_elo:Number(card.querySelector('[data-eg-min]')?.value)||600,p_max_elo:Number(card.querySelector('[data-eg-max]')?.value)||3000,p_published:Boolean(card.querySelector('[data-eg-published]')?.checked),p_verified:Boolean(card.querySelector('[data-eg-verified]')?.checked)});if(error)return toast(readableError(error));toast('Endgame saved.');ownerLoadEndgames($('owner-endgame-search')?.value||'');}
+
+// Keep shared Scholar BOZO controls synchronized wherever they appear.
+setTimeout(bindScholarControls,0);
