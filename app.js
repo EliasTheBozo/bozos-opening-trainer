@@ -8324,7 +8324,7 @@ function reviewChessTextForSpeech(text){
 
   // Full SAN piece moves: Nf6, Bxh7+, Rxe5, Qg4#, Kf2, Nbd2, R1e2, etc.
   const pieceName={K:'king',Q:'queen',R:'rook',B:'bishop',N:'knight'};
-  const sanPiece=/\b([KQRBN])([a-h1-8]{0,2})(x?)([a-h][1-8])([+#]?)(?=\b|[.,;:!?)]|$)/g;
+  const sanPiece=/\b([KQRBN])([a-h1-8]{0,2})(x?)([a-h][1-8])([+#]?)(?=\s|[.,;:!?)]|$)/g;
   spoken=spoken.replace(sanPiece,(m,piece,disamb,capture,target,suffix)=>{
     let phrase=pieceName[piece];
     if(disamb){
@@ -8340,12 +8340,18 @@ function reviewChessTextForSpeech(text){
   });
 
   // Pawn SAN used in explanations, e.g. exd5, e8=Q was handled above.
-  spoken=spoken.replace(/\b([a-h])(x)([a-h][1-8])([+#]?)(?=\b|[.,;:!?)]|$)/g,(m,file,_x,target,suffix)=>{
+  spoken=spoken.replace(/\b([a-h])(x)([a-h][1-8])([+#]?)(?=\s|[.,;:!?)]|$)/g,(m,file,_x,target,suffix)=>{
     let phrase=`${file}-pawn takes ${target}`;
     if(suffix==='#')phrase+=' checkmate';
     else if(suffix==='+')phrase+=' check';
     return phrase;
   });
+
+  // Final chess-symbol guard: never let TTS literally say "plus" or "hash" for SAN suffixes.
+  // This catches notation that was left intact by an unusual surrounding punctuation/context.
+  spoken=spoken
+    .replace(/(?<=[a-h1-8])\+(?=\s|[.,;:!?)]|$)/g,' check')
+    .replace(/(?<=[a-h1-8])#(?=\s|[.,;:!?)]|$)/g,' checkmate');
 
   // Standalone algebraic square names are clearer as "e four" than "e four" being inferred inconsistently.
   const rankWord={'1':'one','2':'two','3':'three','4':'four','5':'five','6':'six','7':'seven','8':'eight'};
