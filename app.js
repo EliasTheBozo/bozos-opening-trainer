@@ -16413,9 +16413,15 @@ function bindScholarControls(){
 async function loadEndgames(){
   const root=$('endgame-grid');if(!root)return;
   bindScholarControls();root.innerHTML='<div class="empty-state"><div>♟</div><b>Loading endgames…</b><span>Building your tablebase-backed study library.</span></div>';
-  let q=sb.from('endgame_positions').select('*').eq('published',true).order('min_elo',{ascending:true}).limit(500);
-  const {data,error}=await q;if(error){root.innerHTML=`<div class="empty-state"><b>Could not load Endgames</b><span>${escapeHtml(readableError(error))}</span></div>`;return;}
-  endgameCatalog=data||[];renderEndgameCatalog();
+  const pageSize=500;let all=[],from=0;
+  while(true){
+    const {data,error}=await sb.from('endgame_positions').select('*').eq('published',true).order('min_elo',{ascending:true}).order('id',{ascending:true}).range(from,from+pageSize-1);
+    if(error){root.innerHTML=`<div class="empty-state"><b>Could not load Endgames</b><span>${escapeHtml(readableError(error))}</span></div>`;return;}
+    const batch=data||[];all.push(...batch);
+    if(batch.length<pageSize)break;
+    from+=pageSize;
+  }
+  endgameCatalog=all;renderEndgameCatalog();
 }
 function endgamePieceCount(fen){return (String(fen).split(' ')[0].match(/[prnbqk]/gi)||[]).length;}
 const ENDGAME_ELO_TIERS=[
