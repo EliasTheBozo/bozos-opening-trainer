@@ -8138,7 +8138,63 @@ const reviewVoiceCache=new Map();
 function reviewVoiceText(row){
   if(!row)return '';
   const ex=reviewAutoExplanation(row);
-  return [ex.why,ex.comparison,ex.lesson].filter(Boolean).join(' ');
+  return reviewChessTextForSpeech([ex.why,ex.comparison,ex.lesson].filter(Boolean).join(' '));
+}
+function reviewChessTextForSpeech(text){
+  if(!text)return '';
+  let spoken=String(text);
+
+  // Speak castling naturally before processing individual SAN tokens.
+  spoken=spoken
+    .replace(/\b(?:O|0)-(?:O|0)-(?:O|0)\b/g,'castle queenside')
+    .replace(/\b(?:O|0)-(?:O|0)\b/g,'castle kingside');
+
+  // Promotions written in prose/SAN, e.g. a8=Q, b1=N+.
+  const promotionPiece={Q:'queen',R:'rook',B:'bishop',N:'knight'};
+  spoken=spoken.replace(/\b([a-h])([18])=([QRBN])([+#]?)/g,(m,file,rank,piece,suffix)=>{
+    const ending=suffix==='#'?' checkmate':suffix==='+'?' check':'';
+    return `${file}${rank} promotes to a ${promotionPiece[piece]}${ending}`;
+  });
+
+  // Full SAN piece moves: Nf6, Bxh7+, Rxe5, Qg4#, Kf2, Nbd2, R1e2, etc.
+  const pieceName={K:'king',Q:'queen',R:'rook',B:'bishop',N:'knight'};
+  const sanPiece=/\b([KQRBN])([a-h1-8]{0,2})(x?)([a-h][1-8])([+#]?)(?=\b|[.,;:!?)]|$)/g;
+  spoken=spoken.replace(sanPiece,(m,piece,disamb,capture,target,suffix)=>{
+    let phrase=pieceName[piece];
+    if(disamb){
+      if(/^[a-h]$/.test(disamb))phrase+=` from the ${disamb}-file`;
+      else if(/^[1-8]$/.test(disamb))phrase+=` from rank ${disamb}`;
+      else if(/^[a-h][1-8]$/.test(disamb))phrase+=` from ${disamb}`;
+    }
+    phrase+=capture?' takes ':' to ';
+    phrase+=target;
+    if(suffix==='#')phrase+=' checkmate';
+    else if(suffix==='+')phrase+=' check';
+    return phrase;
+  });
+
+  // Pawn SAN used in explanations, e.g. exd5, e8=Q was handled above.
+  spoken=spoken.replace(/\b([a-h])(x)([a-h][1-8])([+#]?)(?=\b|[.,;:!?)]|$)/g,(m,file,_x,target,suffix)=>{
+    let phrase=`${file}-pawn takes ${target}`;
+    if(suffix==='#')phrase+=' checkmate';
+    else if(suffix==='+')phrase+=' check';
+    return phrase;
+  });
+
+  // Standalone algebraic square names are clearer as "e four" than "e four" being inferred inconsistently.
+  const rankWord={'1':'one','2':'two','3':'three','4':'four','5':'five','6':'six','7':'seven','8':'eight'};
+  spoken=spoken.replace(/\b([a-h])([1-8])\b/g,(m,file,rank)=>`${file} ${rankWord[rank]}`);
+
+  // Remaining chess abbreviations that can occur outside strict SAN. Keep these word-boundary-safe
+  // so normal words beginning with B/K/N/Q/R are untouched.
+  spoken=spoken
+    .replace(/\bQ\b/g,'queen')
+    .replace(/\bR\b/g,'rook')
+    .replace(/\bB\b/g,'bishop')
+    .replace(/\bN\b/g,'knight')
+    .replace(/\bK\b/g,'king');
+
+  return spoken.replace(/\s+/g,' ').trim();
 }
 function reviewVoiceStatus(text,state=''){
   const el=$('review-voice-status');if(!el)return;
