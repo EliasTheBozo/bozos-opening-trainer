@@ -16495,7 +16495,7 @@ function endgameSearchDocument(row){
   const material=endgameMaterialLabel(row?.fen||'');
   const aliases=row?.search_aliases||'';
   const source=row?.source_type==='theory'?'theory theoretical canonical named lesson study':'master game practical example';
-  return normalizeEndgameSearchText(`${row?.title||''} ${row?.category||''} ${row?.subcategory||''} ${row?.concept||''} ${aliases} ${material} ${endgameDifficultyLabel(row)} ${endgameEloStamp(row)} ${source}`);
+  return normalizeEndgameSearchText(`${row?.title||''} ${row?.category||''} ${row?.subcategory||''} ${row?.concept||''} ${row?.concept_key||''} ${aliases} ${material} ${endgameDifficultyLabel(row)} ${endgameEloStamp(row)} ${source}`);
 }
 function parseEndgameSearchQuery(raw){
   const q=normalizeEndgameSearchText(raw);let tier='',category='';
@@ -16519,10 +16519,11 @@ function renderEndgameCatalog(){
     if(!rawSearch)return true;
     const doc=endgameSearchDocument(r);
     return parsed.terms.every(term=>doc.includes(term));
-  }).sort((a,b)=>(a.source_type==='theory'?0:1)-(b.source_type==='theory'?0:1)||(Number(a.min_elo)||0)-(Number(b.min_elo)||0)||String(a.title).localeCompare(String(b.title)));
+  }).sort((a,b)=>(a.source_type==='theory'?0:1)-(b.source_type==='theory'?0:1)||(Number(a.min_elo)||0)-(Number(b.min_elo)||0)||(Number(a.curriculum_order)||999999)-(Number(b.curriculum_order)||999999)||String(a.title).localeCompare(String(b.title)));
   const theoryCount=endgameCatalog.filter(r=>r.source_type==='theory').length;
-  $('endgame-count').textContent=`${endgameCatalog.length} studies · ${theoryCount} theory lessons`;
-  root.innerHTML=rows.map(r=>`<article class="endgame-card"><div class="endgame-card-top"><span class="endgame-category">${escapeHtml(r.category)}</span><span>${r.source_type==='theory'?'THEORY':`${endgamePieceCount(r.fen)} pieces`}</span></div><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.concept||r.subcategory||'Technical endgame')}</p><div class="endgame-meta"><span>${escapeHtml(endgameDifficultyLabel(r))}</span><span>${escapeHtml(endgameEloStamp(r))}</span><span>${escapeHtml(endgameMaterialLabel(r.fen))}</span></div><div class="endgame-card-actions"><button class="button secondary" data-endgame-open="${r.id}" data-mode="learn">Learn</button><button class="button secondary" data-endgame-open="${r.id}" data-mode="practice">Practice</button><button class="button primary" data-endgame-open="${r.id}" data-mode="test">Test</button></div></article>`).join('')||'<div class="empty-state"><b>No matches</b><span>Try a named type such as Lucena, Philidor, Vancura, opposition, Réti, queen vs rook, or rook and bishop vs rook.</span></div>';
+  const conceptCount=new Set(endgameCatalog.filter(r=>r.source_type==='theory').map(r=>r.concept_key||r.title).filter(Boolean)).size;
+  $('endgame-count').textContent=`${endgameCatalog.length} studies · ${theoryCount} theory trainings · ${conceptCount} concepts`;
+  root.innerHTML=rows.map(r=>`<article class="endgame-card"><div class="endgame-card-top"><span class="endgame-category">${escapeHtml(r.category)}</span><span>${r.source_type==='theory'?`THEORY${r.variant_no?` · V${r.variant_no}`:''}`:`${endgamePieceCount(r.fen)} pieces`}</span></div><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.concept||r.subcategory||'Technical endgame')}</p><div class="endgame-meta"><span>${escapeHtml(endgameDifficultyLabel(r))}</span><span>${escapeHtml(endgameEloStamp(r))}</span><span>${escapeHtml(endgameMaterialLabel(r.fen))}</span></div><div class="endgame-card-actions"><button class="button secondary" data-endgame-open="${r.id}" data-mode="learn">Learn</button><button class="button secondary" data-endgame-open="${r.id}" data-mode="practice">Practice</button><button class="button primary" data-endgame-open="${r.id}" data-mode="test">Test</button></div></article>`).join('')||'<div class="empty-state"><b>No matches</b><span>Try a named type such as Lucena, Philidor, Vancura, opposition, Réti, queen vs rook, or rook and bishop vs rook.</span></div>';
   root.querySelectorAll('[data-endgame-open]').forEach(b=>b.addEventListener('click',()=>startEndgameStudy(b.dataset.endgameOpen,b.dataset.mode)));
 }
 function tbSimple(category){if(['win','syzygy-win','maybe-win'].includes(category))return'win';if(category==='cursed-win'||category==='blessed-loss'||category==='draw')return'draw';if(['loss','syzygy-loss','maybe-loss'].includes(category))return'loss';return'unknown';}
