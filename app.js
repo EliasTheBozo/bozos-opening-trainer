@@ -16553,7 +16553,14 @@ function endgameSuccessDialogue(move,tb,result){
 }
 async function playEndgameDefense(){
   if(!endgameGame||endgameGame.turn()===endgameUserColor||endgameGame.game_over())return;const tb=await endgameTablebase(endgameGame.fen());if(!tb.moves?.length)return;
-  let choices=tb.moves.map(m=>({m,user:tbSimple(m.category),rank:tbRank(tbSimple(m.category))}));choices.sort((a,b)=>a.rank-b.rank||Math.abs(a.m.dtz||999)-Math.abs(b.m.dtz||999));const chosen=choices[0].m;
+  // The move categories in the tablebase response describe the CHILD position
+  // from the next side-to-move's point of view (the student's point of view here).
+  // A defender therefore wants the LOWEST child WDL rank. Among equally optimal
+  // WDL moves, prefer the HIGHEST child DTZ. That makes the student's next
+  // zeroing/conversion move as distant as possible instead of accidentally
+  // selecting the quickest losing line (for example, hanging a queen at DTZ 1).
+  let choices=tb.moves.map((m,index)=>({m,index,user:tbSimple(m.category),rank:tbRank(tbSimple(m.category)),dtz:Number.isFinite(m.dtz)?m.dtz:-Infinity}));
+  choices.sort((a,b)=>a.rank-b.rank||b.dtz-a.dtz||a.index-b.index);const chosen=choices[0].m;
   const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,420));endgameGame.move(legal);endgamePushHistory(endgameGame.fen(),legal.san,'defense');paintEndgameBoard();const next=await endgameTablebase(endgameGame.fen());updateEndgameStatus(next);const line=endgameCoachVariant('defense-'+(legal.captured?'capture':/[+#]$/.test(legal.san)?'check':'quiet'),legal.captured?[`The defense answers with ${legal.san}, changing the material. Re-evaluate the pawn race before moving again.`,`The defender chooses ${legal.san}. Because material changed, take a fresh look at king activity and promotion threats.`]:/[+#]$/.test(legal.san)?[`The defense finds ${legal.san} with check. Deal with the forcing move first, then return to your plan.`,`${legal.san} is the defender's resource. Since it comes with check, your king response determines what happens next.`]:[`The defense chooses ${legal.san}. Look for what changed: a key square, a checking lane, or a pawn's route to promotion.`,`${legal.san} is the reply. Don't automatically continue the old plan; scan the position again for the defender's new idea.`,`The defender plays ${legal.san}. Recalculate from here and focus on activity rather than just material.`]);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
 }
 function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=result==='win'?'WIN':result==='draw'?'DRAW':'DEFEND';$('endgame-status').textContent=`Current theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;}
