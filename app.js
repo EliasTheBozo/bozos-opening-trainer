@@ -16483,12 +16483,46 @@ function endgameEloStamp(row){
 function endgameMaterialLabel(fen){
   try{const g=new Chess(fen),v={p:0,n:0,b:0,r:0,q:0};for(const s of ['a','b','c','d','e','f','g','h'])for(let r=1;r<=8;r++){const p=g.get(`${s}${r}`);if(p&&p.type!=='k')v[p.type]++;}return Object.entries(v).filter(x=>x[1]).map(([p,n])=>`${n}${({p:'P',n:'N',b:'B',r:'R',q:'Q'})[p]}`).join(' · ')||'Kings only';}catch{return 'Endgame';}
 }
+const ENDGAME_SEARCH_TIER_WORDS=new Set(['fundamentals','beginner','intermediate','club','advanced','expert','master']);
+const ENDGAME_SEARCH_CATEGORY_ALIASES={
+  pawn:['pawn','pawns','king pawn','king and pawn','pawn ending','pawn endings'],
+  rook:['rook','rooks','rook ending','rook endings'],
+  queen:['queen','queens','queen ending','queen endings'],
+  'minor piece':['minor','minor piece','minor pieces','bishop','bishops','knight','knights','bishop ending','knight ending']
+};
+function normalizeEndgameSearchText(value){return String(value||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9+#=]+/g,' ').replace(/\s+/g,' ').trim();}
+function endgameSearchDocument(row){
+  const material=endgameMaterialLabel(row?.fen||'');
+  const aliases=row?.search_aliases||'';
+  const source=row?.source_type==='theory'?'theory theoretical canonical named lesson study':'master game practical example';
+  return normalizeEndgameSearchText(`${row?.title||''} ${row?.category||''} ${row?.subcategory||''} ${row?.concept||''} ${aliases} ${material} ${endgameDifficultyLabel(row)} ${endgameEloStamp(row)} ${source}`);
+}
+function parseEndgameSearchQuery(raw){
+  const q=normalizeEndgameSearchText(raw);let tier='',category='';
+  for(const word of ENDGAME_SEARCH_TIER_WORDS)if(new RegExp(`(?:^| )${word}(?: |$)`).test(q)){tier=word[0].toUpperCase()+word.slice(1);break;}
+  for(const [key,aliases] of Object.entries(ENDGAME_SEARCH_CATEGORY_ALIASES))if(aliases.some(a=>q.includes(normalizeEndgameSearchText(a)))){category=key==='minor piece'?'Minor Piece':key[0].toUpperCase()+key.slice(1);break;}
+  const stop=new Set(['endgame','endgames','ending','endings','position','positions','study','studies','training','train','practice','lesson','lessons','theory','theoretical','type']);
+  const terms=q.split(' ').filter(Boolean).filter(t=>!stop.has(t)&&!ENDGAME_SEARCH_TIER_WORDS.has(t));
+  return {q,tier,category,terms};
+}
 function renderEndgameCatalog(){
   const root=$('endgame-grid');if(!root)return;
-  const search=($('endgame-search')?.value||'').trim().toLowerCase(),cat=$('endgame-category')?.value||'all',level=$('endgame-level')?.value||'all';
-  const rows=endgameCatalog.filter(r=>(cat==='all'||r.category===cat)&&(level==='all'||endgameDifficultyLabel(r)===level)&&(!search||`${r.title} ${r.category} ${r.subcategory||''} ${r.concept||''} ${endgameDifficultyLabel(r)}`.toLowerCase().includes(search)));
-  $('endgame-count').textContent=`${endgameCatalog.length} tablebase-eligible studies`;
-  root.innerHTML=rows.map(r=>`<article class="endgame-card"><div class="endgame-card-top"><span class="endgame-category">${escapeHtml(r.category)}</span><span>${endgamePieceCount(r.fen)} pieces</span></div><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.concept||r.subcategory||'Technical endgame')}</p><div class="endgame-meta"><span>${escapeHtml(endgameDifficultyLabel(r))}</span><span>${escapeHtml(endgameEloStamp(r))}</span><span>${escapeHtml(endgameMaterialLabel(r.fen))}</span></div><div class="endgame-card-actions"><button class="button secondary" data-endgame-open="${r.id}" data-mode="learn">Learn</button><button class="button secondary" data-endgame-open="${r.id}" data-mode="practice">Practice</button><button class="button primary" data-endgame-open="${r.id}" data-mode="test">Test</button></div></article>`).join('')||'<div class="empty-state"><b>No matches</b><span>Try another category or search.</span></div>';
+  const rawSearch=($('endgame-search')?.value||'').trim(),parsed=parseEndgameSearchQuery(rawSearch),cat=$('endgame-category')?.value||'all',level=$('endgame-level')?.value||'all';
+  // A typed search is primary. If the user searches a named/type concept such as "Lucena",
+  // stale dropdown filters from a previous browse should not hide the result. Users can still
+  // type "master rook" or "advanced queen" to deliberately combine type + level.
+  const activeCat=parsed.category||(!rawSearch?cat:'all');
+  const activeLevel=parsed.tier||(!rawSearch?level:'all');
+  const rows=endgameCatalog.filter(r=>{
+    if(activeCat!=='all'&&r.category!==activeCat)return false;
+    if(activeLevel!=='all'&&endgameDifficultyLabel(r)!==activeLevel)return false;
+    if(!rawSearch)return true;
+    const doc=endgameSearchDocument(r);
+    return parsed.terms.every(term=>doc.includes(term));
+  }).sort((a,b)=>(a.source_type==='theory'?0:1)-(b.source_type==='theory'?0:1)||(Number(a.min_elo)||0)-(Number(b.min_elo)||0)||String(a.title).localeCompare(String(b.title)));
+  const theoryCount=endgameCatalog.filter(r=>r.source_type==='theory').length;
+  $('endgame-count').textContent=`${endgameCatalog.length} studies · ${theoryCount} theory lessons`;
+  root.innerHTML=rows.map(r=>`<article class="endgame-card"><div class="endgame-card-top"><span class="endgame-category">${escapeHtml(r.category)}</span><span>${r.source_type==='theory'?'THEORY':`${endgamePieceCount(r.fen)} pieces`}</span></div><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.concept||r.subcategory||'Technical endgame')}</p><div class="endgame-meta"><span>${escapeHtml(endgameDifficultyLabel(r))}</span><span>${escapeHtml(endgameEloStamp(r))}</span><span>${escapeHtml(endgameMaterialLabel(r.fen))}</span></div><div class="endgame-card-actions"><button class="button secondary" data-endgame-open="${r.id}" data-mode="learn">Learn</button><button class="button secondary" data-endgame-open="${r.id}" data-mode="practice">Practice</button><button class="button primary" data-endgame-open="${r.id}" data-mode="test">Test</button></div></article>`).join('')||'<div class="empty-state"><b>No matches</b><span>Try a named type such as Lucena, Philidor, Vancura, opposition, Réti, queen vs rook, or rook and bishop vs rook.</span></div>';
   root.querySelectorAll('[data-endgame-open]').forEach(b=>b.addEventListener('click',()=>startEndgameStudy(b.dataset.endgameOpen,b.dataset.mode)));
 }
 function tbSimple(category){if(['win','syzygy-win','maybe-win'].includes(category))return'win';if(category==='cursed-win'||category==='blessed-loss'||category==='draw')return'draw';if(['loss','syzygy-loss','maybe-loss'].includes(category))return'loss';return'unknown';}
@@ -16504,7 +16538,7 @@ async function startEndgameStudy(id,mode='learn'){
   endgameCurrent=row;endgameMode=mode;endgameSelected=null;endgameMistakes=0;endgameHints=0;endgameStartFen=row.fen;endgameHistory=[];endgameHistoryIndex=0;clearEndgamePremove();
   try{endgameGame=new Chess(row.fen);}catch{return toast('This endgame FEN could not be loaded.');}
   endgameUserColor=endgameGame.turn();endgamePushHistory(endgameGame.fen());
-  $('endgame-library').hidden=true;$('endgame-study').hidden=false;$('endgame-title').textContent=row.title;$('endgame-study-mode').textContent=mode.toUpperCase();$('endgame-source').textContent=row.source_type==='master_game'?'From the Master Games database':'BOZO Endgame';
+  $('endgame-library').hidden=true;$('endgame-study').hidden=false;$('endgame-title').textContent=row.title;$('endgame-study-mode').textContent=mode.toUpperCase();$('endgame-source').textContent=row.source_type==='master_game'?'From the Master Games database':row.source_type==='theory'?'BOZO Theoretical Endgame':'BOZO Endgame';
   paintEndgameBoard();
   try{const tb=await endgameTablebase(endgameGame.fen());endgameTarget=endgameUserResult(tb);updateEndgameStatus(tb);const intro=endgameIntroDialogue(row,tb);bozoCoachSetDialogue(intro,{speak:true});if(mode==='learn')await showEndgameTeachingLine(tb);}catch(e){$('endgame-status').textContent=readableError(e);bozoCoachSetDialogue('I can still show the position, but the perfect-play tablebase is unavailable right now.',{speak:true});}
 }
@@ -16564,7 +16598,7 @@ async function playEndgameDefense(){
   const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,420));endgameGame.move(legal);endgamePushHistory(endgameGame.fen(),legal.san,'defense');paintEndgameBoard();const next=await endgameTablebase(endgameGame.fen());updateEndgameStatus(next);const line=endgameCoachVariant('defense-'+(legal.captured?'capture':/[+#]$/.test(legal.san)?'check':'quiet'),legal.captured?[`The defense answers with ${legal.san}, changing the material. Re-evaluate the pawn race before moving again.`,`The defender chooses ${legal.san}. Because material changed, take a fresh look at king activity and promotion threats.`]:/[+#]$/.test(legal.san)?[`The defense finds ${legal.san} with check. Deal with the forcing move first, then return to your plan.`,`${legal.san} is the defender's resource. Since it comes with check, your king response determines what happens next.`]:[`The defense chooses ${legal.san}. Look for what changed: a key square, a checking lane, or a pawn's route to promotion.`,`${legal.san} is the reply. Don't automatically continue the old plan; scan the position again for the defender's new idea.`,`The defender plays ${legal.san}. Recalculate from here and focus on activity rather than just material.`]);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
 }
 function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=result==='win'?'WIN':result==='draw'?'DRAW':'DEFEND';$('endgame-status').textContent=`Current theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;}
-async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0];const text=`Start by considering ${best.san}. In Learn mode I can reveal a tablebase-perfect move, but the goal is to understand why it preserves the result, not memorize one sequence.`;$('endgame-learn-note').textContent=text;}
+async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0];const lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'';const text=`${lesson}Start by considering ${best.san}. In Learn mode I can reveal a tablebase-perfect move, but the goal is to understand why it preserves the result, not memorize one sequence.`;$('endgame-learn-note').textContent=text;}
 async function endgameHint(){if(!endgameGame||endgameBusy)return;endgameHints++;const tb=await endgameTablebase(endgameGame.fen());const ranked=(tb.moves||[]).map(m=>({m,result:tbInvert(tbSimple(m.category))})).sort((a,b)=>tbRank(b.result)-tbRank(a.result));const best=ranked[0]?.m;if(!best)return;const stage=Math.min(endgameHints,3);const text=stage===1?`Look first for forcing moves and moves that improve king activity. The best move begins from the ${best.uci[0]}-file.`:stage===2?`Focus on the piece on ${best.uci.slice(0,2)}. Its best move preserves the theoretical result.`:`The move is ${best.san}. Before playing it, ask what square, tempo, check, capture, or promotion threat makes it work.`;bozoCoachSetDialogue(text,{speak:true});$('endgame-hints-used').textContent=endgameHints;}
 async function finishEndgame(result){const won=(endgameTarget==='win'&&result==='win')||(endgameTarget==='draw'&&result!=='loss');bozoCoachSetDialogue(won?'You proved the result. Good technique. The next step is recognizing the same idea when the pieces are arranged differently.':'The position is finished, but the target result was lost. Replay it and look for the first moment the theoretical result changed.',{speak:true});await saveEndgameProgress(won);}
 async function saveEndgameProgress(success){if(!state?.session?.user?.id||!endgameCurrent)return;const uid=state.session.user.id;const {data}=await sb.from('endgame_progress').select('*').eq('user_id',uid).eq('endgame_id',endgameCurrent.id).maybeSingle();const patch={user_id:uid,endgame_id:endgameCurrent.id,last_practiced_at:new Date().toISOString()};if(endgameMode==='learn')patch.learn_completed=true;else if(endgameMode==='practice'){patch.practice_attempts=(data?.practice_attempts||0)+1;patch.practice_wins=(data?.practice_wins||0)+(success?1:0);}else{patch.test_attempts=(data?.test_attempts||0)+1;patch.test_wins=(data?.test_wins||0)+(success?1:0);}patch.mastery=Math.min(100,(patch.learn_completed||data?.learn_completed?25:0)+Math.min(35,(patch.practice_wins??data?.practice_wins??0)*7)+Math.min(40,(patch.test_wins??data?.test_wins??0)*10));await sb.from('endgame_progress').upsert(patch,{onConflict:'user_id,endgame_id'});}
