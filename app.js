@@ -16534,12 +16534,14 @@ async function endgameTablebase(fen){
   const response=await fetch(`${BOZO_TABLEBASE_ENDPOINT}?fen=${encodeURIComponent(fen)}`);if(!response.ok)throw new Error('Tablebase unavailable for this position.');const json=await response.json();endgameTbCache.set(key,json);return json;
 }
 function endgameUserResult(tb){const side=endgameGame?.turn?.();const raw=tbSimple(tb.category);return side===endgameUserColor?raw:tbInvert(raw);}
+function endgameFenHasSafeKings(fen){try{const board=String(fen||'').split(' ')[0],rows=board.split('/');if(rows.length!==8)return false;let wk=null,bk=null;for(let r=0;r<8;r++){let f=0;for(const ch of rows[r]){if(/\d/.test(ch)){f+=Number(ch);continue;}if(ch==='K')wk=[f,7-r];else if(ch==='k')bk=[f,7-r];f++;}if(f!==8)return false;}if(!wk||!bk)return false;return Math.max(Math.abs(wk[0]-bk[0]),Math.abs(wk[1]-bk[1]))>1;}catch{return false;}}
 async function startEndgameStudy(id,mode='learn'){
   const row=endgameCatalog.find(x=>String(x.id)===String(id));if(!row)return;
   endgameCurrent=row;endgameMode=mode;endgameSelected=null;endgameMistakes=0;endgameHints=0;endgameStartFen=row.fen;endgameHistory=[];endgameHistoryIndex=0;clearEndgamePremove();
   try{endgameGame=new Chess(row.fen);}catch{return toast('This endgame FEN could not be loaded.');}
+  if(!endgameFenHasSafeKings(row.fen)){console.error('[BOZO Endgames] blocked illegal king placement',row.id,row.fen);return toast('This endgame was blocked because the kings are illegally adjacent.');}
   endgameUserColor=endgameGame.turn();endgamePushHistory(endgameGame.fen());
-  $('endgame-library').hidden=true;$('endgame-study').hidden=false;$('endgame-title').textContent=row.title;$('endgame-study-mode').textContent=mode.toUpperCase();$('endgame-source').textContent=row.source_type==='master_game'?'From the Master Games database':row.source_type==='theory'?'BOZO Theoretical Endgame':'BOZO Endgame';
+  $('endgame-library').hidden=true;$('endgame-study').hidden=false;$('endgame-title').textContent=row.title;$('endgame-study-mode').textContent=mode.toUpperCase();$('endgame-source').textContent=row.source_type==='master_game'?'From the Master Games database':row.source_type==='theory'?'BOZO Theoretical Endgame':'BOZO Endgame';const sideLabel=endgameUserColor==='w'?'WHITE TO MOVE':'BLACK TO MOVE';$('endgame-source').textContent=`${sideLabel} · ${$('endgame-source').textContent}`;
   paintEndgameBoard();
   try{const tb=await endgameTablebase(endgameGame.fen());endgameTarget=endgameUserResult(tb);updateEndgameStatus(tb);const intro=endgameIntroDialogue(row,tb);bozoCoachSetDialogue(intro,{speak:true});if(mode==='learn')await showEndgameTeachingLine(tb);}catch(e){$('endgame-status').textContent=readableError(e);bozoCoachSetDialogue('I can still show the position, but the perfect-play tablebase is unavailable right now.',{speak:true});}
 }

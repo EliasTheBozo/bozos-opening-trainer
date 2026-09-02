@@ -1,0 +1,3 @@
+-- Applied live as endgame_theory_legality_guard_v4158.
+-- Hard invariant: theory rows must contain one king per side and kings cannot touch.
+-- See live migration for function public.bozo_endgame_fen_has_safe_kings and CHECK endgame_theory_safe_kings.
