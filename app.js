@@ -16417,6 +16417,57 @@ function endgameCoachVariant(key, variants){
   const list=(variants||[]).filter(Boolean);if(!list.length)return'';
   const next=(endgameCoachVariantCursor.get(key)||0)%list.length;endgameCoachVariantCursor.set(key,next+1);return list[next];
 }
+function endgameTerminalReason(game=endgameGame){
+  if(!game)return'';
+  if(duelCheckmate(game))return'checkmate';
+  if(duelThreefold(game))return'threefold repetition';
+  if(duelFiftyMoveRule(game))return'fifty-move rule';
+  if(duelStalemate(game))return'stalemate';
+  if(duelInsufficientMaterial(game))return'insufficient material';
+  if(duelGeneralDraw(game))return'draw';
+  return'';
+}
+function endgameTerminalUserResult(game=endgameGame){
+  const reason=endgameTerminalReason(game);if(!reason)return'';
+  if(reason==='checkmate')return game.turn()===endgameUserColor?'loss':'win';
+  return'draw';
+}
+function endgameResultMeetsObjective(result){
+  return (endgameTarget==='win'&&result==='win')||(endgameTarget==='draw'&&result!=='loss')||(endgameTarget==='loss'&&result==='loss');
+}
+function endgameTerminalLabel(reason){
+  if(reason==='threefold repetition')return'Draw by repetition';
+  if(reason==='fifty-move rule')return'Draw by 50-move rule';
+  if(reason==='stalemate')return'Draw by stalemate';
+  if(reason==='insufficient material')return'Draw by insufficient material';
+  if(reason==='checkmate')return'Checkmate';
+  return'Draw';
+}
+function endgameTerminalDialogue(result,reason,success){
+  if(reason==='threefold repetition'){
+    if(success&&endgameTarget==='draw')return'Draw by repetition. You completed the exercise. You used repetition correctly to hold the position.';
+    if(!success&&endgameTarget==='win')return'Draw by repetition. The game is drawn, but your objective was to win.';
+    return success?'Draw by repetition. That secures the result you needed.':'Draw by repetition. The position is over, but that does not meet the exercise objective.';
+  }
+  if(reason==='fifty-move rule'){
+    if(success&&endgameTarget==='draw')return'Draw by the 50-move rule. You completed the exercise by preventing any pawn move or capture long enough to hold the draw.';
+    if(!success&&endgameTarget==='win')return'Draw by the 50-move rule. The winning chance expired before you could make progress.';
+  }
+  if(reason==='stalemate'){
+    if(success&&endgameTarget==='draw')return'Draw by stalemate. You completed the exercise by leaving the side to move with no legal move and no check.';
+    if(!success&&endgameTarget==='win')return'Draw by stalemate. The win is gone because the defender has no legal move, but is not in check.';
+  }
+  if(reason==='insufficient material'){
+    if(success&&endgameTarget==='draw')return'Draw by insufficient material. The board no longer contains enough material for checkmate, so you completed the drawing objective.';
+    if(!success&&endgameTarget==='win')return'Draw by insufficient material. Too much winning material was exchanged, so checkmate is no longer possible.';
+  }
+  if(reason==='checkmate'){
+    if(result==='win')return success?'Checkmate. You completed the exercise and finished the conversion.':'Checkmate. The game is over, but that result does not match the exercise objective.';
+    return'Checkmate. The defending side finished the game, so the exercise is lost.';
+  }
+  if(success)return'Game over. You proved the required result. Good technique.';
+  return'The game is over, but the final result does not meet the exercise objective.';
+}
 function endgameAtLivePosition(){return !endgameHistory.length||endgameHistoryIndex===endgameHistory.length-1;}
 function endgameHistoryGame(){
   if(endgameAtLivePosition())return endgameGame;
@@ -16535,11 +16586,26 @@ async function endgameTablebase(fen){
 }
 function endgameUserResult(tb){const side=endgameGame?.turn?.();const raw=tbSimple(tb.category);return side===endgameUserColor?raw:tbInvert(raw);}
 function endgameFenHasSafeKings(fen){try{const board=String(fen||'').split(' ')[0],rows=board.split('/');if(rows.length!==8)return false;let wk=null,bk=null;for(let r=0;r<8;r++){let f=0;for(const ch of rows[r]){if(/\d/.test(ch)){f+=Number(ch);continue;}if(ch==='K')wk=[f,7-r];else if(ch==='k')bk=[f,7-r];f++;}if(f!==8)return false;}if(!wk||!bk)return false;return Math.max(Math.abs(wk[0]-bk[0]),Math.abs(wk[1]-bk[1]))>1;}catch{return false;}}
+function endgameFenStructuralIssue(fen){
+  const value=String(fen||'').trim();
+  if(!endgameFenHasSafeKings(value))return'This endgame was blocked because its king placement is illegal.';
+  if(endgamePieceCount(value)>7)return'This endgame was blocked because tablebase training supports at most seven pieces.';
+  const ranks=value.split(' ')[0].split('/');
+  if(/[Pp]/.test(ranks[0]||'')||/[Pp]/.test(ranks[7]||''))return'This endgame was blocked because a pawn is illegally placed on the first or eighth rank.';
+  try{
+    new Chess(value);
+    const fields=value.split(' ');fields[1]=fields[1]==='w'?'b':'w';
+    const otherTurn=new Chess(fields.join(' '));
+    if(chessBoolean(otherTurn,['isCheck','inCheck','in_check']))return'This endgame was blocked because the side that is not to move is already in check.';
+  }catch{return'This endgame was blocked because its FEN is invalid.';}
+  return'';
+}
 async function startEndgameStudy(id,mode='learn'){
   const row=endgameCatalog.find(x=>String(x.id)===String(id));if(!row)return;
   endgameCurrent=row;endgameMode=mode;endgameSelected=null;endgameMistakes=0;endgameHints=0;endgameStartFen=row.fen;endgameHistory=[];endgameHistoryIndex=0;clearEndgamePremove();
   try{endgameGame=new Chess(row.fen);}catch{return toast('This endgame FEN could not be loaded.');}
-  if(!endgameFenHasSafeKings(row.fen)){console.error('[BOZO Endgames] blocked illegal king placement',row.id,row.fen);return toast('This endgame was blocked because the kings are illegally adjacent.');}
+  const structuralIssue=endgameFenStructuralIssue(row.fen);
+  if(structuralIssue){console.error('[BOZO Endgames] blocked invalid theory position',row.id,row.fen,structuralIssue);return toast(structuralIssue);}
   endgameUserColor=endgameGame.turn();endgamePushHistory(endgameGame.fen());
   $('endgame-library').hidden=true;$('endgame-study').hidden=false;$('endgame-title').textContent=row.title;$('endgame-study-mode').textContent=mode.toUpperCase();$('endgame-source').textContent=row.source_type==='master_game'?'From the Master Games database':row.source_type==='theory'?'BOZO Theoretical Endgame':'BOZO Endgame';const sideLabel=endgameUserColor==='w'?'WHITE TO MOVE':'BLACK TO MOVE';$('endgame-source').textContent=`${sideLabel} · ${$('endgame-source').textContent}`;
   paintEndgameBoard();
@@ -16568,10 +16634,20 @@ async function executeEndgameUserMove(from,to,promotion='q',fromPremove=false){
   if(!endgameGame||endgameGame.turn()!==endgameUserColor||endgameGame.game_over())return;let move=null;try{move=endgameGame.move({from,to,promotion});}catch{}if(!move){paintEndgameBoard();return;}
   endgameBusy=true;paintEndgameBoard();
   try{
+    // A real chess result outranks ordinary tablebase commentary. This catches
+    // repetition, stalemate, checkmate, the 50-move rule, and insufficient
+    // material immediately after the student's move.
+    const terminalReason=endgameTerminalReason(endgameGame);
+    if(terminalReason){
+      endgamePushHistory(endgameGame.fen(),move.san,'user');
+      paintEndgameBoard();
+      await finishEndgame(endgameTerminalUserResult(endgameGame),terminalReason);
+      endgameBusy=false;return;
+    }
     const tb=await endgameTablebase(endgameGame.fen()),result=endgameUserResult(tb),preserved=tbRank(result)>=tbRank(endgameTarget);
     if(!preserved){endgameMistakes++;const reason=endgameFailureDialogue(move,tb,result);bozoCoachSetDialogue(reason,{speak:true});if(endgameMode==='test'){endgameGame.undo();endgameSelected=null;paintEndgameBoard();endgameBusy=false;return;} }
     else bozoCoachSetDialogue(endgameSuccessDialogue(move,tb,result),{speak:true});
-    endgamePushHistory(endgameGame.fen(),move.san,'user');updateEndgameStatus(tb);if(endgameGame.game_over()){await finishEndgame(result);endgameBusy=false;return;}
+    endgamePushHistory(endgameGame.fen(),move.san,'user');updateEndgameStatus(tb);
     await playEndgameDefense();
   }catch(e){bozoCoachSetDialogue(endgameCoachVariant('verify-error',['I could not verify that move against the tablebase just now. Try it again in a moment.','The tablebase check did not return cleanly. Give that move another try.']),{speak:true});}
   endgameBusy=false;
@@ -16598,12 +16674,28 @@ async function playEndgameDefense(){
   // selecting the quickest losing line (for example, hanging a queen at DTZ 1).
   let choices=tb.moves.map((m,index)=>({m,index,user:tbSimple(m.category),rank:tbRank(tbSimple(m.category)),dtz:Number.isFinite(m.dtz)?m.dtz:-Infinity}));
   choices.sort((a,b)=>a.rank-b.rank||b.dtz-a.dtz||a.index-b.index);const chosen=choices[0].m;
-  const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,420));endgameGame.move(legal);endgamePushHistory(endgameGame.fen(),legal.san,'defense');paintEndgameBoard();const next=await endgameTablebase(endgameGame.fen());updateEndgameStatus(next);const line=endgameCoachVariant('defense-'+(legal.captured?'capture':/[+#]$/.test(legal.san)?'check':'quiet'),legal.captured?[`The defense answers with ${legal.san}, changing the material. Re-evaluate the pawn race before moving again.`,`The defender chooses ${legal.san}. Because material changed, take a fresh look at king activity and promotion threats.`]:/[+#]$/.test(legal.san)?[`The defense finds ${legal.san} with check. Deal with the forcing move first, then return to your plan.`,`${legal.san} is the defender's resource. Since it comes with check, your king response determines what happens next.`]:[`The defense chooses ${legal.san}. Look for what changed: a key square, a checking lane, or a pawn's route to promotion.`,`${legal.san} is the reply. Don't automatically continue the old plan; scan the position again for the defender's new idea.`,`The defender plays ${legal.san}. Recalculate from here and focus on activity rather than just material.`]);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
+  const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,420));endgameGame.move(legal);endgamePushHistory(endgameGame.fen(),legal.san,'defense');paintEndgameBoard();
+    // Terminal game state always wins over the generic "defense chooses..."
+    // dialogue. This is the bug that previously let the board say repetition
+    // while Scholar BOZO kept talking as if the exercise were still running.
+    const terminalReason=endgameTerminalReason(endgameGame);
+    if(terminalReason){await finishEndgame(endgameTerminalUserResult(endgameGame),terminalReason);return;}
+    const next=await endgameTablebase(endgameGame.fen());updateEndgameStatus(next);const line=endgameCoachVariant('defense-'+(legal.captured?'capture':/[+#]$/.test(legal.san)?'check':'quiet'),legal.captured?[`The defense answers with ${legal.san}, changing the material. Re-evaluate the pawn race before moving again.`,`The defender chooses ${legal.san}. Because material changed, take a fresh look at king activity and promotion threats.`]:/[+#]$/.test(legal.san)?[`The defense finds ${legal.san} with check. Deal with the forcing move first, then return to your plan.`,`${legal.san} is the defender's resource. Since it comes with check, your king response determines what happens next.`]:[`The defense chooses ${legal.san}. Look for what changed: a key square, a checking lane, or a pawn's route to promotion.`,`${legal.san} is the reply. Don't automatically continue the old plan; scan the position again for the defender's new idea.`,`The defender plays ${legal.san}. Recalculate from here and focus on activity rather than just material.`]);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
 }
 function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=result==='win'?'WIN':result==='draw'?'DRAW':'DEFEND';$('endgame-status').textContent=`Current theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;}
 async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0];const lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'';const text=`${lesson}Start by considering ${best.san}. In Learn mode I can reveal a tablebase-perfect move, but the goal is to understand why it preserves the result, not memorize one sequence.`;$('endgame-learn-note').textContent=text;}
 async function endgameHint(){if(!endgameGame||endgameBusy)return;endgameHints++;const tb=await endgameTablebase(endgameGame.fen());const ranked=(tb.moves||[]).map(m=>({m,result:tbInvert(tbSimple(m.category))})).sort((a,b)=>tbRank(b.result)-tbRank(a.result));const best=ranked[0]?.m;if(!best)return;const stage=Math.min(endgameHints,3);const text=stage===1?`Look first for forcing moves and moves that improve king activity. The best move begins from the ${best.uci[0]}-file.`:stage===2?`Focus on the piece on ${best.uci.slice(0,2)}. Its best move preserves the theoretical result.`:`The move is ${best.san}. Before playing it, ask what square, tempo, check, capture, or promotion threat makes it work.`;bozoCoachSetDialogue(text,{speak:true});$('endgame-hints-used').textContent=endgameHints;}
-async function finishEndgame(result){const won=(endgameTarget==='win'&&result==='win')||(endgameTarget==='draw'&&result!=='loss');bozoCoachSetDialogue(won?'You proved the result. Good technique. The next step is recognizing the same idea when the pieces are arranged differently.':'The position is finished, but the target result was lost. Replay it and look for the first moment the theoretical result changed.',{speak:true});await saveEndgameProgress(won);}
+async function finishEndgame(result,reason=endgameTerminalReason(endgameGame)){
+  const actual=reason?endgameTerminalUserResult(endgameGame):result;
+  const won=endgameResultMeetsObjective(actual);
+  const label=endgameTerminalLabel(reason);
+  if($('endgame-status')){$('endgame-status').dataset.state=won?'success':'wrong';$('endgame-status').textContent=`${label} · ${won?'OBJECTIVE COMPLETE':'OBJECTIVE MISSED'}`;}
+  if($('endgame-mistakes'))$('endgame-mistakes').textContent=endgameMistakes;
+  if($('endgame-hints-used'))$('endgame-hints-used').textContent=endgameHints;
+  clearEndgamePremove();
+  bozoCoachSetDialogue(endgameTerminalDialogue(actual,reason,won),{speak:true});
+  await saveEndgameProgress(won);
+}
 async function saveEndgameProgress(success){if(!state?.session?.user?.id||!endgameCurrent)return;const uid=state.session.user.id;const {data}=await sb.from('endgame_progress').select('*').eq('user_id',uid).eq('endgame_id',endgameCurrent.id).maybeSingle();const patch={user_id:uid,endgame_id:endgameCurrent.id,last_practiced_at:new Date().toISOString()};if(endgameMode==='learn')patch.learn_completed=true;else if(endgameMode==='practice'){patch.practice_attempts=(data?.practice_attempts||0)+1;patch.practice_wins=(data?.practice_wins||0)+(success?1:0);}else{patch.test_attempts=(data?.test_attempts||0)+1;patch.test_wins=(data?.test_wins||0)+(success?1:0);}patch.mastery=Math.min(100,(patch.learn_completed||data?.learn_completed?25:0)+Math.min(35,(patch.practice_wins??data?.practice_wins??0)*7)+Math.min(40,(patch.test_wins??data?.test_wins??0)*10));await sb.from('endgame_progress').upsert(patch,{onConflict:'user_id,endgame_id'});}
 function resetEndgame(){if(!endgameCurrent)return;startEndgameStudy(endgameCurrent.id,endgameMode);}
 function closeEndgameStudy(){$('endgame-study').hidden=true;$('endgame-library').hidden=false;clearEndgamePremove();reviewStopVoice();}
