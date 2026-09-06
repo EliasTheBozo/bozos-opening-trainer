@@ -16573,7 +16573,7 @@ function renderEndgameCatalog(){
   }).sort((a,b)=>(a.source_type==='theory'?0:1)-(b.source_type==='theory'?0:1)||(Number(a.min_elo)||0)-(Number(b.min_elo)||0)||(Number(a.curriculum_order)||999999)-(Number(b.curriculum_order)||999999)||String(a.title).localeCompare(String(b.title)));
   const theoryCount=endgameCatalog.filter(r=>r.source_type==='theory').length;
   const conceptCount=new Set(endgameCatalog.filter(r=>r.source_type==='theory').map(r=>r.concept_key||r.title).filter(Boolean)).size;
-  $('endgame-count').textContent=`${endgameCatalog.length} studies · ${theoryCount} theory trainings · ${conceptCount} concepts`;
+  $('endgame-count').textContent=`${endgameCatalog.length} studies · ${theoryCount} published theory trainings · ${conceptCount} concepts`;
   root.innerHTML=rows.map(r=>`<article class="endgame-card"><div class="endgame-card-top"><span class="endgame-category">${escapeHtml(r.category)}</span><span>${r.source_type==='theory'?`THEORY${r.variant_no?` · V${r.variant_no}`:''}`:`${endgamePieceCount(r.fen)} pieces`}</span></div><h3>${escapeHtml(r.title)}</h3><p>${escapeHtml(r.concept||r.subcategory||'Technical endgame')}</p><div class="endgame-meta"><span>${escapeHtml(endgameDifficultyLabel(r))}</span><span>${escapeHtml(endgameEloStamp(r))}</span><span>${escapeHtml(endgameMaterialLabel(r.fen))}</span></div><div class="endgame-card-actions"><button class="button secondary" data-endgame-open="${r.id}" data-mode="learn">Learn</button><button class="button secondary" data-endgame-open="${r.id}" data-mode="practice">Practice</button><button class="button primary" data-endgame-open="${r.id}" data-mode="test">Test</button></div></article>`).join('')||'<div class="empty-state"><b>No matches</b><span>Try a named type such as Lucena, Philidor, Vancura, opposition, Réti, queen vs rook, or rook and bishop vs rook.</span></div>';
   root.querySelectorAll('[data-endgame-open]').forEach(b=>b.addEventListener('click',()=>startEndgameStudy(b.dataset.endgameOpen,b.dataset.mode)));
 }
@@ -16685,8 +16685,20 @@ async function executeEndgameUserMove(from,to,promotion='q',fromPremove=false){
       endgameBusy=false;return;
     }
     const tb=await endgameTablebase(endgameGame.fen()),result=endgameUserResult(tb),preserved=tbRank(result)>=tbRank(endgameTarget);
-    if(!preserved){endgameMistakes++;const reason=endgameFailureDialogue(move,tb,result);bozoCoachSetDialogue(reason,{speak:true});if(endgameMode==='test'){endgameGame.undo();endgameSelected=null;paintEndgameBoard();endgameBusy=false;return;} }
-    else bozoCoachSetDialogue(endgameSuccessDialogue(move,tb,result),{speak:true});
+    if(!preserved){
+      // Never continue an exercise from a position where the student's verified
+      // objective has already been lost. Previously Learn/Practice kept playing
+      // after a bad move, so BOZO's reply could leave the board showing LOSS and
+      // make a sound starting exercise look broken. Keep the feedback, rewind the
+      // move, and let the student solve the original position instead.
+      endgameMistakes++;
+      const reason=endgameFailureDialogue(move,tb,result);
+      bozoCoachSetDialogue(`${reason} Try a different move from the position before that mistake.`,{speak:true});
+      endgameGame.undo();endgameSelected=null;clearEndgamePremove();paintEndgameBoard();
+      try{updateEndgameStatus(await endgameTablebase(endgameGame.fen()));}catch{}
+      endgameBusy=false;return;
+    }
+    bozoCoachSetDialogue(endgameSuccessDialogue(move,tb,result),{speak:true});
     endgamePushHistory(endgameGame.fen(),move.san,'user');updateEndgameStatus(tb);
     await playEndgameDefense();
   }catch(e){bozoCoachSetDialogue(endgameCoachVariant('verify-error',['I could not verify that move against the tablebase just now. Try it again in a moment.','The tablebase check did not return cleanly. Give that move another try.']),{speak:true});}
@@ -16720,7 +16732,21 @@ async function playEndgameDefense(){
     // while Scholar BOZO kept talking as if the exercise were still running.
     const terminalReason=endgameTerminalReason(endgameGame);
     if(terminalReason){await finishEndgame(endgameTerminalUserResult(endgameGame),terminalReason);return;}
-    const next=await endgameTablebase(endgameGame.fen());updateEndgameStatus(next);const line=endgameCoachVariant('defense-'+(legal.captured?'capture':/[+#]$/.test(legal.san)?'check':'quiet'),legal.captured?[`The defense answers with ${legal.san}, changing the material. Re-evaluate the pawn race before moving again.`,`The defender chooses ${legal.san}. Because material changed, take a fresh look at king activity and promotion threats.`]:/[+#]$/.test(legal.san)?[`The defense finds ${legal.san} with check. Deal with the forcing move first, then return to your plan.`,`${legal.san} is the defender's resource. Since it comes with check, your king response determines what happens next.`]:[`The defense chooses ${legal.san}. Look for what changed: a key square, a checking lane, or a pawn's route to promotion.`,`${legal.san} is the reply. Don't automatically continue the old plan; scan the position again for the defender's new idea.`,`The defender plays ${legal.san}. Recalculate from here and focus on activity rather than just material.`]);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
+    const next=await endgameTablebase(endgameGame.fen());
+    const nextResult=endgameUserResult(next);
+    // Hard runtime invariant: after BOZO moves, the student's objective must
+    // still be achievable under perfect play. If this ever fails because of bad
+    // metadata/API semantics, do not strand the student in an impossible task.
+    if(tbRank(nextResult)<tbRank(endgameTarget)){
+      console.error('[BOZO Endgames] defense move violated training objective',endgameCurrent?.id,legal.san,endgameTarget,nextResult,endgameGame.fen());
+      endgameGame.undo();
+      if(endgameHistory.length>1){endgameHistory.pop();endgameHistoryIndex=endgameHistory.length-1;}
+      clearEndgamePremove();paintEndgameBoard();
+      try{updateEndgameStatus(await endgameTablebase(endgameGame.fen()));}catch{}
+      bozoCoachSetDialogue('This exercise was paused because the defensive reply did not preserve a fair training objective. BOZO will not make you continue from an impossible position.',{speak:true});
+      return;
+    }
+    updateEndgameStatus(next);const line=endgameCoachVariant('defense-'+(legal.captured?'capture':/[+#]$/.test(legal.san)?'check':'quiet'),legal.captured?[`The defense answers with ${legal.san}, changing the material. Re-evaluate the pawn race before moving again.`,`The defender chooses ${legal.san}. Because material changed, take a fresh look at king activity and promotion threats.`]:/[+#]$/.test(legal.san)?[`The defense finds ${legal.san} with check. Deal with the forcing move first, then return to your plan.`,`${legal.san} is the defender's resource. Since it comes with check, your king response determines what happens next.`]:[`The defense chooses ${legal.san}. Look for what changed: a key square, a checking lane, or a pawn's route to promotion.`,`${legal.san} is the reply. Don't automatically continue the old plan; scan the position again for the defender's new idea.`,`The defender plays ${legal.san}. Recalculate from here and focus on activity rather than just material.`]);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
 }
 function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=endgameObjectiveLabel();if(endgameMode==='learn')$('endgame-status').textContent=`Theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;else if(endgameMode==='practice')$('endgame-status').textContent=`Objective ${endgameObjectiveLabel()} · theoretical result hidden during practice`;else $('endgame-status').textContent='Theoretical result hidden until the exercise ends.';$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;}
 async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0];const lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'';const text=`${lesson}Start by considering ${best.san}. In Learn mode I can reveal a tablebase-perfect move, but the goal is to understand why it preserves the result, not memorize one sequence.`;$('endgame-learn-note').textContent=text;}
