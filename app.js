@@ -2852,7 +2852,7 @@ function paintDailyBoard(){
   board.innerHTML=ranks.flatMap(r=>files.map(f=>{const sq=dailySquareName(f,r);const p=dailyGame.get(sq);return `<button type="button" class="board-square ${(r+f)%2?'dark':'light'}${dailySelectedSquare===sq?' selected':''}" data-daily-square="${sq}" aria-label="${sq}">${dailyPieceMarkup(p)}</button>`})).join('');
   board.querySelectorAll('[data-daily-square]').forEach(b=>b.addEventListener('click',()=>dailyBoardClick(b.dataset.dailySquare)));
 }
-function dailyBoardClick(sq){
+async function dailyBoardClick(sq){
   if(dailySolved||!dailyGame||!dailyPuzzle)return;
   const piece=dailyGame.get(sq);
   const turn=dailyGame.turn();
@@ -2860,7 +2860,9 @@ function dailyBoardClick(sq){
   if(piece&&piece.color===turn){dailySelectedSquare=sq;paintDailyBoard();return;}
   const from=dailySelectedSquare; dailySelectedSquare=null;
   const expected=(dailyLine[dailyLineIndex]||'').toLowerCase();
-  let move=null; try{move=dailyGame.move({from,to:sq,promotion:'q'});}catch{}
+  const candidate=await bozoLegalMoveForDestination(dailyGame,from,sq,turn);
+  if(!candidate){paintDailyBoard();return;}
+  let move=null; try{move=dailyGame.move(candidate);}catch{}
   if(!move){paintDailyBoard();return;}
   const uci=(move.from+move.to+(move.promotion||'')).toLowerCase();
   if(uci!==expected){ dailyGame.undo(); paintDailyBoard(); const f=$('daily-feedback'); f.dataset.state='error'; f.innerHTML='<b>Not quite.</b><span>Try another continuation.</span>'; bozoCoachSetDialogue('Not quite. Look again at checks, captures, threats, and what changed on the last move.',{speak:true}); return; }
@@ -2946,7 +2948,7 @@ function paintDailyEditorBoard(){
   decorateBozoBoardCoordinates(board);
   board.querySelectorAll('[data-daily-editor-square]').forEach(b=>{b.addEventListener('click',()=>dailyEditorClick(b.dataset.dailyEditorSquare));b.addEventListener('contextmenu',e=>{if(!dailyEditorSetupMode)return;e.preventDefault();delete dailySetupPieces[b.dataset.dailyEditorSquare];paintDailyEditorBoard();});});
 }
-function dailyEditorClick(sq){
+async function dailyEditorClick(sq){
   if(dailyEditorSetupMode){
     if(dailySetupTool==='erase'){ delete dailySetupPieces[sq]; }
     else {
@@ -2964,8 +2966,9 @@ function dailyEditorClick(sq){
     return;
   }
   if(p&&p.color===dailyEditorGame.turn()){ dailyEditorSelected=sq; paintDailyEditorBoard(); return; }
-  const from=dailyEditorSelected; dailyEditorSelected=null; let move=null;
-  try{ move=dailyEditorGame.move({from,to:sq,promotion:'q'}); }catch{}
+  const from=dailyEditorSelected; dailyEditorSelected=null; const turn=dailyEditorGame.turn();
+  const candidate=await bozoLegalMoveForDestination(dailyEditorGame,from,sq,turn); let move=null;
+  try{ if(candidate)move=dailyEditorGame.move(candidate); }catch{}
   if(move){ dailyEditorMoves.push(move.from+move.to+(move.promotion||'')); paintDailyEditorLine(); }
   paintDailyEditorBoard();
 }
@@ -8390,6 +8393,7 @@ function reviewStopVoice(){
   reviewVoicePlayback=null;
   if(reviewVoiceObjectUrl){try{URL.revokeObjectURL(reviewVoiceObjectUrl);}catch{}reviewVoiceObjectUrl='';}
   try{window.speechSynthesis?.cancel?.();}catch{}
+  try{window.Capacitor?.Plugins?.TextToSpeech?.stop?.();}catch{}
 }
 function updateReviewVoiceButton(){
   const b=$('review-voice-toggle');if(b){
@@ -8472,6 +8476,11 @@ async function speakCurrentReviewExplanation(row,{manual=false}={}){
   if(!reviewVoiceEnabled||!row)return;
   const token=reviewVoiceRequestToken;
   const text=reviewVoiceText(row);if(!text)return;
+  if(bozoNativeAndroid()){
+    const ok=await bozoNativeSpeak(text);
+    if(manual&&!ok)toast('Coach voice could not play on this device.');
+    return;
+  }
   try{
     const audio=await requestReviewCoachAudio(text,row);
     if(token!==reviewVoiceRequestToken)return;
@@ -10102,7 +10111,12 @@ async function handleRatedOnlineSquare(square) {
     }
 
     // We don't submit anything now. We store ONE provisional move only.
-    queueRatedPremove(from, square, 'q');
+    let promotion='q';
+    if(bozoPromotionRequired(game,from,square,ratedMatchSession.myColor)){
+      promotion=await chooseBozoPromotion(ratedMatchSession.myColor);
+      if(!promotion){paintRatedOnlineGame();return;}
+    }
+    queueRatedPremove(from, square, promotion);
     return;
   }
 
@@ -10122,7 +10136,7 @@ async function handleRatedOnlineSquare(square) {
 
   const from = ratedMatchSelectedSquare;
   ratedMatchSelectedSquare = null;
-  const candidate = game.moves({ square: from, verbose: true }).find(move => move.to === square);
+  const candidate = await bozoLegalMoveForDestination(game, from, square, ratedMatchSession.myColor);
 
   if (!candidate) {
     paintRatedOnlineGame();
@@ -10917,7 +10931,7 @@ function paintWebBotGame() {
 }
 
 
-function handleWebBotSquare(square) {
+async function handleWebBotSquare(square) {
   if (!webBotSession ||
       webBotSession.status !== 'active' ||
       webBotSession.botThinking ||
@@ -10942,8 +10956,7 @@ function handleWebBotSquare(square) {
 
   const from = webBotSelectedSquare;
   webBotSelectedSquare = null;
-  const legal = game.moves({ square: from, verbose: true });
-  const candidate = legal.find(move => move.to === square);
+  const candidate = await bozoLegalMoveForDestination(game, from, square, webBotSession.playerColor);
 
   if (!candidate) {
     paintWebBotGame();
@@ -12599,7 +12612,9 @@ async function clickWebDuelSquare(square) {
     selectedWebSquare=square; paintWebDuel(); return;
   }
 
-  let move=webDuelGame.move({from:selectedWebSquare,to:square,promotion:'q'});
+  const from=selectedWebSquare;
+  const candidate=await bozoLegalMoveForDestination(webDuelGame,from,square,webDuelGame.turn());
+  let move=candidate?webDuelGame.move(candidate):null;
   if (!move) {
     selectedWebSquare=null; paintWebDuel(); return;
   }
@@ -13016,7 +13031,7 @@ async function handleStudySquare(square) {
 
   const from = studySelectedSquare;
   studySelectedSquare = null;
-  const candidate = game.moves({ square: from, verbose: true }).find(move => move.to === square);
+  const candidate = await bozoLegalMoveForDestination(game, from, square, game.turn());
   if (!candidate) {
     paintStudyBoard();
     return toast('That move is not legal.');
@@ -13821,7 +13836,7 @@ function paintTrainBoard() {
   boardEl.querySelectorAll('button').forEach(button => button.addEventListener('click', () => clickTrainSquare(button.dataset.square)));
 }
 
-function clickTrainSquare(square) {
+async function clickTrainSquare(square) {
   if (!trainGame || trainPly >= trainMoves.length || !isTrainUserTurn()) return;
   const myColor = trainUserSide === 'white' ? 'w' : 'b';
   if (!trainSelectedSquare) {
@@ -13831,7 +13846,8 @@ function clickTrainSquare(square) {
   }
   const from = trainSelectedSquare;
   trainSelectedSquare = null;
-  const move = trainGame.move({ from, to: square, promotion: 'q' });
+  const candidate = await bozoLegalMoveForDestination(trainGame, from, square, myColor);
+  const move = candidate ? trainGame.move(candidate) : null;
   if (!move) { paintTrainBoard(); return; }
   const expectedSan = trainMoves[trainPly];
   trainGame.undo();
@@ -15013,12 +15029,9 @@ async function evaluatePlayedPuzzleMove(fenBefore, playedUci, knownCandidates=[]
   return { candidate:{uci:playedUci,rank:99,loss,dynamic:true,pv:[playedUci,...(after.pv||[])]}, loss, dynamic:true };
 }
 
-function resolvePuzzleLegalMove(from, to) {
+async function resolvePuzzleLegalMove(from, to) {
   if (!puzzleGame) return null;
-  const legal = puzzleGame.moves({ verbose:true }).filter(move => move.from === from && move.to === to);
-  if (!legal.length) return null;
-  // Default to queen promotion when the destination admits several promotion choices.
-  return legal.find(move => move.promotion === 'q') || legal[0];
+  return bozoLegalMoveForDestination(puzzleGame,from,to,puzzleGame.turn());
 }
 
 async function clickPuzzleSquare(square) {
@@ -15029,7 +15042,7 @@ async function clickPuzzleSquare(square) {
     puzzleSelectedSquare=square; paintPuzzleBoard(); return;
   }
   const from=puzzleSelectedSquare; puzzleSelectedSquare=null;
-  const legalMove = resolvePuzzleLegalMove(from, square);
+  const legalMove = await resolvePuzzleLegalMove(from, square);
   if (!legalMove) {
     setPuzzleFeedback('wrong','That move is not legal here.','BOZO checks legality from the current board before evaluating move quality.');
     paintPuzzleBoard(); updatePuzzleUI(); return;
@@ -16252,12 +16265,12 @@ function paintMasterMoves(){
   root.querySelector('.current')?.scrollIntoView({block:'nearest'});
 }
 function masterUserTurn(){if(!masterState.game)return false;const turn=masterState.game.turn();return masterState.mode==='both'||(masterState.mode==='white'&&turn==='w')||(masterState.mode==='black'&&turn==='b');}
-function masterBoardClick(sq){
+async function masterBoardClick(sq){
   if(masterState.mode==='study'||masterState.locked||!masterState.current||!masterState.game||!masterUserTurn())return;
   const piece=masterState.game.get(sq),turn=masterState.game.turn();
   if(!masterState.selected){if(piece&&piece.color===turn){masterState.selected=sq;paintMasterBoard();}return;}
   if(piece&&piece.color===turn){masterState.selected=sq;paintMasterBoard();return;}
-  const from=masterState.selected;masterState.selected=null;let move=null;try{move=masterState.game.move({from,to:sq,promotion:'q'});}catch{}
+  const from=masterState.selected;masterState.selected=null;const candidate=await bozoLegalMoveForDestination(masterState.game,from,sq,turn);let move=null;try{if(candidate)move=masterState.game.move(candidate);}catch{}
   if(!move){paintMasterBoard();return;}
   const played=(move.from+move.to+(move.promotion||'')).toLowerCase(),expected=String(masterMovesUci()[masterState.ply]||'').toLowerCase(),sanPlayed=move.san||played,masterSan=masterMovesSan()[masterState.ply]||expected,exact=played===expected;
   masterState.decisions.push({ply:masterState.ply+1,played_uci:played,played_san:sanPlayed,master_uci:expected,master_san:masterSan,exact});
@@ -16399,6 +16412,83 @@ $('master-puzzle-search')?.addEventListener('keydown',e=>{if(e.key==='Enter')fin
 // BOZO v4.15.0 — Endgame Study + universal Scholar BOZO coach
 const BOZO_TABLEBASE_ENDPOINT='https://tablebase.lichess.ovh/standard';
 let endgameCatalog=[],endgameCurrent=null,endgameGame=null,endgameSelected=null,endgameMode='learn',endgameUserColor='w',endgameTarget='draw',endgameStartFen='',endgameMistakes=0,endgameHints=0,endgameBusy=false,endgameHistory=[],endgameHistoryIndex=0,endgamePremove=null,endgamePremoveSelected=null;
+
+// Shared promotion UI. Keep this in the web layer so the website and Capacitor
+// Android build use the exact same chess-correct promotion flow.
+let bozoPromotionRequest=null;
+function bozoPromotionRequired(game,from,to,color=''){
+  try{
+    const piece=game?.get?.(from);
+    if(!piece||piece.type!=='p')return false;
+    if(color&&piece.color!==color)return false;
+    return (piece.color==='w'&&String(to).endsWith('8'))||(piece.color==='b'&&String(to).endsWith('1'));
+  }catch{return false;}
+}
+function ensureBozoPromotionPicker(){
+  let overlay=$('bozo-promotion-overlay');
+  if(overlay)return overlay;
+  const style=document.createElement('style');
+  style.id='bozo-promotion-style';
+  style.textContent=`
+    #bozo-promotion-overlay{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(8,4,12,.66);backdrop-filter:blur(4px)}
+    #bozo-promotion-overlay[hidden]{display:none!important}
+    .bozo-promotion-card{width:min(430px,calc(100vw - 28px));border:1px solid rgba(181,115,255,.42);border-radius:20px;padding:18px;background:#16091f;box-shadow:0 24px 80px rgba(0,0,0,.55);text-align:center}
+    .bozo-promotion-card b{display:block;font-size:1.05rem;margin-bottom:4px}
+    .bozo-promotion-card span{display:block;opacity:.72;font-size:.9rem;margin-bottom:14px}
+    .bozo-promotion-options{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .bozo-promotion-piece{min-width:0;min-height:72px;border:1px solid rgba(255,255,255,.16);border-radius:14px;background:rgba(255,255,255,.06);color:inherit;font:inherit;cursor:pointer;touch-action:manipulation}
+    .bozo-promotion-piece:hover,.bozo-promotion-piece:focus-visible{border-color:#b573ff;background:rgba(181,115,255,.16);outline:none}
+    .bozo-promotion-glyph{display:block!important;font-size:2.25rem;line-height:1;margin:0!important;opacity:1!important}
+    .bozo-promotion-name{display:block!important;margin:7px 0 0!important;font-size:.72rem!important;opacity:.82!important}
+    @media(max-width:520px){.bozo-promotion-card{padding:15px}.bozo-promotion-options{gap:7px}.bozo-promotion-piece{min-height:68px}.bozo-promotion-glyph{font-size:2rem}}
+  `;
+  document.head.appendChild(style);
+  overlay=document.createElement('div');
+  overlay.id='bozo-promotion-overlay';
+  overlay.hidden=true;
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.setAttribute('aria-label','Choose promotion piece');
+  document.body.appendChild(overlay);
+  return overlay;
+}
+function chooseBozoPromotion(color='w'){
+  if(bozoPromotionRequest)return bozoPromotionRequest;
+  const overlay=ensureBozoPromotionPicker();
+  const pieces=[['q','Queen'],['r','Rook'],['b','Bishop'],['n','Knight']];
+  const glyphs=color==='b'?{q:'♛',r:'♜',b:'♝',n:'♞'}:{q:'♕',r:'♖',b:'♗',n:'♘'};
+  overlay.innerHTML=`<div class="bozo-promotion-card"><b>Promote pawn</b><span>Choose a piece.</span><div class="bozo-promotion-options">${pieces.map(([code,name])=>`<button type="button" class="bozo-promotion-piece" data-promotion="${code}" aria-label="Promote to ${name}"><span class="bozo-promotion-glyph">${glyphs[code]}</span><span class="bozo-promotion-name">${name}</span></button>`).join('')}</div></div>`;
+  overlay.hidden=false;
+  bozoPromotionRequest=new Promise(resolve=>{
+    let settled=false;
+    const onKey=event=>{
+      if(event.key==='Escape'){event.preventDefault();finish(null);return;}
+      const hotkey={q:'q',r:'r',b:'b',n:'n'}[String(event.key||'').toLowerCase()];
+      if(hotkey){event.preventDefault();finish(hotkey);}
+    };
+    const onBackdrop=event=>{if(event.target===overlay)finish(null);};
+    const finish=value=>{
+      if(settled)return;settled=true;
+      document.removeEventListener('keydown',onKey);overlay.removeEventListener('click',onBackdrop);
+      overlay.hidden=true;overlay.innerHTML='';bozoPromotionRequest=null;resolve(value);
+    };
+    overlay.querySelectorAll('[data-promotion]').forEach(button=>button.addEventListener('click',()=>finish(button.dataset.promotion),{once:true}));
+    overlay.addEventListener('click',onBackdrop);
+    document.addEventListener('keydown',onKey);
+    overlay.querySelector('[data-promotion="q"]')?.focus();
+  });
+  return bozoPromotionRequest;
+}
+async function bozoLegalMoveForDestination(game,from,to,color=''){
+  let candidates=[];
+  try{candidates=game?.moves?.({square:from,verbose:true})?.filter(move=>move.to===to)||[];}catch{}
+  if(!candidates.length)return null;
+  const promotionMoves=candidates.filter(move=>move.promotion);
+  if(!promotionMoves.length)return candidates[0];
+  const promotion=await chooseBozoPromotion(color||promotionMoves[0]?.color||game?.get?.(from)?.color||'w');
+  if(!promotion)return null;
+  return promotionMoves.find(move=>move.promotion===promotion)||null;
+}
 const endgameCoachVariantCursor=new Map();
 const endgameTbCache=new Map();
 
@@ -16409,11 +16499,34 @@ function bozoCoachSetDialogue(text,{speak=true,title='Scholar BOZO'}={}){
   document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>s.value=reviewVoiceId);
   if(speak&&reviewVoiceEnabled&&text)bozoCoachSpeakText(text);
 }
+function bozoNativeAndroid(){
+  try{
+    return Boolean(window.Capacitor?.isNativePlatform?.()&&window.Capacitor?.getPlatform?.()==='android');
+  }catch{return false;}
+}
+async function bozoNativeSpeak(text){
+  const plugin=window.Capacitor?.Plugins?.TextToSpeech;
+  if(plugin?.speak){
+    try{
+      await plugin.stop?.();
+      // Do not await completion from the caller. Native Android TTS runs outside
+      // the WebView, so board input/rendering remains responsive while it speaks.
+      plugin.speak({text,lang:'en-GB',rate:.96,pitch:1,volume:1,queueStrategy:0}).catch(()=>reviewSpeechFallback(text));
+      reviewVoiceStatus('Using Android device voice.','fallback');
+      return true;
+    }catch{}
+  }
+  return reviewSpeechFallback(text);
+}
 async function bozoCoachSpeakText(text){
   reviewStopVoice();
   if(!reviewVoiceEnabled||!text)return;
   const token=reviewVoiceRequestToken;
   const spoken=reviewChessTextForSpeech(String(text));
+  if(bozoNativeAndroid()){
+    await bozoNativeSpeak(spoken);
+    return;
+  }
   try{
     const audio=await requestReviewCoachAudio(spoken,null);
     if(token!==reviewVoiceRequestToken)return;
@@ -16552,71 +16665,24 @@ function endgameMaterialLabel(fen){
 function endgamePositionFeatures(game=endgameGame){
   const out={pawns:0,rooks:0,bishops:0,knights:0,queens:0,whitePawns:0,blackPawns:0};
   try{for(const f of ['a','b','c','d','e','f','g','h'])for(let r=1;r<=8;r++){const piece=game?.get?.(`${f}${r}`);if(!piece)continue;if(piece.type==='p'){out.pawns++;piece.color==='w'?out.whitePawns++:out.blackPawns++;}else if(piece.type==='r')out.rooks++;else if(piece.type==='b')out.bishops++;else if(piece.type==='n')out.knights++;else if(piece.type==='q')out.queens++;}}catch{}
-  out.pawnless=out.pawns===0;
-  out.rookEnding=out.rooks>0;
-  out.queenEnding=out.queens>0;
-  out.minorEnding=(out.bishops+out.knights)>0;
-  out.userPawns=endgameUserColor==='b'?out.blackPawns:out.whitePawns;
-  out.opponentPawns=endgameUserColor==='b'?out.whitePawns:out.blackPawns;
-  out.bothSidesHavePawns=out.whitePawns>0&&out.blackPawns>0;
-  return out;
+  out.pawnless=out.pawns===0;out.rookEnding=out.rooks>0;out.queenEnding=out.queens>0;out.minorEnding=(out.bishops+out.knights)>0;return out;
 }
 function endgamePieceName(type){return({k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'})[type]||'piece';}
-function endgamePromotionObjectiveActive(row=endgameCurrent,game=endgameGame){
-  const f=endgamePositionFeatures(game);
-  if(endgameTarget!=='win'||f.userPawns<1)return false;
-  // A pawn merely existing is NOT enough. Promotion advice is reserved for
-  // exercises whose named concept explicitly makes promotion the plan.
-  const conceptText=`${row?.title||''} ${row?.concept||''} ${row?.subcategory||''}`.toLowerCase();
-  return /\b(promote|promotion|queening|queen the pawn|force promotion)\b/.test(conceptText);
-}
-function endgameCoachTopics(row=endgameCurrent,game=endgameGame){
-  const f=endgamePositionFeatures(game),promotion=endgamePromotionObjectiveActive(row,game);
-  const topics=['Checks and forcing tempi'];
-  if(f.pawnless&&f.rooks){topics.push('King confinement and escape squares','Rook activity and checking distance');if(f.minorEnding)topics.push('Piece coordination and mating-net geometry');else topics.push('King and rook coordination');}
-  else if(f.pawnless){topics.push('King activity and key squares');if(f.minorEnding)topics.push('Minor-piece coordination and controlled squares');if(f.queenEnding)topics.push('Queen checks, king safety and stalemate control');else topics.push('Loose pieces and simplification');}
-  else{
-    topics.push('King activity and key squares');
-    if(promotion)topics.push('Passed-pawn support and the concrete promotion route');
-    else if(f.bothSidesHavePawns)topics.push('Pawn breaks, races and which king arrives first');
-    else topics.push('Pawn support, blockade squares and king routes');
-    if(f.rookEnding)topics.push('Rook activity, checking distance and cut-off lines');
-    else if(f.minorEnding)topics.push('Piece coordination around the pawns');
-    else if(f.queenEnding)topics.push('Queen checks and king safety');
-    else topics.push('Tempo moves and opposition');
-  }
-  topics.push('Stalemate, repetition and 50-move drawing resources');
-  return topics.slice(0,5);
-}
-function updateEndgameCoachPrinciples(){
-  const box=document.querySelector('#endgame-study .scholar-coach-principles');if(!box)return;
-  const spans=[...box.querySelectorAll('span')],topics=endgameCoachTopics();
-  spans.forEach((el,i)=>{el.textContent=topics[i]||'';el.hidden=!topics[i];});
-}
 function endgameDefenseDialogue(move){
-  const f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();
+  const f=endgamePositionFeatures();
   if(/[+#]$/.test(move.san))return endgameCoachVariant('defense-check',[`The defense finds ${move.san} with check. Answer the forcing move first, then reassess your plan.`,`${move.san} forces your king to respond. After that, recalculate from the new king placement instead of following the old line automatically.`]);
   if(move.captured){
-    const suffix=f.pawnless?'With no pawn race to calculate, re-check piece activity, king placement, and coordination before moving again.':promotion?'Recalculate the material, king activity, and whether your promotion plan still works after the exchange.':f.bothSidesHavePawns?'Recalculate the material, king activity, and pawn structure before moving again.':'Recalculate the material, king activity, and the remaining pawn-support or blockade squares before moving again.';
+    const suffix=f.pawns?'Recalculate the material balance, king activity, and any pawn race before moving again.':'With no pawn race to worry about, recalculate piece activity, king safety, and coordination before moving again.';
     return endgameCoachVariant('defense-capture',[`The defense answers with ${move.san} and changes the material. ${suffix}`,`${move.san} changes what is left on the board. ${suffix}`]);
   }
-  if(move.piece==='k')return endgameCoachVariant('defense-king',[`The defender plays ${move.san}. The king has changed the key-square geometry, so check access squares and whether your king can still make progress.`,`${move.san} improves the defending king. Re-evaluate which squares your king needs and whether a direct approach still works.`]);
-  if(f.pawnless&&f.rookEnding)return endgameCoachVariant('defense-pawnless-rook',[`The defender plays ${move.san}. There are no pawns here, so focus on king confinement, checking distance, and piece coordination.`,`${move.san} changes the piece geometry. Re-check forcing checks, rook activity, escape squares, and how tightly the defending king is boxed in.`]);
+  if(move.piece==='k')return endgameCoachVariant('defense-king',[`The defender plays ${move.san}. The king has changed the key-square geometry, so check opposition, access squares, and whether your king can make progress.`,`${move.san} improves the defending king. Re-evaluate which squares your king needs and whether a direct approach still works.`]);
+  if(f.pawnless&&f.rookEnding)return endgameCoachVariant('defense-pawnless-rook',[`The defender plays ${move.san}. There are no pawns here, so focus on king confinement, checking distance, and coordination between the rook and king.`,`${move.san} changes the piece geometry. In this pawnless ending, re-check checks, rook activity, and how tightly the defending king is boxed in.`]);
   if(f.pawnless&&f.minorEnding)return endgameCoachVariant('defense-pawnless-minor',[`The defender plays ${move.san}. With no pawns on the board, piece coordination and king placement are the whole position.`,`${move.san} changes the piece geometry. Recalculate checks, mating nets, and which squares the kings and minor pieces control.`]);
-  if(f.pawns&&move.piece==='p'){
-    if(promotion)return endgameCoachVariant('defense-pawn-promotion',[`The defender plays ${move.san}. Recalculate whether your pawn can still be supported all the way to promotion and which king controls the critical squares.`,`${move.san} changes the pawn geometry. Check the concrete promotion route again instead of assuming the old path still works.`]);
-    if(f.bothSidesHavePawns)return endgameCoachVariant('defense-pawn-race',[`The defender plays ${move.san}. Recalculate the pawn structure, king routes, and which side wins the race to the critical squares.`,`${move.san} changes the pawn structure. Compare king access and pawn breaks before deciding whether to push.`]);
-    return endgameCoachVariant('defense-pawn-single',[`The defender plays ${move.san}. Re-check the pawn's support, blockade squares, and the route both kings have to it.`,`${move.san} changes the pawn's role. Decide whether the important task is supporting it, blockading it, or improving the king first.`]);
-  }
-  if(f.rookEnding)return endgameCoachVariant('defense-rook',[`The defender plays ${move.san}. Re-check active rook squares, side or rear checks, and whether either king can be cut off.`,`${move.san} is the defensive resource. Before continuing, compare rook activity and king position rather than counting material alone.`]);
-  if(f.pawns){
-    if(promotion)return endgameCoachVariant('defense-pawns-promotion',[`The defender plays ${move.san}. Recalculate the key squares that support your promotion plan and whether the pawn can advance safely.`,`${move.san} changes the position. Check the concrete promotion route and the king support it requires.`]);
-    if(f.bothSidesHavePawns)return endgameCoachVariant('defense-pawns',[`The defender plays ${move.san}. Recalculate key squares, king routes, and the pawn structure from this exact position.`,`${move.san} changes the position. Compare pawn breaks and which king can improve first.`]);
-    return endgameCoachVariant('defense-one-pawn-side',[`The defender plays ${move.san}. Re-check king routes, blockade squares, and whether the pawn should move at all.`,`${move.san} changes the position. Focus on king activity and the pawn's support or blockade, not on pushing automatically.`]);
-  }
+  if(f.pawns&&move.piece==='p')return endgameCoachVariant('defense-pawn',[`The defender plays ${move.san}. Recalculate the pawn race and which king reaches the critical squares first.`,`${move.san} changes the pawn structure. Check promotion timing, king routes, and whether a passed pawn has become more dangerous.`]);
+  if(f.rookEnding)return endgameCoachVariant('defense-rook',[`The defender plays ${move.san}. Re-check active rook squares, checks from behind or the side, and whether either king can be cut off.`,`${move.san} is the defensive resource. Before continuing, compare rook activity and king position rather than counting material alone.`]);
+  if(f.pawns)return endgameCoachVariant('defense-pawns',[`The defender plays ${move.san}. Recalculate key squares, king routes, and the pawn race from this exact position.`,`${move.san} changes the position. Check which pawn can advance safely and which king reaches the critical squares first.`]);
   return endgameCoachVariant('defense-generic',[`The defender plays ${move.san}. Recalculate checks, king activity, and piece coordination from the new position.`,`${move.san} is the reply. Do not continue the old plan automatically; identify what square or line the move changed.`]);
 }
-
 const ENDGAME_SEARCH_TIER_WORDS=new Set(['fundamentals','beginner','intermediate','club','advanced','expert','master']);
 const ENDGAME_SEARCH_CATEGORY_ALIASES={
   pawn:['pawn','pawns','king pawn','king and pawn','pawn ending','pawn endings'],
@@ -16664,8 +16730,19 @@ function tbSimple(category){if(['win','syzygy-win','maybe-win'].includes(categor
 function tbInvert(v){return v==='win'?'loss':v==='loss'?'win':v;}
 function tbRank(v){return v==='win'?2:v==='draw'?1:v==='loss'?0:-1;}
 async function endgameTablebase(fen){
-  const key=fen;if(endgameTbCache.has(key))return endgameTbCache.get(key);
-  const response=await fetch(`${BOZO_TABLEBASE_ENDPOINT}?fen=${encodeURIComponent(fen)}`);if(!response.ok)throw new Error('Tablebase unavailable for this position.');const json=await response.json();endgameTbCache.set(key,json);return json;
+  const key=fen;
+  if(endgameTbCache.has(key))return await endgameTbCache.get(key);
+  // Cache the in-flight request as well as the finished result. Endgame move
+  // handling can ask for the same FEN from status/teaching/fairness paths in
+  // quick succession; on mobile those duplicate fetches make a tap feel hung.
+  const pending=(async()=>{
+    const response=await fetch(`${BOZO_TABLEBASE_ENDPOINT}?fen=${encodeURIComponent(fen)}`);
+    if(!response.ok)throw new Error('Tablebase unavailable for this position.');
+    return await response.json();
+  })();
+  endgameTbCache.set(key,pending);
+  try{const json=await pending;endgameTbCache.set(key,json);return json;}
+  catch(error){if(endgameTbCache.get(key)===pending)endgameTbCache.delete(key);throw error;}
 }
 function endgameUserResult(tb){const side=endgameGame?.turn?.();const raw=tbSimple(tb.category);return side===endgameUserColor?raw:tbInvert(raw);}
 function endgameConfiguredObjective(row,tb){
@@ -16726,39 +16803,49 @@ async function startEndgameStudy(id,mode='learn'){
   const sourceLabel=row.source_type==='master_game'?'From the Master Games database':row.source_type==='theory'?'BOZO Theoretical Endgame':'BOZO Endgame';
   const mover=endgameGame.turn()==='w'?'WHITE':'BLACK',you=endgameUserColor==='w'?'WHITE':'BLACK';
   $('endgame-source').textContent=endgameGame.turn()===endgameUserColor?`${mover} TO MOVE · ${sourceLabel}`:`${mover} TO MOVE · YOU PLAY ${you} · ${sourceLabel}`;
-  paintEndgameBoard();updateEndgameStatus(tb);updateEndgameCoachPrinciples();
-  const intro=endgameIntroDialogue(row,tb);bozoCoachSetDialogue(intro,{speak:true});
+  paintEndgameBoard();updateEndgameStatus(tb);
+  const intro=endgameIntroDialogue(row,tb);bozoCoachSetDialogue(intro,{speak:endgameMode!=='test'});
   if(endgameGame.turn()!==endgameUserColor){
     await playEndgameDefense();
     if(endgameMode==='learn'&&endgameGame&&!endgameGame.game_over()&&endgameGame.turn()===endgameUserColor){try{await showEndgameTeachingLine(await endgameTablebase(endgameGame.fen()));}catch{}}
   }else if(mode==='learn')await showEndgameTeachingLine(tb);
 }
 
-function endgameIntroDialogue(row,tb){
-  const objective=endgameTarget==='win'?'win this position':'hold the draw',family=String(row.category||'endgame').toLowerCase(),waits=endgameGame?.turn?.()!==endgameUserColor?` The defense moves first; you are playing ${endgameUserColor==='w'?'White':'Black'}.`:'',f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive(row);
-  if(f.pawnless&&f.rookEnding)return endgameCoachVariant('intro-pawnless-rook',[`This is a ${family} endgame. Your task is to ${objective}.${waits} There are no pawns to race, so start with checks, king confinement, rook activity, and escape squares.`,`Your goal is to ${objective}.${waits} In this pawnless ending, calculate forcing checks and how the pieces restrict the enemy king before you move.`]);
-  if(f.pawnless)return endgameCoachVariant('intro-pawnless',[`This is a ${family} endgame. Your task is to ${objective}.${waits} With no pawns on the board, focus on king placement, forcing moves, and piece coordination.`,`Your goal is to ${objective}.${waits} Start with checks, controlled squares, and how your pieces coordinate around the kings.`]);
-  if(promotion)return endgameCoachVariant('intro-promotion',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Promotion is part of the actual training plan here, so calculate the pawn's route, the king support it needs, and the defender's blockade squares.`,`Your goal is to ${objective}.${waits} This lesson is specifically about converting through promotion. Identify the critical pawn, the supporting king route, and any forcing checks first.`]);
-  if(f.bothSidesHavePawns)return endgameCoachVariant('intro-pawn-structure',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Start with king activity, pawn breaks, and which side reaches the critical squares first.`,`Your goal is to ${objective}.${waits} There are pawns on both sides, but do not assume the answer is to push. Compare king routes, pawn breaks, and forcing moves first.`]);
-  return endgameCoachVariant('intro-single-pawn-side',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Focus on king activity, blockade or support squares, and whether moving the pawn actually helps.`,`Your goal is to ${objective}.${waits} A pawn is present, but the position is not automatically about promotion. Start with king routes, forcing moves, and the pawn's strategic role.`]);
-}
+function endgameIntroDialogue(row,tb){const objective=endgameTarget==='win'?'win this position':'hold the draw';const family=String(row.category||'endgame').toLowerCase();const waits=endgameGame?.turn?.()!==endgameUserColor?` The defense moves first; you are playing ${endgameUserColor==='w'?'White':'Black'}.`:'';return endgameCoachVariant('intro-'+family,[`This is a ${family} endgame. Your task is to ${objective}.${waits} Start by checking forcing moves and king activity.`,`Your goal here is to ${objective}.${waits} Before calculating deeply, identify passed pawns, loose pieces, and the most active king.`,`Take a moment before moving. In this ${family} ending, you need to ${objective}.${waits} Checks, pawn races, and key squares are the first things I want you to scan.`]);}
 function paintEndgameBoard(){
   const board=$('endgame-board');if(!board||!endgameGame)return;const orientation=endgameUserColor==='w'?'white':'black',displayGame=endgameHistoryGame();const ranks=orientation==='white'?[8,7,6,5,4,3,2,1]:[1,2,3,4,5,6,7,8],files=orientation==='white'?['a','b','c','d','e','f','g','h']:['h','g','f','e','d','c','b','a'];
   board.innerHTML=ranks.flatMap(rank=>files.map(file=>{const sq=`${file}${rank}`,p=displayGame.get(sq),symbol=p?`${p.color}${p.type.toUpperCase()}`:'',selected=endgameSelected===sq||endgamePremoveSelected===sq,pmFrom=endgamePremove?.from===sq,pmTo=endgamePremove?.to===sq;return `<button type="button" data-endgame-square="${sq}" data-piece-color="${p?.color==='w'?'white':p?.color==='b'?'black':''}" class="${selected?'selected ':''}${pmFrom?'rated-premove-from ':''}${pmTo?'rated-premove-to':''}">${webPiece(symbol)}</button>`})).join('');
   syncBoardUserAnnotationPosition('endgame-board',`${displayGame.fen()}|${orientation}`);board.querySelectorAll('[data-endgame-square]').forEach(b=>b.addEventListener('click',()=>clickEndgameSquare(b.dataset.endgameSquare)));
 }
+function paintEndgameSelection(){
+  const board=$('endgame-board');if(!board)return;
+  board.querySelectorAll('[data-endgame-square]').forEach(b=>b.classList.toggle('selected',b.dataset.endgameSquare===endgameSelected||b.dataset.endgameSquare===endgamePremoveSelected));
+}
+
 async function clickEndgameSquare(square){
   if(!endgameGame||endgameGame.game_over()||!endgameAtLivePosition())return;
   const p=endgameGame.get(square),ourTurn=endgameGame.turn()===endgameUserColor;
   if(!ourTurn){
-    if(!endgamePremoveSelected){if(p&&p.color===endgameUserColor){endgamePremoveSelected=square;paintEndgameBoard();}return;}
-    if(p&&p.color===endgameUserColor){endgamePremoveSelected=square;paintEndgameBoard();return;}
-    const from=endgamePremoveSelected;queueEndgamePremove(from,square,'q');return;
+    if(!endgamePremoveSelected){if(p&&p.color===endgameUserColor){endgamePremoveSelected=square;paintEndgameSelection();}return;}
+    if(p&&p.color===endgameUserColor){endgamePremoveSelected=square;paintEndgameSelection();return;}
+    const from=endgamePremoveSelected;
+    let promotion='q';
+    if(bozoPromotionRequired(endgameGame,from,square,endgameUserColor)){
+      promotion=await chooseBozoPromotion(endgameUserColor);
+      if(!promotion){endgamePremoveSelected=null;paintEndgameBoard();return;}
+    }
+    queueEndgamePremove(from,square,promotion);return;
   }
   if(endgameBusy)return;
-  if(!endgameSelected){if(p&&p.color===endgameUserColor){endgameSelected=square;paintEndgameBoard();}return;}
-  if(p&&p.color===endgameUserColor){endgameSelected=square;paintEndgameBoard();return;}
-  const from=endgameSelected;endgameSelected=null;await executeEndgameUserMove(from,square,'q',false);
+  if(!endgameSelected){if(p&&p.color===endgameUserColor){endgameSelected=square;paintEndgameSelection();}return;}
+  if(p&&p.color===endgameUserColor){endgameSelected=square;paintEndgameSelection();return;}
+  const from=endgameSelected;
+  let promotion='q';
+  if(bozoPromotionRequired(endgameGame,from,square,endgameUserColor)){
+    promotion=await chooseBozoPromotion(endgameUserColor);
+    if(!promotion){endgameSelected=null;paintEndgameBoard();return;}
+  }
+  endgameSelected=null;await executeEndgameUserMove(from,square,promotion,false);
 }
 async function executeEndgameUserMove(from,to,promotion='q',fromPremove=false){
   if(!endgameGame||endgameGame.turn()!==endgameUserColor||endgameGame.game_over())return;let move=null;try{move=endgameGame.move({from,to,promotion});}catch{}if(!move){paintEndgameBoard();return;}
@@ -16795,31 +16882,17 @@ async function executeEndgameUserMove(from,to,promotion='q',fromPremove=false){
   endgameBusy=false;
 }
 function endgameFailureDialogue(move,tb,result){
-  const f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();
   if(tb.checkmate)return endgameCoachVariant('fail-mate',[`${move.san} allows checkmate. Check the king's escape squares before committing.`,`${move.san} loses to mate. In a reduced position, one forcing check can decide everything.`]);
   if(tb.stalemate)return endgameCoachVariant('fail-stalemate',[`${move.san} allows stalemate. The opponent has no legal move, so the win disappears.`,`Careful: ${move.san} stalemates the defender. Keep at least one legal move available while you convert.`]);
-  if(result==='draw'&&endgameTarget==='win'){
-    if(f.pawnless)return endgameCoachVariant('fail-win-draw-pawnless',[`${move.san} gives away the win. There is no pawn race here; look for the check, restriction, or king placement that keeps the defender boxed in.`,`${move.san} lets the win slip. Re-check forcing moves, escape squares, and piece coordination instead of searching for a pawn plan.`]);
-    if(promotion)return endgameCoachVariant('fail-win-draw-promotion',[`${move.san} gives away the win. Recalculate whether your promotion route still works and which supporting square you surrendered.`,`${move.san} lets the win slip. Check the exact pawn timing and king support required by this promotion plan.`]);
-    return endgameCoachVariant('fail-win-draw',[`${move.san} gives away the win. Re-check king activity, forcing moves, and the key square or pawn break you surrendered.`,`${move.san} lets the win slip. The presence of pawns does not mean you should race them; identify the move that keeps the opponent restricted.`]);
-  }
-  if(result==='loss'){
-    if(f.pawnless)return endgameCoachVariant('fail-loss-pawnless',[`${move.san} turns the position into a theoretical loss. Look for the checking line, escape square, or piece-coordination detail you just gave up.`,`${move.san} loses the result. Compare forcing moves and king placement before retrying.`]);
-    if(promotion)return endgameCoachVariant('fail-loss-promotion',[`${move.san} loses the result. Recalculate the concrete promotion route and the king support it needs.`,`${move.san} turns the position into a loss. Check whether the defender gained the critical blockade square.`]);
-    return endgameCoachVariant('fail-loss',[`${move.san} turns the position into a theoretical loss. Look for the square, tempo, or pawn-structure detail you just gave up.`,`${move.san} loses the result. Before retrying, compare forcing moves and king routes.`]);
-  }
+  if(result==='draw'&&endgameTarget==='win')return endgameCoachVariant('fail-win-draw',[`${move.san} gives away the win. The position is now a draw, so look for the move that keeps the opponent restricted.`,`${move.san} lets the win slip. Re-check king activity, pawn races, and whether you surrendered a key checking square.`,`That move changes a winning position into a draw. Find the resource that keeps your opponent tied down instead.`]);
+  if(result==='loss')return endgameCoachVariant('fail-loss',[`${move.san} turns the position into a theoretical loss. Look for the square or tempo you just gave up.`,`${move.san} loses the result. Before retrying, compare forcing checks and the race of both kings and pawns.`]);
   return endgameCoachVariant('fail-generic',[`${move.san} does not preserve the result. Compare the king positions and forcing moves before trying again.`,`Not quite. ${move.san} changes the theoretical result, so inspect checks, captures, and key squares first.`]);
 }
 function endgameSuccessDialogue(move,tb,result){
-  const f=endgamePositionFeatures(),promotionFocus=endgamePromotionObjectiveActive(),check=/[+#]$/.test(move.san);
-  if(move.promotion)return endgameCoachVariant('success-promotion',[`${move.san} works because the pawn actually reaches promotion while preserving the ${endgameTarget}. Now convert the new material cleanly.`,`${move.san} completes the promotion phase of the plan. The position still meets your ${endgameTarget} objective.`]);
-  if(check)return endgameCoachVariant('success-check',[`${move.san} works because the check forces a reply and gains you a tempo for the endgame plan.`,`${move.san} keeps the result. The check matters because your opponent must answer it before creating counterplay.`,`Good. ${move.san} is forcing, so the king has to respond before the defender can improve anything else.`]);
+  const check=/[+#]$/.test(move.san);if(check)return endgameCoachVariant('success-check',[`${move.san} works because the check forces a reply and gains you a tempo for the endgame plan.`,`${move.san} keeps the result. The check matters because your opponent must answer it before creating counterplay.`,`Good. ${move.san} is forcing, so the king has to respond before the defender can improve anything else.`]);
   if(move.captured)return endgameCoachVariant('success-capture',[`${move.san} keeps the theoretical ${endgameTarget}. The exchange changes the material without giving up the result.`,`That capture works. ${move.san} simplifies while preserving the ${endgameTarget}.`,`Good conversion choice. ${move.san} changes the material, but the resulting position still meets your objective.`]);
-  if(f.pawnless)return endgameCoachVariant('success-quiet-pawnless',[`${move.san} preserves the ${endgameTarget}. With no pawns to race, keep improving king placement, checks, and piece coordination.`,`${move.san} is sound. The next job is to restrict escape squares and counterchecks, not search for a pawn plan.`]);
-  if(promotionFocus)return endgameCoachVariant('success-quiet-promotion',[`${move.san} preserves the ${endgameTarget}. Now check whether it improves the concrete promotion route or the king support behind it.`,`${move.san} is sound. Keep the promotion plan concrete: pawn route, king support, and blockade squares.`]);
-  return endgameCoachVariant('success-quiet',[`${move.san} preserves the ${endgameTarget}. Now ask what the defender's most active reply is.`,`${move.san} is sound. Keep improving the position without assuming the pawn must advance.`,`Good. ${move.san} holds the result. Restrict counterplay first; push pawns only when the position actually calls for it.`]);
+  return endgameCoachVariant('success-quiet',[`${move.san} preserves the ${endgameTarget}. Now ask what the defender's most active reply is.`,`${move.san} is sound. Keep improving the position without allowing checks or a pawn race.`,`Good. ${move.san} holds the result. The next job is to restrict counterplay, not rush.`]);
 }
-
 async function playEndgameDefense(){
   if(!endgameGame||endgameGame.turn()===endgameUserColor||endgameGame.game_over())return;const tb=await endgameTablebase(endgameGame.fen());if(!tb.moves?.length)return;
   // The move categories in the tablebase response describe the CHILD position
@@ -16830,47 +16903,43 @@ async function playEndgameDefense(){
   // selecting the quickest losing line (for example, hanging a queen at DTZ 1).
   let choices=tb.moves.map((m,index)=>({m,index,user:tbSimple(m.category),rank:tbRank(tbSimple(m.category)),dtz:Number.isFinite(m.dtz)?m.dtz:-Infinity}));
   choices.sort((a,b)=>a.rank-b.rank||b.dtz-a.dtz||a.index-b.index);const chosen=choices[0].m;
-  const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,420));endgameGame.move(legal);endgamePushHistory(endgameGame.fen(),legal.san,'defense');paintEndgameBoard();
+  const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,120));endgameGame.move(legal);endgamePushHistory(endgameGame.fen(),legal.san,'defense');paintEndgameBoard();
     // Terminal game state always wins over the generic "defense chooses..."
     // dialogue. This is the bug that previously let the board say repetition
     // while Scholar BOZO kept talking as if the exercise were still running.
     const terminalReason=endgameTerminalReason(endgameGame);
     if(terminalReason){await finishEndgame(endgameTerminalUserResult(endgameGame),terminalReason);return;}
-    const next=await endgameTablebase(endgameGame.fen());
-    const nextResult=endgameUserResult(next);
-    // Hard runtime invariant: after BOZO moves, the student's objective must
-    // still be achievable under perfect play. If this ever fails because of bad
-    // metadata/API semantics, do not strand the student in an impossible task.
+    // The selected tablebase move already contains the WDL category of the
+    // CHILD position from the next side-to-move's point of view. After BOZO's
+    // move, that next side is the student, so we can verify the training
+    // objective immediately without blocking input on a second network request.
+    const next={category:chosen.category,dtz:chosen.dtz};
+    const nextResult=tbSimple(chosen.category);
     if(tbRank(nextResult)<tbRank(endgameTarget)){
       console.error('[BOZO Endgames] defense move violated training objective',endgameCurrent?.id,legal.san,endgameTarget,nextResult,endgameGame.fen());
       endgameGame.undo();
       if(endgameHistory.length>1){endgameHistory.pop();endgameHistoryIndex=endgameHistory.length-1;}
       clearEndgamePremove();paintEndgameBoard();
-      try{updateEndgameStatus(await endgameTablebase(endgameGame.fen()));}catch{}
+      updateEndgameStatus(tb);
       bozoCoachSetDialogue('This exercise was paused because the defensive reply did not preserve a fair training objective. BOZO will not make you continue from an impossible position.',{speak:true});
       return;
     }
-    updateEndgameStatus(next);const line=endgameDefenseDialogue(legal);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
+    updateEndgameStatus(next);
+    // Warm the complete child tablebase response in the background for the
+    // student's next move/hint, but never keep endgameBusy locked waiting on it.
+    endgameTablebase(endgameGame.fen()).catch(()=>{});
+    const line=endgameDefenseDialogue(legal);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
 }
-function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=endgameObjectiveLabel();if(endgameMode==='learn')$('endgame-status').textContent=`Theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;else if(endgameMode==='practice')$('endgame-status').textContent=`Objective ${endgameObjectiveLabel()} · theoretical result hidden during practice`;else $('endgame-status').textContent='Theoretical result hidden until the exercise ends.';$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;updateEndgameCoachPrinciples();}
-async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0],lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'',promotion=endgamePromotionObjectiveActive();const reasons=promotion?'square, tempo, check, restriction, simplification, or promotion detail':'square, tempo, check, restriction, or simplification';const text=`${lesson}A strong move to investigate is ${best.san}. Do not memorize the notation: work out what ${reasons} makes the move preserve your objective.`;$('endgame-learn-note').textContent=text;}
+function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=endgameObjectiveLabel();if(endgameMode==='learn')$('endgame-status').textContent=`Theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;else if(endgameMode==='practice')$('endgame-status').textContent=`Objective ${endgameObjectiveLabel()} · theoretical result hidden during practice`;else $('endgame-status').textContent='Theoretical result hidden until the exercise ends.';$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;}
+async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0];const lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'';const text=`${lesson}A strong move to investigate is ${best.san}. Do not memorize the notation: work out what square, tempo, check, restriction, or simplification makes the move preserve your objective.`;$('endgame-learn-note').textContent=text;}
 async function endgameHint(){
   if(!endgameGame||endgameBusy)return;endgameHints++;const tb=await endgameTablebase(endgameGame.fen());const ranked=(tb.moves||[]).map(m=>({m,result:tbInvert(tbSimple(m.category))})).sort((a,b)=>tbRank(b.result)-tbRank(a.result));const best=ranked[0]?.m;if(!best)return;
-  const stage=Math.min(endgameHints,3),from=best.uci.slice(0,2),piece=endgameGame.get(from),features=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();let text='';
-  if(stage===1){
-    if(features.pawnless&&features.rooks)text='There are no pawns to race. Start with forcing checks, king confinement, rook activity, checking distance, and escape squares.';
-    else if(features.pawnless)text='There are no pawns here. Start with forcing moves, king placement, and how your pieces coordinate to restrict the enemy king.';
-    else if(promotion)text="Promotion is part of this lesson. Start with the pawn's exact route, the king support it needs, and the defender's blockade squares.";
-    else if(features.rooks)text='Start with forcing checks, active rook placement, king activity, and the strategic role of the pawns. Do not assume the answer is to push one.';
-    else if(features.queens)text='Start with forcing checks, king safety, and the role of the pawns. Only calculate promotion if the position makes it a concrete threat.';
-    else if(features.bothSidesHavePawns)text='Start with opposition, key squares, pawn breaks, and king routes. A pawn race matters only if the timing is actually forcing.';
-    else text='Start with king routes, support or blockade squares, and whether moving the pawn improves the position at all.';
-  }
+  const stage=Math.min(endgameHints,3),from=best.uci.slice(0,2),piece=endgameGame.get(from),features=endgamePositionFeatures();let text='';
+  if(stage===1){if(features.pawnless&&features.rooks)text='There are no pawns to race. Start with forcing checks, king confinement, rook activity, and the distance between the kings.';else if(features.pawnless)text='There are no pawns here. Start with forcing moves, king placement, and how your pieces coordinate to restrict the enemy king.';else if(features.rooks)text='Start with forcing checks, active rook placement, king activity, and whether a rook belongs behind a passed pawn.';else if(features.queens)text='Start with forcing checks, king safety, and whether a queen move creates a promotion or mating threat.';else text='Start with opposition, key squares, king routes, and the exact timing of the pawn race.';}
   else if(stage===2)text=`Focus on the ${endgamePieceName(piece?.type)} on ${from}. Find the move that preserves your ${endgameObjectiveLabel().toLowerCase()} and explain what it changes before you play it.`;
-  else text=promotion?`The move is ${best.san}. Before playing it, identify the concrete reason it works: a check, capture, key square, tempo, restriction, or promotion detail.`:`The move is ${best.san}. Before playing it, identify the concrete reason it works: a check, capture, key square, tempo, restriction, or simplification.`;
+  else text=`The move is ${best.san}. Before playing it, identify the concrete reason it works: a check, capture, key square, tempo, restriction, or promotion idea.`;
   bozoCoachSetDialogue(text,{speak:true});$('endgame-hints-used').textContent=endgameHints;
 }
-
 async function finishEndgame(result,reason=endgameTerminalReason(endgameGame)){
   const actual=reason?endgameTerminalUserResult(endgameGame):result;
   const won=endgameResultMeetsObjective(actual);
