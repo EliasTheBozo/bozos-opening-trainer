@@ -1735,9 +1735,10 @@ async function loadMyReports() {
   const list = $('profile-reports-list');
   if (!list || !state.session?.user) return;
   list.innerHTML = '<div class="empty-state"><div>⌛</div><b>Loading reports…</b></div>';
+  const uid = state.session.user.id;
   const { data, error } = await sb.from('reports')
     .select('id,report_type,severity,reason,status,created_at,updated_at')
-    .eq('reporter_id', state.session.user.id)
+    .or(`reporter_id.eq.${uid},reported_by.eq.${uid}`)
     .order('created_at', { ascending:false })
     .limit(25);
   if (error) {
@@ -2714,6 +2715,7 @@ $('community-feedback-form').addEventListener('submit', async event => {
     ({ error } = await sb.from('opening_submissions').insert(richPayload));
     if (error && /column|schema cache/i.test(readableError(error))) {
       ({ error } = await sb.from('opening_submissions').insert({
+        submitted_by: state.session.user.id,
         proposed_name: openingName,
         submission_type: type,
         status: 'pending'
@@ -2731,6 +2733,7 @@ $('community-feedback-form').addEventListener('submit', async event => {
     const includeBoard = $('community-feedback-board-context').checked;
     const context = [openingName ? `Context: ${openingName}` : '', openingId ? `Opening ID: ${openingId}` : '', details].filter(Boolean).join('\n');
     const richPayload = {
+      reported_by: state.session.user.id,
       reporter_id: state.session.user.id,
       report_type: type,
       severity,
@@ -2752,7 +2755,13 @@ $('community-feedback-form').addEventListener('submit', async event => {
     };
     ({ error } = await sb.from('reports').insert(richPayload));
     if (error && /column|schema cache/i.test(readableError(error))) {
-      ({ error } = await sb.from('reports').insert({ report_type: type, reason: context, status: 'open' }));
+      ({ error } = await sb.from('reports').insert({
+        reported_by: state.session.user.id,
+        reporter_id: state.session.user.id,
+        report_type: type,
+        reason: context,
+        status: 'open'
+      }));
     }
   }
   submit.disabled = false;
@@ -10489,8 +10498,14 @@ async function loadMyClubsForArena() {
 async function loadArenaOpeningOptions() {
   const select = $('arena-opening-id');
   if (select.dataset.loaded === '1') return;
-  const { data } = await sb.from('openings').select('id,name,variation').order('name').limit(500);
-  select.innerHTML = '<option value="">Choose an opening</option>' + (data || []).map(o =>
+  const rows=[],pageSize=1000;
+  for(let from=0;from<5000;from+=pageSize){
+    const {data,error}=await sb.from('openings').select('id,name,variation').eq('status','published').order('name').range(from,from+pageSize-1);
+    if(error){console.warn('Could not load arena opening options:',error);break;}
+    rows.push(...(data||[]));
+    if(!data||data.length<pageSize)break;
+  }
+  select.innerHTML = '<option value="">Choose an opening</option>' + rows.map(o =>
     `<option value="${o.id}" data-search="${escapeHtml(`${o.name} ${o.variation || ''}`.toLowerCase())}">${escapeHtml(o.name)}${o.variation ? ': '+escapeHtml(o.variation) : ''}</option>`
   ).join('');
   select.dataset.loaded = '1';
@@ -16534,6 +16549,74 @@ function endgameEloStamp(row){
 function endgameMaterialLabel(fen){
   try{const g=new Chess(fen),v={p:0,n:0,b:0,r:0,q:0};for(const s of ['a','b','c','d','e','f','g','h'])for(let r=1;r<=8;r++){const p=g.get(`${s}${r}`);if(p&&p.type!=='k')v[p.type]++;}return Object.entries(v).filter(x=>x[1]).map(([p,n])=>`${n}${({p:'P',n:'N',b:'B',r:'R',q:'Q'})[p]}`).join(' · ')||'Kings only';}catch{return 'Endgame';}
 }
+function endgamePositionFeatures(game=endgameGame){
+  const out={pawns:0,rooks:0,bishops:0,knights:0,queens:0,whitePawns:0,blackPawns:0};
+  try{for(const f of ['a','b','c','d','e','f','g','h'])for(let r=1;r<=8;r++){const piece=game?.get?.(`${f}${r}`);if(!piece)continue;if(piece.type==='p'){out.pawns++;piece.color==='w'?out.whitePawns++:out.blackPawns++;}else if(piece.type==='r')out.rooks++;else if(piece.type==='b')out.bishops++;else if(piece.type==='n')out.knights++;else if(piece.type==='q')out.queens++;}}catch{}
+  out.pawnless=out.pawns===0;
+  out.rookEnding=out.rooks>0;
+  out.queenEnding=out.queens>0;
+  out.minorEnding=(out.bishops+out.knights)>0;
+  out.userPawns=endgameUserColor==='b'?out.blackPawns:out.whitePawns;
+  out.opponentPawns=endgameUserColor==='b'?out.whitePawns:out.blackPawns;
+  out.bothSidesHavePawns=out.whitePawns>0&&out.blackPawns>0;
+  return out;
+}
+function endgamePieceName(type){return({k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'})[type]||'piece';}
+function endgamePromotionObjectiveActive(row=endgameCurrent,game=endgameGame){
+  const f=endgamePositionFeatures(game);
+  if(endgameTarget!=='win'||f.userPawns<1)return false;
+  // A pawn merely existing is NOT enough. Promotion advice is reserved for
+  // exercises whose named concept explicitly makes promotion the plan.
+  const conceptText=`${row?.title||''} ${row?.concept||''} ${row?.subcategory||''}`.toLowerCase();
+  return /\b(promote|promotion|queening|queen the pawn|force promotion)\b/.test(conceptText);
+}
+function endgameCoachTopics(row=endgameCurrent,game=endgameGame){
+  const f=endgamePositionFeatures(game),promotion=endgamePromotionObjectiveActive(row,game);
+  const topics=['Checks and forcing tempi'];
+  if(f.pawnless&&f.rooks){topics.push('King confinement and escape squares','Rook activity and checking distance');if(f.minorEnding)topics.push('Piece coordination and mating-net geometry');else topics.push('King and rook coordination');}
+  else if(f.pawnless){topics.push('King activity and key squares');if(f.minorEnding)topics.push('Minor-piece coordination and controlled squares');if(f.queenEnding)topics.push('Queen checks, king safety and stalemate control');else topics.push('Loose pieces and simplification');}
+  else{
+    topics.push('King activity and key squares');
+    if(promotion)topics.push('Passed-pawn support and the concrete promotion route');
+    else if(f.bothSidesHavePawns)topics.push('Pawn breaks, races and which king arrives first');
+    else topics.push('Pawn support, blockade squares and king routes');
+    if(f.rookEnding)topics.push('Rook activity, checking distance and cut-off lines');
+    else if(f.minorEnding)topics.push('Piece coordination around the pawns');
+    else if(f.queenEnding)topics.push('Queen checks and king safety');
+    else topics.push('Tempo moves and opposition');
+  }
+  topics.push('Stalemate, repetition and 50-move drawing resources');
+  return topics.slice(0,5);
+}
+function updateEndgameCoachPrinciples(){
+  const box=document.querySelector('#endgame-study .scholar-coach-principles');if(!box)return;
+  const spans=[...box.querySelectorAll('span')],topics=endgameCoachTopics();
+  spans.forEach((el,i)=>{el.textContent=topics[i]||'';el.hidden=!topics[i];});
+}
+function endgameDefenseDialogue(move){
+  const f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();
+  if(/[+#]$/.test(move.san))return endgameCoachVariant('defense-check',[`The defense finds ${move.san} with check. Answer the forcing move first, then reassess your plan.`,`${move.san} forces your king to respond. After that, recalculate from the new king placement instead of following the old line automatically.`]);
+  if(move.captured){
+    const suffix=f.pawnless?'With no pawn race to calculate, re-check piece activity, king placement, and coordination before moving again.':promotion?'Recalculate the material, king activity, and whether your promotion plan still works after the exchange.':f.bothSidesHavePawns?'Recalculate the material, king activity, and pawn structure before moving again.':'Recalculate the material, king activity, and the remaining pawn-support or blockade squares before moving again.';
+    return endgameCoachVariant('defense-capture',[`The defense answers with ${move.san} and changes the material. ${suffix}`,`${move.san} changes what is left on the board. ${suffix}`]);
+  }
+  if(move.piece==='k')return endgameCoachVariant('defense-king',[`The defender plays ${move.san}. The king has changed the key-square geometry, so check access squares and whether your king can still make progress.`,`${move.san} improves the defending king. Re-evaluate which squares your king needs and whether a direct approach still works.`]);
+  if(f.pawnless&&f.rookEnding)return endgameCoachVariant('defense-pawnless-rook',[`The defender plays ${move.san}. There are no pawns here, so focus on king confinement, checking distance, and piece coordination.`,`${move.san} changes the piece geometry. Re-check forcing checks, rook activity, escape squares, and how tightly the defending king is boxed in.`]);
+  if(f.pawnless&&f.minorEnding)return endgameCoachVariant('defense-pawnless-minor',[`The defender plays ${move.san}. With no pawns on the board, piece coordination and king placement are the whole position.`,`${move.san} changes the piece geometry. Recalculate checks, mating nets, and which squares the kings and minor pieces control.`]);
+  if(f.pawns&&move.piece==='p'){
+    if(promotion)return endgameCoachVariant('defense-pawn-promotion',[`The defender plays ${move.san}. Recalculate whether your pawn can still be supported all the way to promotion and which king controls the critical squares.`,`${move.san} changes the pawn geometry. Check the concrete promotion route again instead of assuming the old path still works.`]);
+    if(f.bothSidesHavePawns)return endgameCoachVariant('defense-pawn-race',[`The defender plays ${move.san}. Recalculate the pawn structure, king routes, and which side wins the race to the critical squares.`,`${move.san} changes the pawn structure. Compare king access and pawn breaks before deciding whether to push.`]);
+    return endgameCoachVariant('defense-pawn-single',[`The defender plays ${move.san}. Re-check the pawn's support, blockade squares, and the route both kings have to it.`,`${move.san} changes the pawn's role. Decide whether the important task is supporting it, blockading it, or improving the king first.`]);
+  }
+  if(f.rookEnding)return endgameCoachVariant('defense-rook',[`The defender plays ${move.san}. Re-check active rook squares, side or rear checks, and whether either king can be cut off.`,`${move.san} is the defensive resource. Before continuing, compare rook activity and king position rather than counting material alone.`]);
+  if(f.pawns){
+    if(promotion)return endgameCoachVariant('defense-pawns-promotion',[`The defender plays ${move.san}. Recalculate the key squares that support your promotion plan and whether the pawn can advance safely.`,`${move.san} changes the position. Check the concrete promotion route and the king support it requires.`]);
+    if(f.bothSidesHavePawns)return endgameCoachVariant('defense-pawns',[`The defender plays ${move.san}. Recalculate key squares, king routes, and the pawn structure from this exact position.`,`${move.san} changes the position. Compare pawn breaks and which king can improve first.`]);
+    return endgameCoachVariant('defense-one-pawn-side',[`The defender plays ${move.san}. Re-check king routes, blockade squares, and whether the pawn should move at all.`,`${move.san} changes the position. Focus on king activity and the pawn's support or blockade, not on pushing automatically.`]);
+  }
+  return endgameCoachVariant('defense-generic',[`The defender plays ${move.san}. Recalculate checks, king activity, and piece coordination from the new position.`,`${move.san} is the reply. Do not continue the old plan automatically; identify what square or line the move changed.`]);
+}
+
 const ENDGAME_SEARCH_TIER_WORDS=new Set(['fundamentals','beginner','intermediate','club','advanced','expert','master']);
 const ENDGAME_SEARCH_CATEGORY_ALIASES={
   pawn:['pawn','pawns','king pawn','king and pawn','pawn ending','pawn endings'],
@@ -16643,7 +16726,7 @@ async function startEndgameStudy(id,mode='learn'){
   const sourceLabel=row.source_type==='master_game'?'From the Master Games database':row.source_type==='theory'?'BOZO Theoretical Endgame':'BOZO Endgame';
   const mover=endgameGame.turn()==='w'?'WHITE':'BLACK',you=endgameUserColor==='w'?'WHITE':'BLACK';
   $('endgame-source').textContent=endgameGame.turn()===endgameUserColor?`${mover} TO MOVE · ${sourceLabel}`:`${mover} TO MOVE · YOU PLAY ${you} · ${sourceLabel}`;
-  paintEndgameBoard();updateEndgameStatus(tb);
+  paintEndgameBoard();updateEndgameStatus(tb);updateEndgameCoachPrinciples();
   const intro=endgameIntroDialogue(row,tb);bozoCoachSetDialogue(intro,{speak:true});
   if(endgameGame.turn()!==endgameUserColor){
     await playEndgameDefense();
@@ -16651,7 +16734,14 @@ async function startEndgameStudy(id,mode='learn'){
   }else if(mode==='learn')await showEndgameTeachingLine(tb);
 }
 
-function endgameIntroDialogue(row,tb){const objective=endgameTarget==='win'?'win this position':'hold the draw';const family=String(row.category||'endgame').toLowerCase();const waits=endgameGame?.turn?.()!==endgameUserColor?` The defense moves first; you are playing ${endgameUserColor==='w'?'White':'Black'}.`:'';return endgameCoachVariant('intro-'+family,[`This is a ${family} endgame. Your task is to ${objective}.${waits} Start by checking forcing moves and king activity.`,`Your goal here is to ${objective}.${waits} Before calculating deeply, identify passed pawns, loose pieces, and the most active king.`,`Take a moment before moving. In this ${family} ending, you need to ${objective}.${waits} Checks, pawn races, and key squares are the first things I want you to scan.`]);}
+function endgameIntroDialogue(row,tb){
+  const objective=endgameTarget==='win'?'win this position':'hold the draw',family=String(row.category||'endgame').toLowerCase(),waits=endgameGame?.turn?.()!==endgameUserColor?` The defense moves first; you are playing ${endgameUserColor==='w'?'White':'Black'}.`:'',f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive(row);
+  if(f.pawnless&&f.rookEnding)return endgameCoachVariant('intro-pawnless-rook',[`This is a ${family} endgame. Your task is to ${objective}.${waits} There are no pawns to race, so start with checks, king confinement, rook activity, and escape squares.`,`Your goal is to ${objective}.${waits} In this pawnless ending, calculate forcing checks and how the pieces restrict the enemy king before you move.`]);
+  if(f.pawnless)return endgameCoachVariant('intro-pawnless',[`This is a ${family} endgame. Your task is to ${objective}.${waits} With no pawns on the board, focus on king placement, forcing moves, and piece coordination.`,`Your goal is to ${objective}.${waits} Start with checks, controlled squares, and how your pieces coordinate around the kings.`]);
+  if(promotion)return endgameCoachVariant('intro-promotion',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Promotion is part of the actual training plan here, so calculate the pawn's route, the king support it needs, and the defender's blockade squares.`,`Your goal is to ${objective}.${waits} This lesson is specifically about converting through promotion. Identify the critical pawn, the supporting king route, and any forcing checks first.`]);
+  if(f.bothSidesHavePawns)return endgameCoachVariant('intro-pawn-structure',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Start with king activity, pawn breaks, and which side reaches the critical squares first.`,`Your goal is to ${objective}.${waits} There are pawns on both sides, but do not assume the answer is to push. Compare king routes, pawn breaks, and forcing moves first.`]);
+  return endgameCoachVariant('intro-single-pawn-side',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Focus on king activity, blockade or support squares, and whether moving the pawn actually helps.`,`Your goal is to ${objective}.${waits} A pawn is present, but the position is not automatically about promotion. Start with king routes, forcing moves, and the pawn's strategic role.`]);
+}
 function paintEndgameBoard(){
   const board=$('endgame-board');if(!board||!endgameGame)return;const orientation=endgameUserColor==='w'?'white':'black',displayGame=endgameHistoryGame();const ranks=orientation==='white'?[8,7,6,5,4,3,2,1]:[1,2,3,4,5,6,7,8],files=orientation==='white'?['a','b','c','d','e','f','g','h']:['h','g','f','e','d','c','b','a'];
   board.innerHTML=ranks.flatMap(rank=>files.map(file=>{const sq=`${file}${rank}`,p=displayGame.get(sq),symbol=p?`${p.color}${p.type.toUpperCase()}`:'',selected=endgameSelected===sq||endgamePremoveSelected===sq,pmFrom=endgamePremove?.from===sq,pmTo=endgamePremove?.to===sq;return `<button type="button" data-endgame-square="${sq}" data-piece-color="${p?.color==='w'?'white':p?.color==='b'?'black':''}" class="${selected?'selected ':''}${pmFrom?'rated-premove-from ':''}${pmTo?'rated-premove-to':''}">${webPiece(symbol)}</button>`})).join('');
@@ -16705,17 +16795,31 @@ async function executeEndgameUserMove(from,to,promotion='q',fromPremove=false){
   endgameBusy=false;
 }
 function endgameFailureDialogue(move,tb,result){
+  const f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();
   if(tb.checkmate)return endgameCoachVariant('fail-mate',[`${move.san} allows checkmate. Check the king's escape squares before committing.`,`${move.san} loses to mate. In a reduced position, one forcing check can decide everything.`]);
   if(tb.stalemate)return endgameCoachVariant('fail-stalemate',[`${move.san} allows stalemate. The opponent has no legal move, so the win disappears.`,`Careful: ${move.san} stalemates the defender. Keep at least one legal move available while you convert.`]);
-  if(result==='draw'&&endgameTarget==='win')return endgameCoachVariant('fail-win-draw',[`${move.san} gives away the win. The position is now a draw, so look for the move that keeps the opponent restricted.`,`${move.san} lets the win slip. Re-check king activity, pawn races, and whether you surrendered a key checking square.`,`That move changes a winning position into a draw. Find the resource that keeps your opponent tied down instead.`]);
-  if(result==='loss')return endgameCoachVariant('fail-loss',[`${move.san} turns the position into a theoretical loss. Look for the square or tempo you just gave up.`,`${move.san} loses the result. Before retrying, compare forcing checks and the race of both kings and pawns.`]);
+  if(result==='draw'&&endgameTarget==='win'){
+    if(f.pawnless)return endgameCoachVariant('fail-win-draw-pawnless',[`${move.san} gives away the win. There is no pawn race here; look for the check, restriction, or king placement that keeps the defender boxed in.`,`${move.san} lets the win slip. Re-check forcing moves, escape squares, and piece coordination instead of searching for a pawn plan.`]);
+    if(promotion)return endgameCoachVariant('fail-win-draw-promotion',[`${move.san} gives away the win. Recalculate whether your promotion route still works and which supporting square you surrendered.`,`${move.san} lets the win slip. Check the exact pawn timing and king support required by this promotion plan.`]);
+    return endgameCoachVariant('fail-win-draw',[`${move.san} gives away the win. Re-check king activity, forcing moves, and the key square or pawn break you surrendered.`,`${move.san} lets the win slip. The presence of pawns does not mean you should race them; identify the move that keeps the opponent restricted.`]);
+  }
+  if(result==='loss'){
+    if(f.pawnless)return endgameCoachVariant('fail-loss-pawnless',[`${move.san} turns the position into a theoretical loss. Look for the checking line, escape square, or piece-coordination detail you just gave up.`,`${move.san} loses the result. Compare forcing moves and king placement before retrying.`]);
+    if(promotion)return endgameCoachVariant('fail-loss-promotion',[`${move.san} loses the result. Recalculate the concrete promotion route and the king support it needs.`,`${move.san} turns the position into a loss. Check whether the defender gained the critical blockade square.`]);
+    return endgameCoachVariant('fail-loss',[`${move.san} turns the position into a theoretical loss. Look for the square, tempo, or pawn-structure detail you just gave up.`,`${move.san} loses the result. Before retrying, compare forcing moves and king routes.`]);
+  }
   return endgameCoachVariant('fail-generic',[`${move.san} does not preserve the result. Compare the king positions and forcing moves before trying again.`,`Not quite. ${move.san} changes the theoretical result, so inspect checks, captures, and key squares first.`]);
 }
 function endgameSuccessDialogue(move,tb,result){
-  const check=/[+#]$/.test(move.san);if(check)return endgameCoachVariant('success-check',[`${move.san} works because the check forces a reply and gains you a tempo for the endgame plan.`,`${move.san} keeps the result. The check matters because your opponent must answer it before creating counterplay.`,`Good. ${move.san} is forcing, so the king has to respond before the defender can improve anything else.`]);
+  const f=endgamePositionFeatures(),promotionFocus=endgamePromotionObjectiveActive(),check=/[+#]$/.test(move.san);
+  if(move.promotion)return endgameCoachVariant('success-promotion',[`${move.san} works because the pawn actually reaches promotion while preserving the ${endgameTarget}. Now convert the new material cleanly.`,`${move.san} completes the promotion phase of the plan. The position still meets your ${endgameTarget} objective.`]);
+  if(check)return endgameCoachVariant('success-check',[`${move.san} works because the check forces a reply and gains you a tempo for the endgame plan.`,`${move.san} keeps the result. The check matters because your opponent must answer it before creating counterplay.`,`Good. ${move.san} is forcing, so the king has to respond before the defender can improve anything else.`]);
   if(move.captured)return endgameCoachVariant('success-capture',[`${move.san} keeps the theoretical ${endgameTarget}. The exchange changes the material without giving up the result.`,`That capture works. ${move.san} simplifies while preserving the ${endgameTarget}.`,`Good conversion choice. ${move.san} changes the material, but the resulting position still meets your objective.`]);
-  return endgameCoachVariant('success-quiet',[`${move.san} preserves the ${endgameTarget}. Now ask what the defender's most active reply is.`,`${move.san} is sound. Keep improving the position without allowing checks or a pawn race.`,`Good. ${move.san} holds the result. The next job is to restrict counterplay, not rush.`]);
+  if(f.pawnless)return endgameCoachVariant('success-quiet-pawnless',[`${move.san} preserves the ${endgameTarget}. With no pawns to race, keep improving king placement, checks, and piece coordination.`,`${move.san} is sound. The next job is to restrict escape squares and counterchecks, not search for a pawn plan.`]);
+  if(promotionFocus)return endgameCoachVariant('success-quiet-promotion',[`${move.san} preserves the ${endgameTarget}. Now check whether it improves the concrete promotion route or the king support behind it.`,`${move.san} is sound. Keep the promotion plan concrete: pawn route, king support, and blockade squares.`]);
+  return endgameCoachVariant('success-quiet',[`${move.san} preserves the ${endgameTarget}. Now ask what the defender's most active reply is.`,`${move.san} is sound. Keep improving the position without assuming the pawn must advance.`,`Good. ${move.san} holds the result. Restrict counterplay first; push pawns only when the position actually calls for it.`]);
 }
+
 async function playEndgameDefense(){
   if(!endgameGame||endgameGame.turn()===endgameUserColor||endgameGame.game_over())return;const tb=await endgameTablebase(endgameGame.fen());if(!tb.moves?.length)return;
   // The move categories in the tablebase response describe the CHILD position
@@ -16746,11 +16850,27 @@ async function playEndgameDefense(){
       bozoCoachSetDialogue('This exercise was paused because the defensive reply did not preserve a fair training objective. BOZO will not make you continue from an impossible position.',{speak:true});
       return;
     }
-    updateEndgameStatus(next);const line=endgameCoachVariant('defense-'+(legal.captured?'capture':/[+#]$/.test(legal.san)?'check':'quiet'),legal.captured?[`The defense answers with ${legal.san}, changing the material. Re-evaluate the pawn race before moving again.`,`The defender chooses ${legal.san}. Because material changed, take a fresh look at king activity and promotion threats.`]:/[+#]$/.test(legal.san)?[`The defense finds ${legal.san} with check. Deal with the forcing move first, then return to your plan.`,`${legal.san} is the defender's resource. Since it comes with check, your king response determines what happens next.`]:[`The defense chooses ${legal.san}. Look for what changed: a key square, a checking lane, or a pawn's route to promotion.`,`${legal.san} is the reply. Don't automatically continue the old plan; scan the position again for the defender's new idea.`,`The defender plays ${legal.san}. Recalculate from here and focus on activity rather than just material.`]);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
+    updateEndgameStatus(next);const line=endgameDefenseDialogue(legal);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
 }
-function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=endgameObjectiveLabel();if(endgameMode==='learn')$('endgame-status').textContent=`Theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;else if(endgameMode==='practice')$('endgame-status').textContent=`Objective ${endgameObjectiveLabel()} · theoretical result hidden during practice`;else $('endgame-status').textContent='Theoretical result hidden until the exercise ends.';$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;}
-async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0];const lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'';const text=`${lesson}Start by considering ${best.san}. In Learn mode I can reveal a tablebase-perfect move, but the goal is to understand why it preserves the result, not memorize one sequence.`;$('endgame-learn-note').textContent=text;}
-async function endgameHint(){if(!endgameGame||endgameBusy)return;endgameHints++;const tb=await endgameTablebase(endgameGame.fen());const ranked=(tb.moves||[]).map(m=>({m,result:tbInvert(tbSimple(m.category))})).sort((a,b)=>tbRank(b.result)-tbRank(a.result));const best=ranked[0]?.m;if(!best)return;const stage=Math.min(endgameHints,3);const text=stage===1?`Look first for forcing moves and moves that improve king activity. The best move begins from the ${best.uci[0]}-file.`:stage===2?`Focus on the piece on ${best.uci.slice(0,2)}. Its best move preserves the theoretical result.`:`The move is ${best.san}. Before playing it, ask what square, tempo, check, capture, or promotion threat makes it work.`;bozoCoachSetDialogue(text,{speak:true});$('endgame-hints-used').textContent=endgameHints;}
+function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=endgameObjectiveLabel();if(endgameMode==='learn')$('endgame-status').textContent=`Theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;else if(endgameMode==='practice')$('endgame-status').textContent=`Objective ${endgameObjectiveLabel()} · theoretical result hidden during practice`;else $('endgame-status').textContent='Theoretical result hidden until the exercise ends.';$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;updateEndgameCoachPrinciples();}
+async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0],lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'',promotion=endgamePromotionObjectiveActive();const reasons=promotion?'square, tempo, check, restriction, simplification, or promotion detail':'square, tempo, check, restriction, or simplification';const text=`${lesson}A strong move to investigate is ${best.san}. Do not memorize the notation: work out what ${reasons} makes the move preserve your objective.`;$('endgame-learn-note').textContent=text;}
+async function endgameHint(){
+  if(!endgameGame||endgameBusy)return;endgameHints++;const tb=await endgameTablebase(endgameGame.fen());const ranked=(tb.moves||[]).map(m=>({m,result:tbInvert(tbSimple(m.category))})).sort((a,b)=>tbRank(b.result)-tbRank(a.result));const best=ranked[0]?.m;if(!best)return;
+  const stage=Math.min(endgameHints,3),from=best.uci.slice(0,2),piece=endgameGame.get(from),features=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();let text='';
+  if(stage===1){
+    if(features.pawnless&&features.rooks)text='There are no pawns to race. Start with forcing checks, king confinement, rook activity, checking distance, and escape squares.';
+    else if(features.pawnless)text='There are no pawns here. Start with forcing moves, king placement, and how your pieces coordinate to restrict the enemy king.';
+    else if(promotion)text="Promotion is part of this lesson. Start with the pawn's exact route, the king support it needs, and the defender's blockade squares.";
+    else if(features.rooks)text='Start with forcing checks, active rook placement, king activity, and the strategic role of the pawns. Do not assume the answer is to push one.';
+    else if(features.queens)text='Start with forcing checks, king safety, and the role of the pawns. Only calculate promotion if the position makes it a concrete threat.';
+    else if(features.bothSidesHavePawns)text='Start with opposition, key squares, pawn breaks, and king routes. A pawn race matters only if the timing is actually forcing.';
+    else text='Start with king routes, support or blockade squares, and whether moving the pawn improves the position at all.';
+  }
+  else if(stage===2)text=`Focus on the ${endgamePieceName(piece?.type)} on ${from}. Find the move that preserves your ${endgameObjectiveLabel().toLowerCase()} and explain what it changes before you play it.`;
+  else text=promotion?`The move is ${best.san}. Before playing it, identify the concrete reason it works: a check, capture, key square, tempo, restriction, or promotion detail.`:`The move is ${best.san}. Before playing it, identify the concrete reason it works: a check, capture, key square, tempo, restriction, or simplification.`;
+  bozoCoachSetDialogue(text,{speak:true});$('endgame-hints-used').textContent=endgameHints;
+}
+
 async function finishEndgame(result,reason=endgameTerminalReason(endgameGame)){
   const actual=reason?endgameTerminalUserResult(endgameGame):result;
   const won=endgameResultMeetsObjective(actual);
@@ -16762,7 +16882,14 @@ async function finishEndgame(result,reason=endgameTerminalReason(endgameGame)){
   bozoCoachSetDialogue(endgameTerminalDialogue(actual,reason,won),{speak:true});
   await saveEndgameProgress(won);
 }
-async function saveEndgameProgress(success){if(!state?.session?.user?.id||!endgameCurrent)return;const uid=state.session.user.id;const {data}=await sb.from('endgame_progress').select('*').eq('user_id',uid).eq('endgame_id',endgameCurrent.id).maybeSingle();const patch={user_id:uid,endgame_id:endgameCurrent.id,last_practiced_at:new Date().toISOString()};if(endgameMode==='learn')patch.learn_completed=true;else if(endgameMode==='practice'){patch.practice_attempts=(data?.practice_attempts||0)+1;patch.practice_wins=(data?.practice_wins||0)+(success?1:0);}else{patch.test_attempts=(data?.test_attempts||0)+1;patch.test_wins=(data?.test_wins||0)+(success?1:0);}patch.mastery=Math.min(100,(patch.learn_completed||data?.learn_completed?25:0)+Math.min(35,(patch.practice_wins??data?.practice_wins??0)*7)+Math.min(40,(patch.test_wins??data?.test_wins??0)*10));await sb.from('endgame_progress').upsert(patch,{onConflict:'user_id,endgame_id'});}
+async function saveEndgameProgress(success){
+  if(!state?.session?.user?.id||!endgameCurrent)return;const uid=state.session.user.id;
+  try{
+    const {data,error:readError}=await sb.from('endgame_progress').select('*').eq('user_id',uid).eq('endgame_id',endgameCurrent.id).maybeSingle();if(readError)throw readError;
+    const patch={user_id:uid,endgame_id:endgameCurrent.id,last_practiced_at:new Date().toISOString()};if(endgameMode==='learn')patch.learn_completed=true;else if(endgameMode==='practice'){patch.practice_attempts=(data?.practice_attempts||0)+1;patch.practice_wins=(data?.practice_wins||0)+(success?1:0);}else{patch.test_attempts=(data?.test_attempts||0)+1;patch.test_wins=(data?.test_wins||0)+(success?1:0);}patch.mastery=Math.min(100,(patch.learn_completed||data?.learn_completed?25:0)+Math.min(35,(patch.practice_wins??data?.practice_wins??0)*7)+Math.min(40,(patch.test_wins??data?.test_wins??0)*10));
+    const {error}=await sb.from('endgame_progress').upsert(patch,{onConflict:'user_id,endgame_id'});if(error)throw error;
+  }catch(error){console.warn('[BOZO Endgames] progress save failed',error);toast('Endgame complete, but progress could not be saved.');}
+}
 function resetEndgame(){if(!endgameCurrent)return;startEndgameStudy(endgameCurrent.id,endgameMode);}
 function closeEndgameStudy(){$('endgame-study').hidden=true;$('endgame-library').hidden=false;clearEndgamePremove();reviewStopVoice();}
 
@@ -16787,7 +16914,19 @@ async function ownerEndgameManager(query=''){
   $('owner-endgame-search-button')?.addEventListener('click',()=>ownerLoadEndgames($('owner-endgame-search').value));$('owner-endgame-search')?.addEventListener('keydown',e=>{if(e.key==='Enter')ownerLoadEndgames(e.currentTarget.value)});await ownerLoadEndgames(query);
 }
 async function ownerLoadEndgames(query=''){
-  const out=$('owner-endgame-results');if(!out)return;out.innerHTML='<div class="empty-state"><b>Loading endgames…</b></div>';let req=sb.from('endgame_positions').select('*').order('title').limit(250);const q=String(query||'').trim();if(q)req=req.or(`title.ilike.%${q}%,category.ilike.%${q}%,concept.ilike.%${q}%`);const {data,error}=await req;if(error){out.innerHTML=escapeHtml(readableError(error));return;}out.innerHTML=(data||[]).map(r=>`<article class="owner-elo-row" data-owner-endgame="${r.id}"><div class="owner-elo-opening"><div><span>${escapeHtml(r.category)} · ${escapeHtml(endgameDifficultyLabel(r))} · ${endgamePieceCount(r.fen)} pieces${r.source_type==='theory'&&r.objective?` · ${escapeHtml(String(r.objective).toUpperCase())} · YOU PLAY ${r.training_side==='b'?'BLACK':'WHITE'} · START ${escapeHtml(String(r.starting_wdl||'?').toUpperCase())}`:''}</span><h3>${escapeHtml(r.title)}</h3></div><small>${r.owner_verified?'✓ VERIFIED':'UNVERIFIED'}${r.published?' · LIVE':' · HIDDEN'}</small></div><div class="owner-elo-controls"><label>Min Elo<input data-eg-min type="number" min="300" max="3000" step="100" value="${r.min_elo}"></label><label>Max Elo<input data-eg-max type="number" min="300" max="3000" step="100" value="${r.max_elo}"></label><label class="owner-elo-reviewed"><input data-eg-verified type="checkbox" ${r.owner_verified?'checked':''}> Verified</label><label class="owner-elo-reviewed"><input data-eg-published type="checkbox" ${r.published?'checked':''}> Published</label><button class="button primary small" data-eg-save type="button">Save</button></div><label style="display:grid;gap:5px;margin-top:8px">Concept<input data-eg-concept value="${escapeHtml(r.concept||'')}"></label><div class="owner-elo-status">${escapeHtml(r.fen)}</div></article>`).join('')||'<div class="empty-state"><b>No matches.</b></div>';out.querySelectorAll('[data-eg-save]').forEach(b=>b.addEventListener('click',()=>ownerSaveEndgame(b.closest('[data-owner-endgame]'))));
+  const out=$('owner-endgame-results');if(!out)return;
+  out.innerHTML='<div class="empty-state"><b>Loading endgames…</b></div>';
+  const q=String(query||'').trim(),pageSize=1000,rows=[];
+  for(let from=0;from<5000;from+=pageSize){
+    let req=sb.from('endgame_positions').select('*').order('title').range(from,from+pageSize-1);
+    if(q)req=req.or(`title.ilike.%${q}%,category.ilike.%${q}%,concept.ilike.%${q}%,concept_key.ilike.%${q}%`);
+    const {data,error}=await req;
+    if(error){out.innerHTML=escapeHtml(readableError(error));return;}
+    rows.push(...(data||[]));
+    if(!data||data.length<pageSize)break;
+  }
+  out.innerHTML=`<div class="owner-elo-status">${rows.length} endgame${rows.length===1?'':'s'} loaded${q?` for “${escapeHtml(q)}”`:''}.</div>`+(rows.map(r=>`<article class="owner-elo-row" data-owner-endgame="${r.id}"><div class="owner-elo-opening"><div><span>${escapeHtml(r.category)} · ${escapeHtml(endgameDifficultyLabel(r))} · ${endgamePieceCount(r.fen)} pieces${r.source_type==='theory'&&r.objective?` · ${escapeHtml(String(r.objective).toUpperCase())} · YOU PLAY ${r.training_side==='b'?'BLACK':'WHITE'} · START ${escapeHtml(String(r.starting_wdl||'?').toUpperCase())}`:''}</span><h3>${escapeHtml(r.title)}</h3></div><small>${r.owner_verified?'✓ VERIFIED':'UNVERIFIED'}${r.published?' · LIVE':' · HIDDEN'}${r.source_type==='theory'&&r.pedagogy_status?` · QA ${escapeHtml(String(r.pedagogy_status).toUpperCase())}`:''}</small></div><div class="owner-elo-controls"><label>Min Elo<input data-eg-min type="number" min="300" max="3000" step="100" value="${r.min_elo}"></label><label>Max Elo<input data-eg-max type="number" min="300" max="3000" step="100" value="${r.max_elo}"></label><label class="owner-elo-reviewed"><input data-eg-verified type="checkbox" ${r.owner_verified?'checked':''}> Verified</label><label class="owner-elo-reviewed"><input data-eg-published type="checkbox" ${r.published?'checked':''}> Published</label><button class="button primary small" data-eg-save type="button">Save</button></div><label style="display:grid;gap:5px;margin-top:8px">Concept<input data-eg-concept value="${escapeHtml(r.concept||'')}"></label><div class="owner-elo-status">${escapeHtml(r.fen)}${r.pedagogy_notes?`<br><strong>QA note:</strong> ${escapeHtml(r.pedagogy_notes)}`:''}</div></article>`).join('')||'<div class="empty-state"><b>No matches.</b></div>');
+  out.querySelectorAll('[data-eg-save]').forEach(b=>b.addEventListener('click',()=>ownerSaveEndgame(b.closest('[data-owner-endgame]'))));
 }
 async function ownerSaveEndgame(card){const id=card?.dataset.ownerEndgame;if(!id)return;const row=endgameCatalog.find(r=>r.id===id);const {error}=await sb.rpc('owner_update_endgame_position',{p_id:id,p_title:row?.title||card.querySelector('h3')?.textContent||'Endgame',p_category:row?.category||card.querySelector('.owner-elo-opening span')?.textContent?.split(' · ')[0]||'Mixed',p_concept:card.querySelector('[data-eg-concept]')?.value||'',p_min_elo:Number(card.querySelector('[data-eg-min]')?.value)||600,p_max_elo:Number(card.querySelector('[data-eg-max]')?.value)||3000,p_published:Boolean(card.querySelector('[data-eg-published]')?.checked),p_verified:Boolean(card.querySelector('[data-eg-verified]')?.checked)});if(error)return toast(readableError(error));toast('Endgame saved.');ownerLoadEndgames($('owner-endgame-search')?.value||'');}
 
