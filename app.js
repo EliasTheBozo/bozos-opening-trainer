@@ -5721,8 +5721,8 @@ $('review-flip').addEventListener('click', () => {
 });
 $('ask-review-coach').addEventListener('click', askReviewCoach);
 $('clear-review-coach').addEventListener('click', clearReviewCoach);
-$('review-voice-toggle')?.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
-$('review-voice-select')?.addEventListener('change',event=>{setReviewVoiceId(event.target.value);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
+$('review-voice-toggle')?.addEventListener('click',()=>{bozoUnlockCoachAudio().catch(()=>{});setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
+$('review-voice-select')?.addEventListener('change',event=>{bozoUnlockCoachAudio().catch(()=>{});setReviewVoiceId(event.target.value);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
 $('review-coach-question').addEventListener('keydown', event => {
   if (event.key === 'Enter') askReviewCoach();
 });
@@ -8394,6 +8394,8 @@ function reviewStopVoice(){
   if(reviewVoiceObjectUrl){try{URL.revokeObjectURL(reviewVoiceObjectUrl);}catch{}reviewVoiceObjectUrl='';}
   try{window.speechSynthesis?.cancel?.();}catch{}
   try{window.Capacitor?.Plugins?.TextToSpeech?.stop?.();}catch{}
+  try{bozoRemoteVoiceAbortController?.abort?.();}catch{}
+  bozoRemoteVoiceAbortController=null;
 }
 function updateReviewVoiceButton(){
   const b=$('review-voice-toggle');if(b){
@@ -8412,6 +8414,7 @@ function setReviewVoiceEnabled(enabled){
 function setReviewVoiceId(id){
   if(!REVIEW_COACH_VOICES[id])return;
   reviewStopVoice();
+  bozoAndroidVoiceCache={key:'',index:null,name:'',lang:''};
   reviewVoiceId=id;
   localStorage.setItem(REVIEW_VOICE_ID_KEY,id);
   updateReviewVoiceButton();
@@ -8471,33 +8474,213 @@ async function requestReviewCoachAudio(text,row){
   reviewVoiceStatus(`${voiceConfig.label} ready${voice!==voiceConfig.requested?' (current George model)':''}.`,'ready');
   return {blob,voice};
 }
+
+// BOZO v4.15.26: mobile TTS is remote Kokoro.
+// Native Android AND mobile browsers use Railway so the phone never runs the neural model.
+// Desktop browsers keep the existing local Kokoro path because desktop WASM inference is fast enough.
+const BOZO_REMOTE_TTS_URL='https://bozo-tts-server-production.up.railway.app';
+const BOZO_REMOTE_TTS_URL_KEY='bozo-remote-tts-url';
+let bozoRemoteVoiceAbortController=null;
+let bozoCoachAudioContext=null;
+
+function bozoMobileBrowser(){
+  try{
+    if(navigator.userAgentData?.mobile===true)return true;
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(String(navigator.userAgent||''));
+  }catch{return false;}
+}
+function bozoUseRemoteTts(){
+  return bozoNativeAndroid()||bozoMobileBrowser();
+}
+function bozoRemoteVoiceId(){
+  // The live Railway server advertises exactly bm_george + bm_daniel.
+  // Keep bm_v0george only for desktop/local Kokoro, where it already works.
+  return reviewVoiceId==='george'?'bm_george':'bm_daniel';
+}
+function bozoRemoteTtsBaseUrl(){
+  const stored=String(localStorage.getItem(BOZO_REMOTE_TTS_URL_KEY)||'').trim();
+  return (stored||BOZO_REMOTE_TTS_URL).replace(/\/+$/,'');
+}
+function bozoTtsLog(stage,detail=''){
+  try{console.info(`[BOZO TTS] ${stage}`,detail||'');}catch{}
+}
+function bozoGetCoachAudioContext(){
+  if(bozoCoachAudioContext)return bozoCoachAudioContext;
+  try{
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx)return null;
+    bozoCoachAudioContext=new AudioCtx();
+    return bozoCoachAudioContext;
+  }catch{return null;}
+}
+async function bozoUnlockCoachAudio(){
+  if(!bozoUseRemoteTts())return false;
+  const ctx=bozoGetCoachAudioContext();
+  if(!ctx)return false;
+  try{
+    if(ctx.state==='suspended')await ctx.resume();
+    // Start one silent sample while we still have a real user gesture. This permanently
+    // unlocks mobile audio so a WAV arriving later from Railway can play automatically.
+    if(ctx.state==='running'){
+      const buffer=ctx.createBuffer(1,1,ctx.sampleRate||24000);
+      const source=ctx.createBufferSource();source.buffer=buffer;source.connect(ctx.destination);source.start(0);
+      return true;
+    }
+  }catch(error){bozoTtsLog('audio unlock failed',error?.message||error);}
+  return false;
+}
+function bozoInstallCoachAudioUnlock(){
+  if(!bozoUseRemoteTts())return;
+  const once=()=>{bozoUnlockCoachAudio().catch(()=>{});};
+  document.addEventListener('pointerdown',once,{once:true,capture:true});
+  document.addEventListener('keydown',once,{once:true,capture:true});
+}
+queueMicrotask(()=>bozoInstallCoachAudioUnlock());
+
+async function bozoRemoteCacheKey(voice,text){
+  const raw=`v41526|${voice}|${text}`;
+  try{
+    const bytes=new TextEncoder().encode(raw);
+    const digest=await crypto.subtle.digest('SHA-256',bytes);
+    return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+  }catch{
+    let h=2166136261;for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
+    return (h>>>0).toString(16);
+  }
+}
+async function bozoRemoteCacheGet(key){
+  if(!('caches' in window))return null;
+  try{
+    const cache=await caches.open('bozo-kokoro-audio-v2');
+    const hit=await cache.match(`https://bozo.invalid/tts/${key}.wav`);
+    if(!hit)return null;
+    const blob=await hit.blob();
+    return blob.size?blob:null;
+  }catch{return null;}
+}
+async function bozoRemoteCachePut(key,blob){
+  if(!blob||!blob.size||!('caches' in window))return;
+  try{
+    const cache=await caches.open('bozo-kokoro-audio-v2');
+    await cache.put(`https://bozo.invalid/tts/${key}.wav`,new Response(blob,{headers:{'Content-Type':blob.type||'audio/wav'}}));
+  }catch{}
+}
+async function requestRemoteKokoroAudio(text){
+  const voiceConfig=REVIEW_COACH_VOICES[reviewVoiceId];
+  const voice=bozoRemoteVoiceId();
+  const cacheKey=await bozoRemoteCacheKey(voice,text);
+  const memoryKey=`mobile-remote|${cacheKey}`;
+  if(reviewVoiceCache.has(memoryKey)){
+    bozoTtsLog('memory cache hit',voice);
+    return {blob:reviewVoiceCache.get(memoryKey),voice,source:'memory-cache'};
+  }
+  const persisted=await bozoRemoteCacheGet(cacheKey);
+  if(persisted){
+    reviewVoiceCache.set(memoryKey,persisted);
+    reviewVoiceStatus(`${voiceConfig.label} ready · cached`,'ready');
+    bozoTtsLog('persistent cache hit',`${voice} · ${persisted.size} bytes`);
+    return {blob:persisted,voice,source:'cache'};
+  }
+  const base=bozoRemoteTtsBaseUrl();
+  if(!base)throw new Error('BOZO remote TTS URL is not configured');
+  try{bozoRemoteVoiceAbortController?.abort?.();}catch{}
+  const controller=new AbortController();bozoRemoteVoiceAbortController=controller;
+  const timeout=setTimeout(()=>{try{controller.abort('timeout')}catch{}},45000);
+  reviewVoiceStatus(`Calling ${voiceConfig.label} on BOZO TTS…`,'loading');
+  bozoTtsLog('request start',`${voice} · ${text.length} chars · ${base}`);
+  try{
+    const response=await fetch(`${base}/v1/audio/speech`,{
+      method:'POST',
+      mode:'cors',
+      headers:{'Content-Type':'application/json','Accept':'audio/wav'},
+      body:JSON.stringify({model:'kokoro',input:text,voice,response_format:'wav',speed:1}),
+      signal:controller.signal,
+      cache:'no-store'
+    });
+    bozoTtsLog('response',`${response.status} ${response.statusText} · voice=${response.headers.get('X-BOZO-Voice')||voice} · cache=${response.headers.get('X-BOZO-Cache')||'?'}`);
+    if(!response.ok){
+      let detail='';try{detail=(await response.text()).slice(0,300)}catch{}
+      throw new Error(`Remote Kokoro ${response.status}${detail?`: ${detail}`:''}`);
+    }
+    const blob=await response.blob();
+    if(!blob.size)throw new Error('Remote Kokoro returned empty audio');
+    bozoTtsLog('wav received',`${blob.size} bytes · ${blob.type||'unknown type'}`);
+    if(reviewVoiceCache.size>32){const first=reviewVoiceCache.keys().next().value;reviewVoiceCache.delete(first)}
+    reviewVoiceCache.set(memoryKey,blob);
+    bozoRemoteCachePut(cacheKey,blob);
+    reviewVoiceStatus(`${voiceConfig.label} ready · remote Kokoro`,'ready');
+    return {blob,voice,source:'remote'};
+  }finally{
+    clearTimeout(timeout);
+    if(bozoRemoteVoiceAbortController===controller)bozoRemoteVoiceAbortController=null;
+  }
+}
+
+async function bozoPlayRemoteCoachBlob(blob,token){
+  if(token!==reviewVoiceRequestToken||!blob)return false;
+  const ctx=bozoGetCoachAudioContext();
+  if(ctx){
+    try{
+      if(ctx.state==='suspended')await ctx.resume();
+      const bytes=await blob.arrayBuffer();
+      const decoded=await ctx.decodeAudioData(bytes.slice(0));
+      if(token!==reviewVoiceRequestToken)return false;
+      const source=ctx.createBufferSource();source.buffer=decoded;source.connect(ctx.destination);
+      const playback={pause:()=>{try{source.stop()}catch{}}};
+      reviewVoicePlayback=playback;
+      source.onended=()=>{if(reviewVoicePlayback===playback)reviewVoicePlayback=null;};
+      source.start(0);
+      bozoTtsLog('playback started',`WebAudio · ${decoded.duration.toFixed(2)} sec`);
+      return true;
+    }catch(error){
+      bozoTtsLog('WebAudio playback failed',error?.message||error);
+    }
+  }
+  // Last-resort media element playback is still the REAL remote WAV, never system TTS.
+  const src=URL.createObjectURL(blob);reviewVoiceObjectUrl=src;reviewVoicePlayback=new Audio(src);
+  reviewVoicePlayback.addEventListener('ended',()=>{if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl=''}},{once:true});
+  await reviewVoicePlayback.play();
+  bozoTtsLog('playback started','HTMLAudio');
+  return true;
+}
+
+async function bozoPlayCoachAudioResult(audio,token){
+  if(token!==reviewVoiceRequestToken||!audio)return false;
+  if(bozoUseRemoteTts()&&audio.blob)return bozoPlayRemoteCoachBlob(audio.blob,token);
+  const src=audio.url||(audio.blob?URL.createObjectURL(audio.blob):'');if(!src)return false;
+  reviewVoiceObjectUrl=audio.blob?src:'';
+  reviewVoicePlayback=new Audio(src);
+  reviewVoicePlayback.addEventListener('ended',()=>{
+    if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl='';}
+  },{once:true});
+  await reviewVoicePlayback.play();
+  return true;
+}
+
 async function speakCurrentReviewExplanation(row,{manual=false}={}){
   reviewStopVoice();
   if(!reviewVoiceEnabled||!row)return;
   const token=reviewVoiceRequestToken;
   const text=reviewVoiceText(row);if(!text)return;
-  if(bozoNativeAndroid()){
-    const ok=await bozoNativeSpeak(text);
-    if(manual&&!ok)toast('Coach voice could not play on this device.');
-    return;
-  }
   try{
-    const audio=await requestReviewCoachAudio(text,row);
+    const audio=bozoUseRemoteTts()?await requestRemoteKokoroAudio(text):await requestReviewCoachAudio(text,row);
     if(token!==reviewVoiceRequestToken)return;
-    const src=audio.url||(audio.blob?URL.createObjectURL(audio.blob):'');if(!src)return;
-    reviewVoiceObjectUrl=audio.blob?src:'';
-    reviewVoicePlayback=new Audio(src);
-    reviewVoicePlayback.addEventListener('ended',()=>{
-      if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl='';}
-    },{once:true});
-    await reviewVoicePlayback.play();
+    await bozoPlayCoachAudioResult(audio,token);
   }catch(error){
     console.warn('Kokoro Review voice failed:',error);
-    if(token!==reviewVoiceRequestToken)return;
+    if(token!==reviewVoiceRequestToken||error?.name==='AbortError')return;
+    if(bozoUseRemoteTts()){
+      const label=REVIEW_COACH_VOICES[reviewVoiceId]?.label||'Coach';
+      reviewVoiceStatus(`${label} unavailable · remote TTS failed`,'error');
+      bozoTtsLog('remote failure',error?.message||error);
+      if(manual)toast(`${label} could not reach BOZO TTS. No fake system voice was substituted.`);
+      return;
+    }
     const fallbackWorked=reviewSpeechFallback(text);
     if(manual&&!fallbackWorked)toast('Coach voice could not play on this device.');
   }
 }
+
 function renderReviewAutoExplanation(row) {
   const answer = $('review-coach-answer');
   if (!answer) return;
@@ -16504,41 +16687,166 @@ function bozoNativeAndroid(){
     return Boolean(window.Capacitor?.isNativePlatform?.()&&window.Capacitor?.getPlatform?.()==='android');
   }catch{return false;}
 }
+let bozoAndroidVoiceCache={key:'',index:null,name:'',lang:''};
+const BOZO_ANDROID_VOICE_KEY_PREFIX='bozo-android-voice-index-';
+
+function bozoAndroidStoredVoiceIndex(voiceId){
+  const raw=localStorage.getItem(`${BOZO_ANDROID_VOICE_KEY_PREFIX}${voiceId}`);
+  if(raw===null||raw==='')return null;
+  const value=Number(raw);
+  return Number.isInteger(value)&&value>=0?value:null;
+}
+function bozoAndroidStoreVoiceIndex(voiceId,index){
+  if(!Number.isInteger(index)||index<0)return;
+  localStorage.setItem(`${BOZO_ANDROID_VOICE_KEY_PREFIX}${voiceId}`,String(index));
+  bozoAndroidVoiceCache={key:'',index:null,name:'',lang:''};
+}
+function bozoAndroidVoiceLabel(voice={},index=0){
+  const name=String(voice.name||voice.voiceURI||`Voice ${index}`);
+  const lang=String(voice.lang||'unknown');
+  const local=voice.localService?'local':'network';
+  return `${name} · ${lang} · ${local}`;
+}
+async function bozoGetAndroidVoice(plugin,voiceId=reviewVoiceId){
+  const key=String(voiceId||'george');
+  if(bozoAndroidVoiceCache.key===key&&Number.isInteger(bozoAndroidVoiceCache.index))return bozoAndroidVoiceCache;
+  try{
+    const result=await plugin.getSupportedVoices?.();
+    const voices=Array.isArray(result?.voices)?result.voices:[];
+    if(!voices.length)return {key,index:null,name:'',lang:''};
+
+    const stored=bozoAndroidStoredVoiceIndex(key);
+    if(Number.isInteger(stored)&&voices[stored]){
+      const voice=voices[stored];
+      bozoAndroidVoiceCache={key,index:stored,name:String(voice.name||voice.voiceURI||`Voice ${stored}`),lang:String(voice.lang||'en-GB')};
+      return bozoAndroidVoiceCache;
+    }
+
+    // Until the user calibrates, only prefer English and do NOT guess gender.
+    // Android does not expose reliable gender metadata for system voices.
+    let chosenIndex=voices.findIndex(v=>/^en-GB/i.test(String(v?.lang||'')));
+    if(chosenIndex<0)chosenIndex=voices.findIndex(v=>/^en/i.test(String(v?.lang||'')));
+    if(chosenIndex<0)chosenIndex=0;
+    const voice=voices[chosenIndex];
+    bozoAndroidVoiceCache={key,index:chosenIndex,name:String(voice?.name||voice?.voiceURI||`Voice ${chosenIndex}`),lang:String(voice?.lang||'en-GB')};
+    return bozoAndroidVoiceCache;
+  }catch(error){
+    console.warn('BOZO could not enumerate Android TTS voices:',error);
+    return {key,index:null,name:'',lang:''};
+  }
+}
+
 async function bozoNativeSpeak(text){
   const plugin=window.Capacitor?.Plugins?.TextToSpeech;
   if(plugin?.speak){
     try{
       await plugin.stop?.();
-      // Do not await completion from the caller. Native Android TTS runs outside
-      // the WebView, so board input/rendering remains responsive while it speaks.
-      plugin.speak({text,lang:'en-GB',rate:.96,pitch:1,volume:1,queueStrategy:0}).catch(()=>reviewSpeechFallback(text));
-      reviewVoiceStatus('Using Android device voice.','fallback');
+      const selected=await bozoGetAndroidVoice(plugin,reviewVoiceId);
+      const options={text,lang:selected.lang||'en-GB',rate:.96,pitch:1,volume:1,queueStrategy:0};
+      if(Number.isInteger(selected.index))options.voice=selected.index;
+      plugin.speak(options).catch(()=>reviewSpeechFallback(text));
+      if(Number.isInteger(selected.index)){
+        reviewVoiceStatus(`${REVIEW_COACH_VOICES[reviewVoiceId]?.label||'Coach'} · Android voice: ${selected.name}`,'ready');
+      }else{
+        reviewVoiceStatus('Android voice unavailable. Using the device fallback.','fallback');
+      }
       return true;
-    }catch{}
+    }catch(error){
+      console.warn('BOZO native Android speech failed:',error);
+    }
   }
   return reviewSpeechFallback(text);
 }
+
+function bozoEnsureAndroidVoiceSetupStyles(){
+  if(document.getElementById('bozo-android-voice-style'))return;
+  const style=document.createElement('style');
+  style.id='bozo-android-voice-style';
+  style.textContent=`
+    .bozo-voice-setup-btn{margin-left:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;border-radius:10px;padding:8px 10px;font:inherit;font-weight:800;cursor:pointer}
+    .bozo-voice-cal-backdrop{position:fixed;inset:0;z-index:100000;background:rgba(8,4,18,.78);backdrop-filter:blur(5px);display:grid;place-items:center;padding:18px}
+    .bozo-voice-cal{width:min(720px,100%);max-height:85vh;overflow:auto;background:#190826;border:1px solid #6f3c92;border-radius:20px;padding:20px;box-shadow:0 24px 80px rgba(0,0,0,.45);color:#fff}
+    .bozo-voice-cal h2{margin:0 0 5px}.bozo-voice-cal p{margin:0 0 14px;color:#d5cbe0;line-height:1.45}
+    .bozo-voice-cal-actions{display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px}.bozo-voice-cal-actions button,.bozo-voice-row button{border:1px solid rgba(255,255,255,.18);background:#30183e;color:#fff;border-radius:9px;padding:8px 10px;font:inherit;font-weight:800;cursor:pointer}
+    .bozo-voice-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:12px 0;border-top:1px solid rgba(255,255,255,.1)}
+    .bozo-voice-row small{display:block;color:#bfb1ca;margin-top:3px;word-break:break-word}.bozo-voice-row-controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+    .bozo-voice-row button[data-assign="george"]{border-color:#9d6bd0}.bozo-voice-row button[data-assign="daniel"]{border-color:#4c9ac5}
+    .bozo-voice-current{font-size:.78rem;color:#79ffe2;margin-top:4px}
+    @media(max-width:600px){.bozo-voice-row{grid-template-columns:1fr}.bozo-voice-row-controls{justify-content:flex-start}.bozo-voice-cal{padding:16px}}
+  `;
+  document.head.appendChild(style);
+}
+
+async function bozoOpenAndroidVoiceSetup(){
+  const plugin=window.Capacitor?.Plugins?.TextToSpeech;
+  if(!plugin?.getSupportedVoices||!plugin?.speak){toast('Android voice setup is unavailable on this device.');return;}
+  bozoEnsureAndroidVoiceSetupStyles();
+  let voices=[];
+  try{voices=(await plugin.getSupportedVoices())?.voices||[];}catch(error){console.warn(error);}
+  if(!voices.length){
+    try{await plugin.openInstall?.();}catch{}
+    toast('Android did not report any installed TTS voices.');
+    return;
+  }
+  const english=voices.map((voice,index)=>({voice,index})).filter(({voice})=>/^en/i.test(String(voice?.lang||'')));
+  const list=english.length?english:voices.map((voice,index)=>({voice,index}));
+  const georgeIndex=bozoAndroidStoredVoiceIndex('george');
+  const danielIndex=bozoAndroidStoredVoiceIndex('daniel');
+  const backdrop=document.createElement('div');
+  backdrop.className='bozo-voice-cal-backdrop';
+  backdrop.innerHTML=`<div class="bozo-voice-cal" role="dialog" aria-modal="true" aria-label="Android voice setup">
+    <div class="bozo-voice-cal-actions"><button type="button" data-close>Close</button></div>
+    <h2>Android voice setup</h2>
+    <p>Android does not reliably tell BOZO whether a system voice is male or female. Tap <b>Test</b> to hear each installed English voice, then assign the ones you want to George and Daniel. Your choices are saved on this device.</p>
+    <div data-voice-list>${list.map(({voice,index})=>`<div class="bozo-voice-row" data-index="${index}">
+      <div><b>${escapeHtml(String(voice.name||`Voice ${index}`))}</b><small>${escapeHtml(String(voice.lang||'unknown'))} · ${voice.localService?'local':'network'}${voice.default?' · default':''}</small><div class="bozo-voice-current">${index===georgeIndex?'GEORGE':''}${index===georgeIndex&&index===danielIndex?' · ':''}${index===danielIndex?'DANIEL':''}</div></div>
+      <div class="bozo-voice-row-controls"><button type="button" data-test="${index}">Test</button><button type="button" data-assign="george" data-index="${index}">Use for George</button><button type="button" data-assign="daniel" data-index="${index}">Use for Daniel</button></div>
+    </div>`).join('')}</div>
+  </div>`;
+  document.body.appendChild(backdrop);
+  const close=()=>{try{plugin.stop?.();}catch{}backdrop.remove();};
+  backdrop.querySelector('[data-close]')?.addEventListener('click',close);
+  backdrop.addEventListener('click',e=>{if(e.target===backdrop)close();});
+  backdrop.querySelectorAll('[data-test]').forEach(button=>button.addEventListener('click',async()=>{
+    const index=Number(button.dataset.test);const voice=voices[index];
+    try{await plugin.stop?.();await plugin.speak({text:'Hello. This is BOZO voice test. The knight belongs on f three.',lang:String(voice?.lang||'en-GB'),rate:.96,pitch:1,volume:1,voice:index,queueStrategy:0});}catch(error){console.warn('Voice test failed',error);toast('That Android voice could not play.');}
+  }));
+  backdrop.querySelectorAll('[data-assign]').forEach(button=>button.addEventListener('click',()=>{
+    const id=button.dataset.assign;const index=Number(button.dataset.index);
+    bozoAndroidStoreVoiceIndex(id,index);
+    backdrop.querySelectorAll('.bozo-voice-current').forEach(el=>el.textContent='');
+    const g=bozoAndroidStoredVoiceIndex('george'),d=bozoAndroidStoredVoiceIndex('daniel');
+    backdrop.querySelectorAll('.bozo-voice-row').forEach(row=>{const i=Number(row.dataset.index);const tags=[];if(i===g)tags.push('GEORGE');if(i===d)tags.push('DANIEL');row.querySelector('.bozo-voice-current').textContent=tags.join(' · ');});
+    toast(`${id==='george'?'George':'Daniel'} now uses ${voice?.name||`voice ${index}`}.`);
+  }));
+}
+
 async function bozoCoachSpeakText(text){
   reviewStopVoice();
   if(!reviewVoiceEnabled||!text)return;
   const token=reviewVoiceRequestToken;
   const spoken=reviewChessTextForSpeech(String(text));
-  if(bozoNativeAndroid()){
-    await bozoNativeSpeak(spoken);
-    return;
-  }
   try{
-    const audio=await requestReviewCoachAudio(spoken,null);
+    const audio=bozoUseRemoteTts()?await requestRemoteKokoroAudio(spoken):await requestReviewCoachAudio(spoken,null);
     if(token!==reviewVoiceRequestToken)return;
-    const src=audio.blob?URL.createObjectURL(audio.blob):audio.url;if(!src)return;
-    reviewVoiceObjectUrl=audio.blob?src:'';reviewVoicePlayback=new Audio(src);
-    reviewVoicePlayback.addEventListener('ended',()=>{if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl=''}},{once:true});
-    await reviewVoicePlayback.play();
-  }catch(error){if(token===reviewVoiceRequestToken)reviewSpeechFallback(spoken);}
+    await bozoPlayCoachAudioResult(audio,token);
+  }catch(error){
+    console.warn('Kokoro coach voice failed:',error);
+    if(token!==reviewVoiceRequestToken||error?.name==='AbortError')return;
+    if(bozoUseRemoteTts()){
+      const label=REVIEW_COACH_VOICES[reviewVoiceId]?.label||'Coach';
+      reviewVoiceStatus(`${label} unavailable · remote TTS failed`,'error');
+      bozoTtsLog('remote failure',error?.message||error);
+      return;
+    }
+    reviewSpeechFallback(spoken);
+  }
 }
 function bindScholarControls(){
-  document.querySelectorAll('[data-scholar-voice-toggle]').forEach(b=>{if(b.dataset.bound)return;b.dataset.bound='1';b.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);bozoCoachSetDialogue('',{speak:false})})});
-  document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>{if(s.dataset.bound)return;s.dataset.bound='1';s.value=reviewVoiceId;s.addEventListener('change',()=>setReviewVoiceId(s.value))});
+  document.querySelectorAll('[data-scholar-voice-toggle]').forEach(b=>{if(b.dataset.bound)return;b.dataset.bound='1';b.addEventListener('click',()=>{bozoUnlockCoachAudio().catch(()=>{});setReviewVoiceEnabled(!reviewVoiceEnabled);bozoCoachSetDialogue('',{speak:false})})});
+  document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>{if(s.dataset.bound)return;s.dataset.bound='1';s.value=reviewVoiceId;s.addEventListener('change',()=>{bozoUnlockCoachAudio().catch(()=>{});setReviewVoiceId(s.value)})});
+  // v4.15.26: native Android + mobile web use the same remote George/Daniel service.
+  // Desktop web keeps local Kokoro. Mobile never falls back to an unrelated system voice.
 }
 
 function endgameCoachVariant(key, variants){
