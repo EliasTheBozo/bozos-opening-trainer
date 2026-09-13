@@ -8547,11 +8547,58 @@ async function requestReviewCoachAudio(text,row){
   reviewVoiceStatus(`${voiceConfig.label} ready.`,'ready');
   return {blob,voice:speaker};
 }
+function reviewAuraStreamingUrl(text,speaker){
+  const url=new URL(BOZO_AURA_TTS_ENDPOINT);
+  url.searchParams.set('text',text);
+  url.searchParams.set('speaker',speaker);
+  return url.toString();
+}
+async function playReviewAuraStream(text,token){
+  const voiceConfig=REVIEW_COACH_VOICES[reviewVoiceId]||REVIEW_COACH_VOICES.atlas;
+  const chunks=splitBozoSpeechChunks(text,1400);
+  for(let i=0;i<chunks.length;i++){
+    if(token!==reviewVoiceRequestToken)return false;
+    const src=reviewAuraStreamingUrl(chunks[i],voiceConfig.speaker);
+    const audio=new Audio(src);
+    audio.preload='auto';
+    reviewVoicePlayback=audio;
+    reviewVoiceStatus(`${voiceConfig.label} speaking…`,'ready');
+
+    // Most Review explanations fit in one chunk, so this normally stays one
+    // Aura render and preserves the selected voice's cadence.
+
+    await new Promise((resolve,reject)=>{
+      let settled=false;
+      const finish=(fn,value)=>{if(settled)return;settled=true;cleanup();fn(value);};
+      const onEnded=()=>finish(resolve,true);
+      const onError=()=>finish(reject,new Error('Aura streaming audio failed'));
+      const cleanup=()=>{audio.removeEventListener('ended',onEnded);audio.removeEventListener('error',onError);};
+      audio.addEventListener('ended',onEnded,{once:true});
+      audio.addEventListener('error',onError,{once:true});
+      audio.play().catch(onError);
+    });
+    if(token!==reviewVoiceRequestToken)return false;
+  }
+  reviewVoiceStatus(`${voiceConfig.label} ready.`,'ready');
+  return true;
+}
 async function speakCurrentReviewExplanation(row,{manual=false}={}){
   reviewStopVoice();
   if(!reviewVoiceEnabled||!row)return;
   const token=reviewVoiceRequestToken;
   const text=reviewVoiceText(row);if(!text)return;
+  try{
+    // The Worker supports streaming GET audio. Feeding that URL directly to the
+    // browser lets playback begin as soon as Aura starts returning audio instead
+    // of waiting for fetch(...).blob() to download the entire explanation first.
+    const streamed=await playReviewAuraStream(text,token);
+    if(streamed||token!==reviewVoiceRequestToken)return;
+  }catch(streamError){
+    if(token!==reviewVoiceRequestToken)return;
+    console.warn('Aura-2 Review streaming path failed; falling back to POST blob:',streamError);
+  }
+
+  // Proven fallback for browsers/WebViews that refuse the streaming URL path.
   try{
     const audio=await requestReviewCoachAudio(text,row);
     if(token!==reviewVoiceRequestToken)return;
