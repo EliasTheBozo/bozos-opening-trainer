@@ -1147,6 +1147,71 @@ footer{width:min(1220px,calc(100% - 40px));margin:0 auto;padding:30px 0 45px;bor
 .bot-user-arrow-layer {
   z-index:5;
 }
+
+.bot-character-panel{
+  display:grid;
+  grid-template-columns:64px minmax(0,1fr) 42px;
+  gap:12px;
+  align-items:center;
+  margin:12px 0 16px;
+  padding:10px 12px;
+  border:1px solid rgba(181,115,255,.24);
+  border-radius:16px;
+  background:linear-gradient(135deg,rgba(255,255,255,.055),rgba(181,115,255,.055));
+  box-shadow:0 12px 30px rgba(0,0,0,.14);
+}
+.bot-character-avatar{
+  width:64px;
+  height:64px;
+  object-fit:cover;
+  border-radius:13px;
+  border:2px solid rgba(181,115,255,.42);
+  background:#211329;
+}
+.bot-character-body{min-width:0}
+.bot-character-heading{
+  display:flex;
+  align-items:baseline;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:5px;
+}
+.bot-character-heading b{font-size:1rem}
+.bot-character-heading span{
+  font-size:.75rem;
+  opacity:.65;
+  text-transform:capitalize;
+}
+.bot-dialogue-text{
+  min-height:1.35em;
+  font-size:.93rem;
+  line-height:1.35;
+  opacity:.94;
+}
+.bot-dialogue-text.bot-dialogue-thinking{opacity:.58;font-style:italic}
+.bot-dialogue-replay{
+  width:38px;
+  height:38px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.06);
+  color:inherit;
+  cursor:pointer;
+  font-size:1rem;
+}
+.bot-dialogue-replay:hover{background:rgba(181,115,255,.15)}
+@media(max-width:560px){
+  .bot-character-panel{
+    grid-template-columns:52px minmax(0,1fr) 36px;
+    gap:9px;
+    padding:9px 10px;
+    margin:9px 0 12px;
+  }
+  .bot-character-avatar{width:52px;height:52px;border-radius:11px}
+  .bot-dialogue-text{font-size:.86rem}
+  .bot-dialogue-replay{width:34px;height:34px}
+}
+
 #web-bot-board button {
   position:relative;
 }
@@ -5650,6 +5715,137 @@ footer a,footer button,.footer-brand{color:#fff!important}
 @media(max-width:600px){.endgame-toolbar{grid-template-columns:1fr}.endgame-grid{grid-template-columns:1fr}}
 .scholar-review-identity{display:flex;align-items:center;gap:9px}.scholar-review-identity img{width:52px;height:52px;object-fit:contain}.daily-scholar-card{position:static}.daily-scholar-card .scholar-coach-head img{width:66px;height:66px}
 </style>
+
+<style id="bozo-exhibition-mobile-v41544">
+/* BOZO v4.16.0 — unified web + Android bot/exhibition release */
+#bot-game-modal,
+#bot-game-modal .duel-game-modal,
+#bot-game-modal .duel-game-header,
+#bot-game-modal .bot-game-layout,
+#bot-game-modal .bot-board-column,
+#bot-game-modal .bot-board-shell,
+#bot-game-modal .bot-exhibition-dialogue,
+#bot-game-modal .bot-exhibition-speaker-card,
+#bot-game-modal .bot-character-body,
+#bot-game-modal .bot-dialogue-text {
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+#bot-game-modal{overflow-x:hidden}
+#bot-game-modal .duel-game-modal{overflow-x:hidden}
+#bot-game-modal .bot-dialogue-text{overflow-wrap:anywhere;word-break:normal}
+#bot-game-modal .bot-board-shell{margin-inline:auto}
+#bot-game-modal .web-duel-board{max-width:100%!important;margin-inline:auto}
+#bot-game-modal .bot-eval-row{width:100%;min-width:0;grid-template-columns:auto minmax(0,1fr) auto auto}
+
+/* Desktop keeps a compact matchup strip. Never allow the portraits to become a hero banner. */
+@media(min-width:769px){
+  #bot-game-modal.is-exhibition #bot-white-fighter-avatar.bot-fighter-avatar,
+  #bot-game-modal.is-exhibition #bot-black-fighter-avatar.bot-fighter-avatar{
+    display:block!important;
+    width:46px!important;height:46px!important;
+    min-width:46px!important;min-height:46px!important;
+    max-width:46px!important;max-height:46px!important;
+    object-fit:cover!important;object-position:center!important;
+  }
+}
+
+@media(max-width:768px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden!important}
+  #bot-game-modal.modal-backdrop{
+    width:100vw;max-width:100vw;
+    padding:8px;
+    padding-left:max(8px,env(safe-area-inset-left));
+    padding-right:max(8px,env(safe-area-inset-right));
+    overflow-x:hidden!important;
+    place-items:start center;
+  }
+  #bot-game-modal .duel-game-modal.bot-game-modal{
+    width:100%!important;
+    max-width:100%!important;
+    margin:0 auto!important;
+    padding:12px!important;
+    border-radius:20px;
+    overflow-x:hidden!important;
+  }
+  #bot-game-modal .duel-game-header{gap:8px;padding-right:34px}
+  #bot-game-modal .duel-game-header>div{min-width:0}
+  #bot-game-modal .duel-game-header h2,
+  #bot-game-modal .duel-game-header p{max-width:100%;overflow-wrap:anywhere}
+  #bot-game-modal #bot-turn-badge{max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* The cinematic fighter banner is desktop-only. Mobile already has both avatars in dialogue. */
+  #bot-game-modal.is-exhibition .bot-battle-strip{display:none!important}
+  #bot-game-modal.is-exhibition #bot-character-panel{display:none!important}
+
+  #bot-game-modal .duel-game-layout.bot-game-layout{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    gap:10px!important;
+    margin-top:10px!important;
+  }
+  #bot-game-modal .bot-board-column{width:100%!important;max-width:100%!important;min-width:0!important}
+  #bot-game-modal .bot-board-shell,
+  #bot-game-modal .study-board-shell,
+  #bot-game-modal .friend-board-shell{
+    width:min(100%,var(--bozo-board-max,580px))!important;
+    max-width:100%!important;
+    min-width:0!important;
+    justify-self:center!important;
+    margin-inline:auto!important;
+  }
+  #bot-game-modal #web-bot-board{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    aspect-ratio:1/1!important;
+  }
+  #bot-game-modal .bozo-board-size-control{
+    width:100%!important;
+    max-width:100%!important;
+    justify-content:center!important;
+    margin:4px auto 8px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-exhibition-dialogue{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    width:100%!important;
+    max-width:100%!important;
+    gap:7px!important;
+    margin:6px 0 8px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-exhibition-speaker-card{
+    display:grid!important;
+    grid-template-columns:46px minmax(0,1fr)!important;
+    align-items:start!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    gap:9px!important;
+    padding:9px 10px!important;
+    border-radius:13px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-exhibition-speaker-card .bot-character-avatar{
+    width:46px!important;height:46px!important;
+    min-width:46px!important;max-width:46px!important;
+    object-fit:cover!important;
+    border-radius:11px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-character-heading{min-width:0;gap:5px;flex-wrap:wrap}
+  #bot-game-modal.is-exhibition .bot-character-heading b{font-size:16px;line-height:1.15}
+  #bot-game-modal.is-exhibition .bot-character-heading span{font-size:10px}
+  #bot-game-modal.is-exhibition .bot-dialogue-text{font-size:14px!important;line-height:1.35!important;margin-top:3px}
+  #bot-game-modal .bot-eval-row{gap:6px;font-size:9px}
+  #bot-game-modal .duel-actions{width:100%;max-width:100%;display:flex;flex-wrap:wrap;gap:8px}
+  #bot-game-modal .duel-actions .button{min-width:0}
+  #bot-game-modal .bot-game-status-card{max-width:100%;overflow-wrap:anywhere}
+}
+
+</style>
 </head>
 <body>
   <div class="background-glow glow-one"></div>
@@ -5671,6 +5867,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
       <button data-route="train">Train</button>
       <button class="daily-nav-button" data-route="daily">Daily Puzzle</button>
       <button data-route="dashboard">Dashboard</button>
+      <button data-route="bots">Bots</button>
       <div class="nav-menu nav-play-menu">
       <button class="nav-link nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false">
         Play <span class="nav-caret">▾</span>
@@ -5716,6 +5913,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
     <button data-route="train">Train</button>
     <button class="daily-nav-button" data-route="daily">Daily Puzzle</button>
     <button data-route="dashboard">Dashboard</button>
+    <button data-route="bots">Bots</button>
     <button data-route="play" data-mobile-play-section="quick">Play</button>
     <button class="mobile-play-sub" data-route="play" data-mobile-play-section="arenas">↳ Arenas</button>
     <button data-route="challenges">Challenges</button>
@@ -5971,7 +6169,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
           <aside class="panel scholar-coach-card">
             <div class="scholar-coach-head"><img src="./scholar-bozo.png" alt="Scholar BOZO"><div><span class="eyebrow">SCHOLAR BOZO</span><h3>Your endgame coach</h3></div></div>
             <div id="endgame-coach-text" class="scholar-coach-dialogue">Choose an endgame and I’ll guide you through it.</div>
-            <div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="daniel">Daniel</option><option value="george">George</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div>
+            <div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="apollo">Apollo</option><option value="arcas">Arcas</option><option value="aries">Aries</option><option value="asteria">Asteria</option><option value="atlas">Atlas</option><option value="callista">Callista</option><option value="cordelia">Cordelia</option><option value="delia">Delia</option><option value="draco">Draco</option><option value="harmonia">Harmonia</option><option value="helena">Helena</option><option value="hera">Hera</option><option value="hermes">Hermes</option><option value="hyperion">Hyperion</option><option value="juno">Juno</option><option value="luna">Luna</option><option value="minerva">Minerva</option><option value="neptune">Neptune</option><option value="odysseus">Odysseus</option><option value="orion">Orion</option><option value="orpheus">Orpheus</option><option value="pandora">Pandora</option><option value="phoebe">Phoebe</option><option value="pluto">Pluto</option><option value="saturn">Saturn</option><option value="thalia">Thalia</option><option value="theia">Theia</option><option value="vesta">Vesta</option><option value="zeus">Zeus</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div>
             <div class="scholar-coach-principles"><b>What I watch for</b><span>Checks and forcing tempi</span><span>Loose or hanging pieces</span><span>King activity and key squares</span><span>Passed-pawn races and promotion</span><span>Stalemate, repetition and 50-move drawing resources</span></div>
           </aside>
         </div>
@@ -6008,7 +6206,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
       <section class="panel train-scholar-strip">
         <img src="./scholar-bozo.png" alt="Scholar BOZO">
         <div><span class="eyebrow">SCHOLAR BOZO</span><p id="train-scholar-text">I’ll step in for hints, mistakes, and explanatory moments across BOZO training.</p></div>
-        <div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="daniel">Daniel</option><option value="george">George</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div>
+        <div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="apollo">Apollo</option><option value="arcas">Arcas</option><option value="aries">Aries</option><option value="asteria">Asteria</option><option value="atlas">Atlas</option><option value="callista">Callista</option><option value="cordelia">Cordelia</option><option value="delia">Delia</option><option value="draco">Draco</option><option value="harmonia">Harmonia</option><option value="helena">Helena</option><option value="hera">Hera</option><option value="hermes">Hermes</option><option value="hyperion">Hyperion</option><option value="juno">Juno</option><option value="luna">Luna</option><option value="minerva">Minerva</option><option value="neptune">Neptune</option><option value="odysseus">Odysseus</option><option value="orion">Orion</option><option value="orpheus">Orpheus</option><option value="pandora">Pandora</option><option value="phoebe">Phoebe</option><option value="pluto">Pluto</option><option value="saturn">Saturn</option><option value="thalia">Thalia</option><option value="theia">Theia</option><option value="vesta">Vesta</option><option value="zeus">Zeus</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div>
       </section>
 
       <div id="train-master-puzzles-mode" hidden>
@@ -6287,31 +6485,6 @@ footer a,footer button,.footer-brand{color:#fff!important}
         </section>
 
         <div class="play-mode-grid">
-          <article class="play-mode-card featured">
-            <div class="eyebrow">PLAY BOZO</div>
-            <h2>Face the bot.</h2>
-            <p>Play a complete unrestricted game against BOZO Bot, then send it straight to Game Review.</p>
-            <div class="play-quick-settings">
-              <label>Your color
-                <select id="freeplay-color">
-                  <option value="white">White</option>
-                  <option value="black">Black</option>
-                  <option value="random">Random</option>
-                </select>
-              </label>
-              <label>BOZO strength
-                <select id="freeplay-strength">
-                  <option value="beginner">Beginner</option>
-                  <option value="casual">Casual</option>
-                  <option value="club" selected>Club</option>
-                  <option value="advanced">Advanced</option>
-                  <option value="master">BOZO Master</option>
-                </select>
-              </label>
-            </div>
-            <button id="start-freeplay-bot" class="button primary">Play BOZO</button>
-          </article>
-
           <article class="play-mode-card">
             <div class="eyebrow">PLAY A FRIEND</div>
             <h2>Challenge someone.</h2>
@@ -6407,6 +6580,60 @@ footer a,footer button,.footer-brand{color:#fff!important}
       </div>
     </section>
 
+
+    <section id="view-bots" class="view">
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">BOZO BOTS</div>
+          <h1>Pick your poison.</h1>
+          <p>Play a BOZO personality yourself, or pair two bots and watch them play, argue, and roast each other.</p>
+        </div>
+      </div>
+      <div class="play-mode-grid bots-mode-grid">
+          <article class="play-mode-card featured">
+            <div class="eyebrow">PLAY BOZO</div>
+            <h2>Face the bot.</h2>
+            <p>Play a complete unrestricted game against BOZO Bot, then send it straight to Game Review.</p>
+            <div class="play-quick-settings">
+              <label>Your color
+                <select id="freeplay-color">
+                  <option value="white">White</option>
+                  <option value="black">Black</option>
+                  <option value="random">Random</option>
+                </select>
+              </label>
+              <label>BOZO opponent
+                <select id="freeplay-strength">
+                  <option value="lucas">Lucas · 500</option>
+                  <option value="miyaka">Miyaka · 700</option>
+                  <option value="jack">Jack · 850</option>
+                  <option value="diana">Diana · 1150</option>
+                  <option value="christine">Christine · 1350</option>
+                  <option value="jayquellen" selected>Jayquellen · 1500</option>
+                  <option value="dragovic">Dragovic · 1800</option>
+                  <option value="rico">Rico · 2000</option>
+                  <option value="havid">Havid · 2200</option>
+                  <option value="wichitus">Wichitus · 1</option>
+                </select>
+              </label>
+            </div>
+            <button id="start-freeplay-bot" class="button primary">Play BOZO</button>
+          </article>
+
+          <article class="play-mode-card featured bot-exhibition-launch-card">
+            <div class="eyebrow">BOT VS BOT</div>
+            <h2>Start an exhibition.</h2>
+            <p>Pair any two BOZO personalities, choose the pace, and watch them play and talk to each other.</p>
+            <button id="start-bot-exhibition-setup" class="button primary">Pair two bots</button>
+          </article>
+
+      </div>
+      <section class="bots-tab-note">
+        <span class="eyebrow">BOT ARENA</span>
+        <p>Bot strength, personality, dialogue, and voice all live here. Opening-specific friend duels remain under Challenges.</p>
+      </section>
+    </section>
+
     <section id="view-challenges" class="view">
       <div id="challenges-guest" class="auth-required">
         <img src="./assets/bozo-mascot.webp" alt="">
@@ -6423,7 +6650,6 @@ footer a,footer button,.footer-brand{color:#fff!important}
             <p>Challenge a friend or train the same opening against BOZO Bot.</p>
           </div>
           <div class="challenge-primary-actions">
-            <button id="new-bot-game-button" class="button secondary">Play BOZO Bot</button>
             <button id="new-challenge-button" class="button primary">Challenge friend</button>
           </div>
         </div>
@@ -6748,7 +6974,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
                   <span class="eyebrow">SCHOLAR BOZO</span>
                   <h3>Move explanation</h3>
                 </div></div>
-                <div class="review-coach-heading-actions"><select id="review-voice-select" class="review-voice-select" aria-label="Coach voice"><option value="daniel">Daniel</option><option value="george">George</option></select><button id="review-voice-toggle" class="review-voice-toggle" type="button" aria-pressed="false">🔇 Coach voice off</button><span id="review-coach-move-label" class="coach-move-label">Choose a move</span></div>
+                <div class="review-coach-heading-actions"><select id="review-voice-select" class="review-voice-select" aria-label="Coach voice"><option value="apollo">Apollo</option><option value="arcas">Arcas</option><option value="aries">Aries</option><option value="asteria">Asteria</option><option value="atlas">Atlas</option><option value="callista">Callista</option><option value="cordelia">Cordelia</option><option value="delia">Delia</option><option value="draco">Draco</option><option value="harmonia">Harmonia</option><option value="helena">Helena</option><option value="hera">Hera</option><option value="hermes">Hermes</option><option value="hyperion">Hyperion</option><option value="juno">Juno</option><option value="luna">Luna</option><option value="minerva">Minerva</option><option value="neptune">Neptune</option><option value="odysseus">Odysseus</option><option value="orion">Orion</option><option value="orpheus">Orpheus</option><option value="pandora">Pandora</option><option value="phoebe">Phoebe</option><option value="pluto">Pluto</option><option value="saturn">Saturn</option><option value="thalia">Thalia</option><option value="theia">Theia</option><option value="vesta">Vesta</option><option value="zeus">Zeus</option></select><button id="review-voice-toggle" class="review-voice-toggle" type="button" aria-pressed="false">🔇 Coach voice off</button><span id="review-coach-move-label" class="coach-move-label">Choose a move</span></div>
               </div>
               <div id="review-voice-status" class="review-voice-status" aria-live="polite"></div>
               <div id="review-coach-answer" class="coach-answer">
@@ -7630,7 +7856,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
             <div class="daily-actions"><button id="daily-hint" class="button secondary" type="button">Hint <span id="daily-hints-left">3</span></button><button id="daily-reset" class="button secondary" type="button">Reset</button><button id="daily-analyze" class="button secondary" type="button" hidden>Analyze position</button></div>
           </section>
           <aside class="daily-side">
-            <section class="panel scholar-coach-card daily-scholar-card"><div class="scholar-coach-head"><img src="./scholar-bozo.png" alt="Scholar BOZO"><div><span class="eyebrow">SCHOLAR BOZO</span><h3>Puzzle coach</h3></div></div><div id="daily-scholar-text" class="scholar-coach-dialogue">I’ll guide hints and explain important moments after you solve.</div><div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="daniel">Daniel</option><option value="george">George</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div></section>
+            <section class="panel scholar-coach-card daily-scholar-card"><div class="scholar-coach-head"><img src="./scholar-bozo.png" alt="Scholar BOZO"><div><span class="eyebrow">SCHOLAR BOZO</span><h3>Puzzle coach</h3></div></div><div id="daily-scholar-text" class="scholar-coach-dialogue">I’ll guide hints and explain important moments after you solve.</div><div class="scholar-coach-controls"><select data-scholar-voice-select aria-label="Coach voice"><option value="apollo">Apollo</option><option value="arcas">Arcas</option><option value="aries">Aries</option><option value="asteria">Asteria</option><option value="atlas">Atlas</option><option value="callista">Callista</option><option value="cordelia">Cordelia</option><option value="delia">Delia</option><option value="draco">Draco</option><option value="harmonia">Harmonia</option><option value="helena">Helena</option><option value="hera">Hera</option><option value="hermes">Hermes</option><option value="hyperion">Hyperion</option><option value="juno">Juno</option><option value="luna">Luna</option><option value="minerva">Minerva</option><option value="neptune">Neptune</option><option value="odysseus">Odysseus</option><option value="orion">Orion</option><option value="orpheus">Orpheus</option><option value="pandora">Pandora</option><option value="phoebe">Phoebe</option><option value="pluto">Pluto</option><option value="saturn">Saturn</option><option value="thalia">Thalia</option><option value="theia">Theia</option><option value="vesta">Vesta</option><option value="zeus">Zeus</option></select><button data-scholar-voice-toggle type="button">🔇 Voice off</button></div></section>
             <section class="panel daily-progress-card"><span class="eyebrow">TODAY'S RUN</span><div class="daily-streak-row"><div><b id="daily-streak">0</b><span>day streak</span></div><div><b id="daily-solved-total">0</b><span>Daily BOZOs solved</span></div></div><div id="daily-line-progress" class="daily-line-progress"></div></section>
             <section id="daily-explanation-card" class="panel" hidden><span class="eyebrow">BOZO'S TAKE</span><h3>Why the line works</h3><p id="daily-explanation"></p><div id="daily-solution-line" class="daily-solution-line"></div><button id="daily-replay" class="button secondary" type="button">Replay solution</button></section>
             <section class="panel daily-archive-card"><div class="panel-heading"><div><span>ARCHIVE</span><h3 id="daily-archive-month">This month</h3></div></div><div class="daily-archive-controls"><button id="daily-month-prev" type="button">←</button><button id="daily-month-next" type="button">→</button></div><div id="daily-calendar" class="daily-calendar"></div></section>
@@ -8079,10 +8305,10 @@ footer a,footer button,.footer-brand{color:#fff!important}
 <div id="challenge-create-modal" class="modal-backdrop" hidden>
     <div class="auth-modal challenge-create-modal">
       <button id="close-challenge-create" class="modal-close">×</button>
-      <div class="eyebrow">NEW OPENING GAME</div>
-      <h2>Choose the battleground</h2>
+      <div id="new-game-eyebrow" class="eyebrow">NEW OPENING GAME</div>
+      <h2 id="new-game-title">Choose the battleground</h2>
 
-      <div class="new-game-mode-tabs">
+      <div id="new-game-mode-tabs" class="new-game-mode-tabs">
         <button class="active" data-new-game-mode="friend">Challenge friend</button>
         <button data-new-game-mode="bot">Play BOZO Bot</button>
       </div>
@@ -8094,13 +8320,18 @@ footer a,footer button,.footer-brand{color:#fff!important}
       </div>
 
       <div id="bot-game-fields" hidden>
-        <label>BOZO Bot strength
+        <label>BOZO opponent
           <select id="bot-strength">
-            <option value="beginner">Beginner · depth 4</option>
-            <option value="casual">Casual · depth 6</option>
-            <option value="club" selected>Club · depth 9</option>
-            <option value="advanced">Advanced · depth 12</option>
-            <option value="master">BOZO Master · depth 15</option>
+            <option value="lucas">Lucas · 500</option>
+            <option value="miyaka">Miyaka · 700</option>
+            <option value="jack">Jack · 850</option>
+            <option value="diana">Diana · 1150</option>
+            <option value="christine">Christine · 1350</option>
+            <option value="jayquellen" selected>Jayquellen · 1500</option>
+            <option value="dragovic">Dragovic · 1800</option>
+            <option value="rico">Rico · 2000</option>
+            <option value="havid">Havid · 2200</option>
+            <option value="wichitus">Wichitus · 1</option>
           </select>
         </label>
         <p class="bot-mode-note">
@@ -8108,20 +8339,43 @@ footer a,footer button,.footer-brand{color:#fff!important}
         </p>
       </div>
 
-      <label>Opening or sideline
+
+      <div id="exhibition-game-fields" hidden>
+        <div class="exhibition-picker-grid">
+          <label>White bot
+            <select id="exhibition-white-bot">
+              <option value="lucas">Lucas · 500</option><option value="miyaka">Miyaka · 700</option><option value="jack">Jack · 850</option><option value="diana" selected>Diana · 1150</option><option value="christine">Christine · 1350</option><option value="jayquellen">Jayquellen · 1500</option><option value="dragovic">Dragovic · 1800</option><option value="rico">Rico · 2000</option><option value="havid">Havid · 2200</option><option value="wichitus">Wichitus · 1</option>
+            </select>
+          </label>
+          <label>Black bot
+            <select id="exhibition-black-bot">
+              <option value="lucas">Lucas · 500</option><option value="miyaka">Miyaka · 700</option><option value="jack">Jack · 850</option><option value="diana">Diana · 1150</option><option value="christine">Christine · 1350</option><option value="jayquellen">Jayquellen · 1500</option><option value="dragovic">Dragovic · 1800</option><option value="rico">Rico · 2000</option><option value="havid">Havid · 2200</option><option value="wichitus" selected>Wichitus · 1</option>
+            </select>
+          </label>
+          <label>Move speed
+            <select id="exhibition-speed"><option value="1000">1 second</option><option value="3000" selected>3 seconds</option><option value="5000">5 seconds</option></select>
+          </label>
+          <label>Dialogue
+            <select id="exhibition-dialogue"><option value="off">Off</option><option value="key" selected>Key moments only</option><option value="every">Every move (testing)</option></select>
+          </label>
+        </div>
+        <p class="bot-mode-note">Pair any two BOZO bots and watch them play. Choose an opening below, or leave it blank to start from move one.</p>
+      </div>
+
+      <label id="duel-opening-wrap">Opening or sideline
         <input id="duel-opening-search" placeholder="Search Polish, Alekhine, Italian…">
       </label>
       <div id="duel-opening-results" class="duel-opening-results"></div>
       <input id="duel-opening-id" type="hidden">
 
-      <label>Your color
+      <label id="duel-color-wrap">Your color
         <select id="duel-color">
           <option value="white">White</option>
           <option value="black">Black</option>
         </select>
       </label>
 
-      <label>Required book moves
+      <label id="duel-book-wrap">Required book moves
         <select id="duel-required-plies">
           <option value="8">4 moves</option>
           <option value="12" selected>6 moves</option>
@@ -8216,6 +8470,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
 
       <div class="bot-battle-strip">
         <div class="bot-fighter">
+          <img id="bot-white-fighter-avatar" class="bot-fighter-avatar" src="./assets/bots/jayquellen.webp" alt="White bot avatar" hidden>
           <div class="bot-fighter-copy">
             <span id="bot-player-role-label">YOU</span>
             <div class="live-player-name-row"><b id="bot-player-color-label">White</b><img id="rated-my-supporter-badge" class="live-supporter-badge" src="./assets/bozo-supporter.png" alt="BOZO Supporter" hidden><span id="rated-my-identity-badges" class="live-identity-badges"></span></div>
@@ -8224,6 +8479,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
         </div>
         <div class="bot-versus">VS</div>
         <div class="bot-fighter">
+          <img id="bot-black-fighter-avatar" class="bot-fighter-avatar" src="./assets/bots/wichitus.webp" alt="Black bot avatar" hidden>
           <div class="bot-fighter-copy">
             <span id="bot-opponent-label">BOZO BOT</span>
             <div class="live-player-name-row"><b id="bot-strength-label">Club</b><img id="rated-opponent-supporter-badge" class="live-supporter-badge" src="./assets/bozo-supporter.png" alt="BOZO Supporter" hidden><span id="rated-opponent-identity-badges" class="live-identity-badges"></span></div>
@@ -8231,6 +8487,29 @@ footer a,footer button,.footer-brand{color:#fff!important}
           <strong id="rated-opponent-clock" class="rated-live-clock" hidden>10:00</strong>
         </div>
       </div>
+
+      <section id="bot-exhibition-dialogue" class="bot-exhibition-dialogue" aria-live="polite" hidden>
+        <article id="bot-exhibition-white-card" class="bot-exhibition-speaker-card">
+          <img id="bot-exhibition-white-avatar" class="bot-character-avatar" src="./assets/bots/diana.webp" alt="White bot avatar">
+          <div class="bot-character-body"><div class="bot-character-heading"><b id="bot-exhibition-white-name">White bot</b><span id="bot-exhibition-white-meta"></span></div><div id="bot-exhibition-white-text" class="bot-dialogue-text">Ready.</div></div>
+        </article>
+        <article id="bot-exhibition-black-card" class="bot-exhibition-speaker-card">
+          <img id="bot-exhibition-black-avatar" class="bot-character-avatar" src="./assets/bots/wichitus.webp" alt="Black bot avatar">
+          <div class="bot-character-body"><div class="bot-character-heading"><b id="bot-exhibition-black-name">Black bot</b><span id="bot-exhibition-black-meta"></span></div><div id="bot-exhibition-black-text" class="bot-dialogue-text">Ready.</div></div>
+        </article>
+      </section>
+
+      <section id="bot-character-panel" class="bot-character-panel" aria-live="polite">
+        <img id="bot-character-avatar" class="bot-character-avatar" src="./assets/bots/jayquellen.webp" alt="BOZO Bot avatar">
+        <div class="bot-character-body">
+          <div class="bot-character-heading">
+            <b id="bot-character-name">BOZO Bot</b>
+            <span id="bot-character-meta"></span>
+          </div>
+          <div id="bot-dialogue-text" class="bot-dialogue-text">Choose your opponent and start a game.</div>
+        </div>
+        <button id="bot-dialogue-replay" class="bot-dialogue-replay" type="button" aria-label="Replay or enable bot voice" title="Replay / enable bot voice">🔊</button>
+      </section>
 
       <div class="duel-game-layout bot-game-layout">
         <div class="bot-board-column">

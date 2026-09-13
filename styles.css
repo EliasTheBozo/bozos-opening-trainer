@@ -3399,3 +3399,210 @@ html[data-music-active="true"][data-music-collapsed="false"] body {
 .review-phase-errors { display:grid; gap:3px; padding:7px 9px; border:1px solid rgba(255,255,255,.08); border-radius:10px; background:rgba(255,255,255,.025); }
 .review-phase-errors span { color:var(--muted); font-size:10px; line-height:1.35; }
 @media (max-width:700px) { .review-side-scores b { font-size:18px; } }
+
+/* BOZO v4.15.14 Android/mobile input latency pass */
+#endgame-board,
+#endgame-board [data-endgame-square] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/* BOZO v4.15.38 - Bot vs Bot exhibition */
+.exhibition-picker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:8px 0 4px}
+.exhibition-picker-grid label{margin:0}
+@media(max-width:640px){.exhibition-picker-grid{grid-template-columns:1fr}}
+
+/* BOZO v4.15.39 — true Bot-vs-Bot exhibition presentation */
+.bot-fighter-avatar{width:46px;height:46px;object-fit:cover;border-radius:11px;border:2px solid rgba(181,115,255,.55);flex:0 0 auto}
+.bot-exhibition-dialogue{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:stretch;margin:12px 0}
+.bot-exhibition-dialogue[hidden]{display:none!important}
+.bot-exhibition-speaker-card{display:flex;gap:10px;align-items:center;min-width:0;padding:12px;border:1px solid rgba(181,115,255,.3);border-radius:16px;background:rgba(255,255,255,.035)}
+.bot-exhibition-speaker-card.is-speaking{border-color:rgba(181,115,255,.85);box-shadow:0 0 0 1px rgba(181,115,255,.18) inset}
+.bot-exhibition-vs{align-self:center;font-weight:900;color:#ffd84a;font-size:.8rem}
+@media(max-width:620px){.bot-exhibition-dialogue{grid-template-columns:1fr}.bot-exhibition-vs{text-align:center}.bot-exhibition-speaker-card{padding:10px}.bot-fighter-avatar{width:40px;height:40px}}
+
+
+/* BOZO v4.15.40 — dedicated Bots tab + compact exhibition UI */
+.bots-mode-grid{margin-top:18px}
+.bots-tab-note{margin-top:18px;padding:16px 18px;border:1px solid rgba(168,85,247,.22);border-radius:16px;background:rgba(27,10,37,.55)}
+.bots-tab-note p{margin:6px 0 0;color:var(--muted)}
+
+#bot-game-modal.is-exhibition .bot-battle-strip{padding:10px 12px;overflow:hidden}
+#bot-game-modal.is-exhibition .bot-fighter{display:grid!important;grid-template-columns:auto minmax(0,1fr);justify-content:initial!important;align-items:center!important;gap:9px!important;min-width:0}
+#bot-game-modal.is-exhibition .bot-fighter-copy{min-width:0}
+#bot-game-modal.is-exhibition #bot-white-fighter-avatar.bot-fighter-avatar,
+#bot-game-modal.is-exhibition #bot-black-fighter-avatar.bot-fighter-avatar{
+  width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important;max-width:46px!important;max-height:46px!important;
+  object-fit:cover!important;object-position:center!important;display:block!important;border-radius:11px!important;
+}
+#bot-game-modal.is-exhibition .bot-exhibition-dialogue{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+#bot-game-modal.is-exhibition .bot-exhibition-vs{display:none}
+#bot-game-modal.is-exhibition .bot-exhibition-speaker-card{align-items:flex-start}
+#bot-game-modal.is-exhibition .bot-exhibition-speaker-card .bot-character-avatar{width:52px;height:52px;min-width:52px;object-fit:cover}
+
+@media(max-width:620px){
+  #bot-game-modal.is-exhibition .bot-battle-strip{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:6px;padding:9px}
+  #bot-game-modal.is-exhibition .bot-fighter{grid-template-columns:38px minmax(0,1fr)!important;gap:6px!important}
+  #bot-game-modal.is-exhibition #bot-white-fighter-avatar.bot-fighter-avatar,
+  #bot-game-modal.is-exhibition #bot-black-fighter-avatar.bot-fighter-avatar{
+    width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important;max-width:38px!important;max-height:38px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-fighter-copy span{font-size:8px}
+  #bot-game-modal.is-exhibition .bot-fighter-copy b{font-size:13px;white-space:normal;line-height:1.1}
+  #bot-game-modal.is-exhibition .bot-exhibition-dialogue{grid-template-columns:1fr;gap:8px}
+  #bot-game-modal.is-exhibition .bot-exhibition-speaker-card{padding:9px 10px}
+  #bot-game-modal.is-exhibition .bot-exhibition-speaker-card .bot-character-avatar{width:42px;height:42px;min-width:42px}
+  #bot-game-modal.is-exhibition .bot-dialogue-text{font-size:14px;line-height:1.35}
+}
+
+
+/* BOZO v4.15.43: compact exhibition presentation */
+#bot-game-modal.is-exhibition .bot-battle-strip{
+  margin-bottom:8px!important;
+  padding:8px 10px!important;
+}
+#bot-game-modal.is-exhibition #bot-white-fighter-avatar,
+#bot-game-modal.is-exhibition #bot-black-fighter-avatar{
+  display:none!important;
+}
+#bot-game-modal.is-exhibition .bot-fighter{
+  grid-template-columns:minmax(0,1fr)!important;
+}
+#bot-game-modal.is-exhibition .bot-exhibition-dialogue{
+  margin:8px 0!important;
+}
+#bot-game-modal.is-exhibition .bot-exhibition-speaker-card.is-speaking{
+  transform:translateY(-1px);
+}
+
+/* BOZO v4.15.44 — mobile-first exhibition containment + formatting */
+#bot-game-modal,
+#bot-game-modal .duel-game-modal,
+#bot-game-modal .duel-game-header,
+#bot-game-modal .bot-game-layout,
+#bot-game-modal .bot-board-column,
+#bot-game-modal .bot-board-shell,
+#bot-game-modal .bot-exhibition-dialogue,
+#bot-game-modal .bot-exhibition-speaker-card,
+#bot-game-modal .bot-character-body,
+#bot-game-modal .bot-dialogue-text {
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+#bot-game-modal{overflow-x:hidden}
+#bot-game-modal .duel-game-modal{overflow-x:hidden}
+#bot-game-modal .bot-dialogue-text{overflow-wrap:anywhere;word-break:normal}
+#bot-game-modal .bot-board-shell{margin-inline:auto}
+#bot-game-modal .web-duel-board{max-width:100%!important;margin-inline:auto}
+#bot-game-modal .bot-eval-row{width:100%;min-width:0;grid-template-columns:auto minmax(0,1fr) auto auto}
+
+/* Desktop keeps a compact matchup strip. Never allow the portraits to become a hero banner. */
+@media(min-width:769px){
+  #bot-game-modal.is-exhibition #bot-white-fighter-avatar.bot-fighter-avatar,
+  #bot-game-modal.is-exhibition #bot-black-fighter-avatar.bot-fighter-avatar{
+    display:block!important;
+    width:46px!important;height:46px!important;
+    min-width:46px!important;min-height:46px!important;
+    max-width:46px!important;max-height:46px!important;
+    object-fit:cover!important;object-position:center!important;
+  }
+}
+
+@media(max-width:768px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden!important}
+  #bot-game-modal.modal-backdrop{
+    width:100vw;max-width:100vw;
+    padding:8px;
+    padding-left:max(8px,env(safe-area-inset-left));
+    padding-right:max(8px,env(safe-area-inset-right));
+    overflow-x:hidden!important;
+    place-items:start center;
+  }
+  #bot-game-modal .duel-game-modal.bot-game-modal{
+    width:100%!important;
+    max-width:100%!important;
+    margin:0 auto!important;
+    padding:12px!important;
+    border-radius:20px;
+    overflow-x:hidden!important;
+  }
+  #bot-game-modal .duel-game-header{gap:8px;padding-right:34px}
+  #bot-game-modal .duel-game-header>div{min-width:0}
+  #bot-game-modal .duel-game-header h2,
+  #bot-game-modal .duel-game-header p{max-width:100%;overflow-wrap:anywhere}
+  #bot-game-modal #bot-turn-badge{max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* The cinematic fighter banner is desktop-only. Mobile already has both avatars in dialogue. */
+  #bot-game-modal.is-exhibition .bot-battle-strip{display:none!important}
+  #bot-game-modal.is-exhibition #bot-character-panel{display:none!important}
+
+  #bot-game-modal .duel-game-layout.bot-game-layout{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    gap:10px!important;
+    margin-top:10px!important;
+  }
+  #bot-game-modal .bot-board-column{width:100%!important;max-width:100%!important;min-width:0!important}
+  #bot-game-modal .bot-board-shell,
+  #bot-game-modal .study-board-shell,
+  #bot-game-modal .friend-board-shell{
+    width:min(100%,var(--bozo-board-max,580px))!important;
+    max-width:100%!important;
+    min-width:0!important;
+    justify-self:center!important;
+    margin-inline:auto!important;
+  }
+  #bot-game-modal #web-bot-board{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    aspect-ratio:1/1!important;
+  }
+  #bot-game-modal .bozo-board-size-control{
+    width:100%!important;
+    max-width:100%!important;
+    justify-content:center!important;
+    margin:4px auto 8px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-exhibition-dialogue{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    width:100%!important;
+    max-width:100%!important;
+    gap:7px!important;
+    margin:6px 0 8px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-exhibition-speaker-card{
+    display:grid!important;
+    grid-template-columns:46px minmax(0,1fr)!important;
+    align-items:start!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    gap:9px!important;
+    padding:9px 10px!important;
+    border-radius:13px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-exhibition-speaker-card .bot-character-avatar{
+    width:46px!important;height:46px!important;
+    min-width:46px!important;max-width:46px!important;
+    object-fit:cover!important;
+    border-radius:11px!important;
+  }
+  #bot-game-modal.is-exhibition .bot-character-heading{min-width:0;gap:5px;flex-wrap:wrap}
+  #bot-game-modal.is-exhibition .bot-character-heading b{font-size:16px;line-height:1.15}
+  #bot-game-modal.is-exhibition .bot-character-heading span{font-size:10px}
+  #bot-game-modal.is-exhibition .bot-dialogue-text{font-size:14px!important;line-height:1.35!important;margin-top:3px}
+  #bot-game-modal .bot-eval-row{gap:6px;font-size:9px}
+  #bot-game-modal .duel-actions{width:100%;max-width:100%;display:flex;flex-wrap:wrap;gap:8px}
+  #bot-game-modal .duel-actions .button{min-width:0}
+  #bot-game-modal .bot-game-status-card{max-width:100%;overflow-wrap:anywhere}
+}
+
+
+/* BOZO v4.16.0 — unified website release. Mobile exhibition containment remains authoritative. */

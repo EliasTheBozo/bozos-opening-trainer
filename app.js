@@ -487,6 +487,10 @@ $('signin-form').addEventListener('submit', async e => {
     password: $('signin-password').value
   });
   if (error) return setAuthMessage(readableError(error), true);
+  // Refresh BOZO profile immediately instead of waiting for the auth event callback.
+  const { data: sessionData } = await sb.auth.getSession();
+  state.session = sessionData?.session || null;
+  await loadIdentity();
   closeAuth();
   toast('Signed in');
   route('dashboard');
@@ -2852,6 +2856,83 @@ function paintDailyBoard(){
   board.innerHTML=ranks.flatMap(r=>files.map(f=>{const sq=dailySquareName(f,r);const p=dailyGame.get(sq);return `<button type="button" class="board-square ${(r+f)%2?'dark':'light'}${dailySelectedSquare===sq?' selected':''}" data-daily-square="${sq}" aria-label="${sq}">${dailyPieceMarkup(p)}</button>`})).join('');
   board.querySelectorAll('[data-daily-square]').forEach(b=>b.addEventListener('click',()=>dailyBoardClick(b.dataset.dailySquare)));
 }
+
+/* BOZO v4.15.30 — restored shared promotion picker (v4.15.19 behavior) */
+let bozoPromotionRequest=null;
+function ensureBozoPromotionPicker(){
+  let overlay=$('bozo-promotion-overlay');
+  if(overlay)return overlay;
+  const style=document.createElement('style');
+  style.id='bozo-promotion-style';
+  style.textContent=`
+    #bozo-promotion-overlay{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(8,4,12,.66);backdrop-filter:blur(4px)}
+    #bozo-promotion-overlay[hidden]{display:none!important}
+    .bozo-promotion-card{width:min(430px,calc(100vw - 28px));border:1px solid rgba(181,115,255,.42);border-radius:20px;padding:18px;background:#16091f;box-shadow:0 24px 80px rgba(0,0,0,.55);text-align:center}
+    .bozo-promotion-card b{display:block;font-size:1.05rem;margin-bottom:4px}
+    .bozo-promotion-card span{display:block;opacity:.72;font-size:.9rem;margin-bottom:14px}
+    .bozo-promotion-options{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .bozo-promotion-piece{min-width:0;min-height:72px;border:1px solid rgba(255,255,255,.16);border-radius:14px;background:rgba(255,255,255,.06);color:inherit;font:inherit;cursor:pointer;touch-action:manipulation}
+    .bozo-promotion-piece:hover,.bozo-promotion-piece:focus-visible{border-color:#b573ff;background:rgba(181,115,255,.16);outline:none}
+    .bozo-promotion-glyph{display:block!important;font-size:2.25rem;line-height:1;margin:0!important;opacity:1!important}
+    .bozo-promotion-name{display:block!important;margin:7px 0 0!important;font-size:.72rem!important;opacity:.82!important}
+    @media(max-width:520px){.bozo-promotion-card{padding:15px}.bozo-promotion-options{gap:7px}.bozo-promotion-piece{min-height:68px}.bozo-promotion-glyph{font-size:2rem}}
+  `;
+  document.head.appendChild(style);
+  overlay=document.createElement('div');
+  overlay.id='bozo-promotion-overlay';
+  overlay.hidden=true;
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.setAttribute('aria-label','Choose promotion piece');
+  document.body.appendChild(overlay);
+  return overlay;
+}
+function chooseBozoPromotion(color='w'){
+  if(bozoPromotionRequest)return bozoPromotionRequest;
+  const overlay=ensureBozoPromotionPicker();
+  const pieces=[['q','Queen'],['r','Rook'],['b','Bishop'],['n','Knight']];
+  const glyphs=color==='b'?{q:'♛',r:'♜',b:'♝',n:'♞'}:{q:'♕',r:'♖',b:'♗',n:'♘'};
+  overlay.innerHTML=`<div class="bozo-promotion-card"><b>Promote pawn</b><span>Choose a piece.</span><div class="bozo-promotion-options">${pieces.map(([code,name])=>`<button type="button" class="bozo-promotion-piece" data-promotion="${code}" aria-label="Promote to ${name}"><span class="bozo-promotion-glyph">${glyphs[code]}</span><span class="bozo-promotion-name">${name}</span></button>`).join('')}</div></div>`;
+  overlay.hidden=false;
+  bozoPromotionRequest=new Promise(resolve=>{
+    let settled=false;
+    const onKey=event=>{
+      if(event.key==='Escape'){event.preventDefault();finish(null);return;}
+      const hotkey={q:'q',r:'r',b:'b',n:'n'}[String(event.key||'').toLowerCase()];
+      if(hotkey){event.preventDefault();finish(hotkey);}
+    };
+    const onBackdrop=event=>{if(event.target===overlay)finish(null);};
+    const finish=value=>{
+      if(settled)return;settled=true;
+      document.removeEventListener('keydown',onKey);overlay.removeEventListener('click',onBackdrop);
+      overlay.hidden=true;overlay.innerHTML='';bozoPromotionRequest=null;resolve(value);
+    };
+    overlay.querySelectorAll('[data-promotion]').forEach(button=>button.addEventListener('click',()=>finish(button.dataset.promotion),{once:true}));
+    overlay.addEventListener('click',onBackdrop);
+    document.addEventListener('keydown',onKey);
+    overlay.querySelector('[data-promotion="q"]')?.focus();
+  });
+  return bozoPromotionRequest;
+}
+function bozoPromotionRequired(game,from,to,color=''){
+  try{
+    const piece=game?.get?.(from);
+    if(!piece||piece.type!=='p')return false;
+    if(color&&piece.color!==color)return false;
+    return (piece.color==='w'&&String(to).endsWith('8'))||(piece.color==='b'&&String(to).endsWith('1'));
+  }catch{return false;}
+}
+async function bozoLegalMoveForDestination(game,from,to,color=''){
+  let candidates=[];
+  try{candidates=game?.moves?.({square:from,verbose:true})?.filter(move=>move.to===to)||[];}catch{}
+  if(!candidates.length)return null;
+  const promotionMoves=candidates.filter(move=>move.promotion);
+  if(!promotionMoves.length)return candidates[0];
+  const promotion=await chooseBozoPromotion(color||promotionMoves[0]?.color||game?.get?.(from)?.color||'w');
+  if(!promotion)return null;
+  return promotionMoves.find(move=>move.promotion===promotion)||null;
+}
+
 async function dailyBoardClick(sq){
   if(dailySolved||!dailyGame||!dailyPuzzle)return;
   const piece=dailyGame.get(sq);
@@ -5676,7 +5757,7 @@ let reviewOpeningCatalog = null;
 // Hoisted state: these are referenced by Review setup/reset code before the later bot/voice implementation blocks run.
 let webBotMoveEngine = null;
 let reviewVoiceEnabled = false;
-let reviewVoiceId = 'daniel';
+let reviewVoiceId = 'atlas';
 
 function prepareReviewPage() {
   const label = $('review-engine-state');
@@ -5721,8 +5802,8 @@ $('review-flip').addEventListener('click', () => {
 });
 $('ask-review-coach').addEventListener('click', askReviewCoach);
 $('clear-review-coach').addEventListener('click', clearReviewCoach);
-$('review-voice-toggle')?.addEventListener('click',()=>{bozoUnlockCoachAudio().catch(()=>{});setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
-$('review-voice-select')?.addEventListener('change',event=>{bozoUnlockCoachAudio().catch(()=>{});setReviewVoiceId(event.target.value);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
+$('review-voice-toggle')?.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
+$('review-voice-select')?.addEventListener('change',event=>{setReviewVoiceId(event.target.value);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
 $('review-coach-question').addEventListener('keydown', event => {
   if (event.key === 'Enter') askReviewCoach();
 });
@@ -6034,7 +6115,7 @@ class ReviewStockfish {
     await this.initialize();
     if (this.failure) throw this.failure;
 
-    const multiPv = Math.max(1, Math.min(8, Number(count) || 4));
+    const multiPv = Math.max(1, Math.min(32, Number(count) || 4));
     this.send(`setoption name MultiPV value ${multiPv}`);
     this.send(`position fen ${fen}`);
     this.searching = true;
@@ -8299,44 +8380,73 @@ function reviewAutoExplanation(row) {
 
 const REVIEW_VOICE_PREF_KEY='bozo-review-voice-enabled';
 const REVIEW_VOICE_ID_KEY='bozo-review-voice-id';
-const REVIEW_KOKORO_MODEL='onnx-community/Kokoro-82M-v1.0-ONNX';
-const REVIEW_KOKORO_ESM='https://cdn.jsdelivr.net/npm/kokoro-js/+esm';
+const BOZO_AURA_TTS_ENDPOINT='https://bozo-tts-test.eliasdakid06.workers.dev/tts';
 const REVIEW_COACH_VOICES={
-  daniel:{label:'Daniel',requested:'bm_daniel',fallback:'bm_daniel'},
-  george:{label:'George',requested:'bm_v0george',fallback:'bm_george'}
+  apollo:{label:'Apollo',speaker:'apollo'},
+  arcas:{label:'Arcas',speaker:'arcas'},
+  aries:{label:'Aries',speaker:'aries'},
+  asteria:{label:'Asteria',speaker:'asteria'},
+  atlas:{label:'Atlas',speaker:'atlas'},
+  callista:{label:'Callista',speaker:'callista'},
+  cordelia:{label:'Cordelia',speaker:'cordelia'},
+  delia:{label:'Delia',speaker:'delia'},
+  draco:{label:'Draco',speaker:'draco'},
+  harmonia:{label:'Harmonia',speaker:'harmonia'},
+  helena:{label:'Helena',speaker:'helena'},
+  hera:{label:'Hera',speaker:'hera'},
+  hermes:{label:'Hermes',speaker:'hermes'},
+  hyperion:{label:'Hyperion',speaker:'hyperion'},
+  juno:{label:'Juno',speaker:'juno'},
+  luna:{label:'Luna',speaker:'luna'},
+  minerva:{label:'Minerva',speaker:'minerva'},
+  neptune:{label:'Neptune',speaker:'neptune'},
+  odysseus:{label:'Odysseus',speaker:'odysseus'},
+  orion:{label:'Orion',speaker:'orion'},
+  orpheus:{label:'Orpheus',speaker:'orpheus'},
+  pandora:{label:'Pandora',speaker:'pandora'},
+  phoebe:{label:'Phoebe',speaker:'phoebe'},
+  pluto:{label:'Pluto',speaker:'pluto'},
+  saturn:{label:'Saturn',speaker:'saturn'},
+  thalia:{label:'Thalia',speaker:'thalia'},
+  theia:{label:'Theia',speaker:'theia'},
+  vesta:{label:'Vesta',speaker:'vesta'},
+  zeus:{label:'Zeus',speaker:'zeus'}
 };
 reviewVoiceEnabled=localStorage.getItem(REVIEW_VOICE_PREF_KEY)==='1';
-reviewVoiceId=localStorage.getItem(REVIEW_VOICE_ID_KEY)||'daniel';
-if(!REVIEW_COACH_VOICES[reviewVoiceId])reviewVoiceId='daniel';
+reviewVoiceId=localStorage.getItem(REVIEW_VOICE_ID_KEY)||'atlas';
+// Migrate retired George/Daniel preferences and any invalid old voice to Aura-2 Atlas.
+if(!REVIEW_COACH_VOICES[reviewVoiceId])reviewVoiceId='atlas';
 queueMicrotask(()=>updateReviewVoiceButton());
 let reviewVoicePlayback=null;
 let reviewVoiceObjectUrl='';
-let reviewKokoroPromise=null;
 let reviewVoiceRequestToken=0;
 const reviewVoiceCache=new Map();
 
 function reviewVoiceText(row){
   if(!row)return '';
   const ex=reviewAutoExplanation(row);
-  return reviewChessTextForSpeech([ex.why,ex.comparison,ex.lesson].filter(Boolean).join(' '));
+  return reviewChessTextForSpeech([
+    ex.headline,
+    ex.why ? `What the move did: ${ex.why}` : '',
+    ex.comparisonLabel,
+    ex.comparison ? `What the better response does: ${ex.comparison}` : '',
+    ex.lesson ? `Lesson: ${ex.lesson}` : ''
+  ].filter(Boolean).join(' '));
 }
 function reviewChessTextForSpeech(text){
   if(!text)return '';
   let spoken=String(text);
 
-  // Speak castling naturally before processing individual SAN tokens.
   spoken=spoken
     .replace(/\b(?:O|0)-(?:O|0)-(?:O|0)\b/g,'castle queenside')
     .replace(/\b(?:O|0)-(?:O|0)\b/g,'castle kingside');
 
-  // Promotions written in prose/SAN, e.g. a8=Q, b1=N+.
   const promotionPiece={Q:'queen',R:'rook',B:'bishop',N:'knight'};
   spoken=spoken.replace(/\b([a-h])([18])=([QRBN])([+#]?)/g,(m,file,rank,piece,suffix)=>{
     const ending=suffix==='#'?' checkmate':suffix==='+'?' check':'';
     return `${file}${rank} promotes to a ${promotionPiece[piece]}${ending}`;
   });
 
-  // Full SAN piece moves: Nf6, Bxh7+, Rxe5, Qg4#, Kf2, Nbd2, R1e2, etc.
   const pieceName={K:'king',Q:'queen',R:'rook',B:'bishop',N:'knight'};
   const sanPiece=/\b([KQRBN])([a-h1-8]{0,2})(x?)([a-h][1-8])([+#]?)(?=\s|[.,;:!?)]|$)/g;
   spoken=spoken.replace(sanPiece,(m,piece,disamb,capture,target,suffix)=>{
@@ -8353,7 +8463,6 @@ function reviewChessTextForSpeech(text){
     return phrase;
   });
 
-  // Pawn SAN used in explanations, e.g. exd5, e8=Q was handled above.
   spoken=spoken.replace(/\b([a-h])(x)([a-h][1-8])([+#]?)(?=\s|[.,;:!?)]|$)/g,(m,file,_x,target,suffix)=>{
     let phrase=`${file}-pawn takes ${target}`;
     if(suffix==='#')phrase+=' checkmate';
@@ -8361,18 +8470,13 @@ function reviewChessTextForSpeech(text){
     return phrase;
   });
 
-  // Final chess-symbol guard: never let TTS literally say "plus" or "hash" for SAN suffixes.
-  // This catches notation that was left intact by an unusual surrounding punctuation/context.
   spoken=spoken
     .replace(/(?<=[a-h1-8])\+(?=\s|[.,;:!?)]|$)/g,' check')
     .replace(/(?<=[a-h1-8])#(?=\s|[.,;:!?)]|$)/g,' checkmate');
 
-  // Standalone algebraic square names are clearer as "e four" than "e four" being inferred inconsistently.
   const rankWord={'1':'one','2':'two','3':'three','4':'four','5':'five','6':'six','7':'seven','8':'eight'};
   spoken=spoken.replace(/\b([a-h])([1-8])\b/g,(m,file,rank)=>`${file} ${rankWord[rank]}`);
 
-  // Remaining chess abbreviations that can occur outside strict SAN. Keep these word-boundary-safe
-  // so normal words beginning with B/K/N/Q/R are untouched.
   spoken=spoken
     .replace(/\bQ\b/g,'queen')
     .replace(/\bR\b/g,'rook')
@@ -8392,10 +8496,6 @@ function reviewStopVoice(){
   try{reviewVoicePlayback?.pause?.();}catch{}
   reviewVoicePlayback=null;
   if(reviewVoiceObjectUrl){try{URL.revokeObjectURL(reviewVoiceObjectUrl);}catch{}reviewVoiceObjectUrl='';}
-  try{window.speechSynthesis?.cancel?.();}catch{}
-  try{window.Capacitor?.Plugins?.TextToSpeech?.stop?.();}catch{}
-  try{bozoRemoteVoiceAbortController?.abort?.();}catch{}
-  bozoRemoteVoiceAbortController=null;
 }
 function updateReviewVoiceButton(){
   const b=$('review-voice-toggle');if(b){
@@ -8404,6 +8504,7 @@ function updateReviewVoiceButton(){
     b.textContent=reviewVoiceEnabled?'🔊 Coach voice on':'🔇 Coach voice off';
   }
   const select=$('review-voice-select');if(select)select.value=reviewVoiceId;
+  document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>s.value=reviewVoiceId);
 }
 function setReviewVoiceEnabled(enabled){
   reviewVoiceEnabled=Boolean(enabled);
@@ -8414,270 +8515,58 @@ function setReviewVoiceEnabled(enabled){
 function setReviewVoiceId(id){
   if(!REVIEW_COACH_VOICES[id])return;
   reviewStopVoice();
-  bozoAndroidVoiceCache={key:'',index:null,name:'',lang:''};
   reviewVoiceId=id;
   localStorage.setItem(REVIEW_VOICE_ID_KEY,id);
   updateReviewVoiceButton();
   reviewVoiceStatus(`${REVIEW_COACH_VOICES[id].label} selected.`,'ready');
 }
-async function loadReviewKokoro(){
-  if(reviewKokoroPromise)return reviewKokoroPromise;
-  reviewVoiceStatus(`Loading local ${REVIEW_COACH_VOICES[reviewVoiceId].label} voice for the first time…`,'loading');
-  reviewKokoroPromise=(async()=>{
-    const mod=await import(REVIEW_KOKORO_ESM);
-    const {KokoroTTS}=mod;
-    if(!KokoroTTS)throw new Error('KokoroTTS module unavailable');
-    const tts=await KokoroTTS.from_pretrained(REVIEW_KOKORO_MODEL,{dtype:'q8',device:'wasm'});
-    reviewVoiceStatus('Local coach voice ready.','ready');
-    return tts;
-  })().catch(error=>{
-    reviewKokoroPromise=null;
-    reviewVoiceStatus('Local voice could not load. Browser fallback will be used.','error');
-    throw error;
-  });
-  return reviewKokoroPromise;
-}
-function reviewSpeechFallback(text){
-  if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance)return false;
-  try{
-    speechSynthesis.cancel();
-    const utterance=new SpeechSynthesisUtterance(text);
-    utterance.lang='en-GB';utterance.rate=.96;utterance.pitch=1;
-    const voices=speechSynthesis.getVoices?.()||[];
-    const british=voices.find(v=>/^en-GB/i.test(v.lang)&&/male|daniel|george|oliver|ryan/i.test(v.name))||voices.find(v=>/^en-GB/i.test(v.lang));
-    if(british)utterance.voice=british;
-    reviewVoicePlayback={pause:()=>speechSynthesis.cancel()};
-    speechSynthesis.speak(utterance);
-    reviewVoiceStatus('Using this device’s British voice fallback.','fallback');
-    return true;
-  }catch{return false;}
-}
 async function requestReviewCoachAudio(text,row){
-  const tts=await loadReviewKokoro();
-  const voiceConfig=REVIEW_COACH_VOICES[reviewVoiceId];
-  let voice=voiceConfig.requested;
-  try{
-    const available=typeof tts.list_voices==='function'?await tts.list_voices():tts.voices;
-    const has=id=>Array.isArray(available)
-      ?available.some(v=>(typeof v==='string'?v:v?.id||v?.name)===id)
-      :Boolean(available&&Object.prototype.hasOwnProperty.call(available,id));
-    if(!has(voice)&&voiceConfig.fallback)voice=voiceConfig.fallback;
-  }catch{voice=voiceConfig.fallback||voice;}
-  const cacheKey=`${voice}|${text}`;
-  if(reviewVoiceCache.has(cacheKey))return {blob:reviewVoiceCache.get(cacheKey),voice};
-  reviewVoiceStatus(`Generating ${voiceConfig.label} locally…`,'loading');
-  const generated=await tts.generate(text,{voice,speed:1});
-  const blob=generated?.toBlob?.();
-  if(!blob)throw new Error('Kokoro returned no playable audio');
-  if(reviewVoiceCache.size>24){const first=reviewVoiceCache.keys().next().value;reviewVoiceCache.delete(first);}
+  const voiceConfig=REVIEW_COACH_VOICES[reviewVoiceId]||REVIEW_COACH_VOICES.atlas;
+  const speaker=voiceConfig.speaker;
+  const cacheKey=`${speaker}|${text}`;
+  if(reviewVoiceCache.has(cacheKey))return {blob:reviewVoiceCache.get(cacheKey),voice:speaker};
+
+  reviewVoiceStatus(`Generating ${voiceConfig.label} with Aura-2…`,'loading');
+  const response=await fetch(BOZO_AURA_TTS_ENDPOINT,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text,speaker})
+  });
+  if(!response.ok){
+    let detail='';
+    try{detail=await response.text();}catch{}
+    throw new Error(`Aura-2 TTS ${response.status}${detail?`: ${detail.slice(0,160)}`:''}`);
+  }
+  const blob=await response.blob();
+  if(!blob?.size)throw new Error('Aura-2 returned no playable audio');
+  if(reviewVoiceCache.size>32){
+    const first=reviewVoiceCache.keys().next().value;
+    reviewVoiceCache.delete(first);
+  }
   reviewVoiceCache.set(cacheKey,blob);
-  reviewVoiceStatus(`${voiceConfig.label} ready${voice!==voiceConfig.requested?' (current George model)':''}.`,'ready');
-  return {blob,voice};
+  reviewVoiceStatus(`${voiceConfig.label} ready.`,'ready');
+  return {blob,voice:speaker};
 }
-
-// BOZO v4.15.26: mobile TTS is remote Kokoro.
-// Native Android AND mobile browsers use Railway so the phone never runs the neural model.
-// Desktop browsers keep the existing local Kokoro path because desktop WASM inference is fast enough.
-const BOZO_REMOTE_TTS_URL='https://bozo-tts-server-production.up.railway.app';
-const BOZO_REMOTE_TTS_URL_KEY='bozo-remote-tts-url';
-let bozoRemoteVoiceAbortController=null;
-let bozoCoachAudioContext=null;
-
-function bozoMobileBrowser(){
-  try{
-    if(navigator.userAgentData?.mobile===true)return true;
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(String(navigator.userAgent||''));
-  }catch{return false;}
-}
-function bozoUseRemoteTts(){
-  return bozoNativeAndroid()||bozoMobileBrowser();
-}
-function bozoRemoteVoiceId(){
-  // The live Railway server advertises exactly bm_george + bm_daniel.
-  // Keep bm_v0george only for desktop/local Kokoro, where it already works.
-  return reviewVoiceId==='george'?'bm_george':'bm_daniel';
-}
-function bozoRemoteTtsBaseUrl(){
-  const stored=String(localStorage.getItem(BOZO_REMOTE_TTS_URL_KEY)||'').trim();
-  return (stored||BOZO_REMOTE_TTS_URL).replace(/\/+$/,'');
-}
-function bozoTtsLog(stage,detail=''){
-  try{console.info(`[BOZO TTS] ${stage}`,detail||'');}catch{}
-}
-function bozoGetCoachAudioContext(){
-  if(bozoCoachAudioContext)return bozoCoachAudioContext;
-  try{
-    const AudioCtx=window.AudioContext||window.webkitAudioContext;
-    if(!AudioCtx)return null;
-    bozoCoachAudioContext=new AudioCtx();
-    return bozoCoachAudioContext;
-  }catch{return null;}
-}
-async function bozoUnlockCoachAudio(){
-  if(!bozoUseRemoteTts())return false;
-  const ctx=bozoGetCoachAudioContext();
-  if(!ctx)return false;
-  try{
-    if(ctx.state==='suspended')await ctx.resume();
-    // Start one silent sample while we still have a real user gesture. This permanently
-    // unlocks mobile audio so a WAV arriving later from Railway can play automatically.
-    if(ctx.state==='running'){
-      const buffer=ctx.createBuffer(1,1,ctx.sampleRate||24000);
-      const source=ctx.createBufferSource();source.buffer=buffer;source.connect(ctx.destination);source.start(0);
-      return true;
-    }
-  }catch(error){bozoTtsLog('audio unlock failed',error?.message||error);}
-  return false;
-}
-function bozoInstallCoachAudioUnlock(){
-  if(!bozoUseRemoteTts())return;
-  const once=()=>{bozoUnlockCoachAudio().catch(()=>{});};
-  document.addEventListener('pointerdown',once,{once:true,capture:true});
-  document.addEventListener('keydown',once,{once:true,capture:true});
-}
-queueMicrotask(()=>bozoInstallCoachAudioUnlock());
-
-async function bozoRemoteCacheKey(voice,text){
-  const raw=`v41526|${voice}|${text}`;
-  try{
-    const bytes=new TextEncoder().encode(raw);
-    const digest=await crypto.subtle.digest('SHA-256',bytes);
-    return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
-  }catch{
-    let h=2166136261;for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=Math.imul(h,16777619)}
-    return (h>>>0).toString(16);
-  }
-}
-async function bozoRemoteCacheGet(key){
-  if(!('caches' in window))return null;
-  try{
-    const cache=await caches.open('bozo-kokoro-audio-v2');
-    const hit=await cache.match(`https://bozo.invalid/tts/${key}.wav`);
-    if(!hit)return null;
-    const blob=await hit.blob();
-    return blob.size?blob:null;
-  }catch{return null;}
-}
-async function bozoRemoteCachePut(key,blob){
-  if(!blob||!blob.size||!('caches' in window))return;
-  try{
-    const cache=await caches.open('bozo-kokoro-audio-v2');
-    await cache.put(`https://bozo.invalid/tts/${key}.wav`,new Response(blob,{headers:{'Content-Type':blob.type||'audio/wav'}}));
-  }catch{}
-}
-async function requestRemoteKokoroAudio(text){
-  const voiceConfig=REVIEW_COACH_VOICES[reviewVoiceId];
-  const voice=bozoRemoteVoiceId();
-  const cacheKey=await bozoRemoteCacheKey(voice,text);
-  const memoryKey=`mobile-remote|${cacheKey}`;
-  if(reviewVoiceCache.has(memoryKey)){
-    bozoTtsLog('memory cache hit',voice);
-    return {blob:reviewVoiceCache.get(memoryKey),voice,source:'memory-cache'};
-  }
-  const persisted=await bozoRemoteCacheGet(cacheKey);
-  if(persisted){
-    reviewVoiceCache.set(memoryKey,persisted);
-    reviewVoiceStatus(`${voiceConfig.label} ready · cached`,'ready');
-    bozoTtsLog('persistent cache hit',`${voice} · ${persisted.size} bytes`);
-    return {blob:persisted,voice,source:'cache'};
-  }
-  const base=bozoRemoteTtsBaseUrl();
-  if(!base)throw new Error('BOZO remote TTS URL is not configured');
-  try{bozoRemoteVoiceAbortController?.abort?.();}catch{}
-  const controller=new AbortController();bozoRemoteVoiceAbortController=controller;
-  const timeout=setTimeout(()=>{try{controller.abort('timeout')}catch{}},45000);
-  reviewVoiceStatus(`Calling ${voiceConfig.label} on BOZO TTS…`,'loading');
-  bozoTtsLog('request start',`${voice} · ${text.length} chars · ${base}`);
-  try{
-    const response=await fetch(`${base}/v1/audio/speech`,{
-      method:'POST',
-      mode:'cors',
-      headers:{'Content-Type':'application/json','Accept':'audio/wav'},
-      body:JSON.stringify({model:'kokoro',input:text,voice,response_format:'wav',speed:1}),
-      signal:controller.signal,
-      cache:'no-store'
-    });
-    bozoTtsLog('response',`${response.status} ${response.statusText} · voice=${response.headers.get('X-BOZO-Voice')||voice} · cache=${response.headers.get('X-BOZO-Cache')||'?'}`);
-    if(!response.ok){
-      let detail='';try{detail=(await response.text()).slice(0,300)}catch{}
-      throw new Error(`Remote Kokoro ${response.status}${detail?`: ${detail}`:''}`);
-    }
-    const blob=await response.blob();
-    if(!blob.size)throw new Error('Remote Kokoro returned empty audio');
-    bozoTtsLog('wav received',`${blob.size} bytes · ${blob.type||'unknown type'}`);
-    if(reviewVoiceCache.size>32){const first=reviewVoiceCache.keys().next().value;reviewVoiceCache.delete(first)}
-    reviewVoiceCache.set(memoryKey,blob);
-    bozoRemoteCachePut(cacheKey,blob);
-    reviewVoiceStatus(`${voiceConfig.label} ready · remote Kokoro`,'ready');
-    return {blob,voice,source:'remote'};
-  }finally{
-    clearTimeout(timeout);
-    if(bozoRemoteVoiceAbortController===controller)bozoRemoteVoiceAbortController=null;
-  }
-}
-
-async function bozoPlayRemoteCoachBlob(blob,token){
-  if(token!==reviewVoiceRequestToken||!blob)return false;
-  const ctx=bozoGetCoachAudioContext();
-  if(ctx){
-    try{
-      if(ctx.state==='suspended')await ctx.resume();
-      const bytes=await blob.arrayBuffer();
-      const decoded=await ctx.decodeAudioData(bytes.slice(0));
-      if(token!==reviewVoiceRequestToken)return false;
-      const source=ctx.createBufferSource();source.buffer=decoded;source.connect(ctx.destination);
-      const playback={pause:()=>{try{source.stop()}catch{}}};
-      reviewVoicePlayback=playback;
-      source.onended=()=>{if(reviewVoicePlayback===playback)reviewVoicePlayback=null;};
-      source.start(0);
-      bozoTtsLog('playback started',`WebAudio · ${decoded.duration.toFixed(2)} sec`);
-      return true;
-    }catch(error){
-      bozoTtsLog('WebAudio playback failed',error?.message||error);
-    }
-  }
-  // Last-resort media element playback is still the REAL remote WAV, never system TTS.
-  const src=URL.createObjectURL(blob);reviewVoiceObjectUrl=src;reviewVoicePlayback=new Audio(src);
-  reviewVoicePlayback.addEventListener('ended',()=>{if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl=''}},{once:true});
-  await reviewVoicePlayback.play();
-  bozoTtsLog('playback started','HTMLAudio');
-  return true;
-}
-
-async function bozoPlayCoachAudioResult(audio,token){
-  if(token!==reviewVoiceRequestToken||!audio)return false;
-  if(bozoUseRemoteTts()&&audio.blob)return bozoPlayRemoteCoachBlob(audio.blob,token);
-  const src=audio.url||(audio.blob?URL.createObjectURL(audio.blob):'');if(!src)return false;
-  reviewVoiceObjectUrl=audio.blob?src:'';
-  reviewVoicePlayback=new Audio(src);
-  reviewVoicePlayback.addEventListener('ended',()=>{
-    if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl='';}
-  },{once:true});
-  await reviewVoicePlayback.play();
-  return true;
-}
-
 async function speakCurrentReviewExplanation(row,{manual=false}={}){
   reviewStopVoice();
   if(!reviewVoiceEnabled||!row)return;
   const token=reviewVoiceRequestToken;
   const text=reviewVoiceText(row);if(!text)return;
   try{
-    const audio=bozoUseRemoteTts()?await requestRemoteKokoroAudio(text):await requestReviewCoachAudio(text,row);
+    const audio=await requestReviewCoachAudio(text,row);
     if(token!==reviewVoiceRequestToken)return;
-    await bozoPlayCoachAudioResult(audio,token);
+    const src=audio.blob?URL.createObjectURL(audio.blob):audio.url;if(!src)return;
+    reviewVoiceObjectUrl=audio.blob?src:'';
+    reviewVoicePlayback=new Audio(src);
+    reviewVoicePlayback.addEventListener('ended',()=>{
+      if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl='';}
+    },{once:true});
+    await reviewVoicePlayback.play();
   }catch(error){
-    console.warn('Kokoro Review voice failed:',error);
-    if(token!==reviewVoiceRequestToken||error?.name==='AbortError')return;
-    if(bozoUseRemoteTts()){
-      const label=REVIEW_COACH_VOICES[reviewVoiceId]?.label||'Coach';
-      reviewVoiceStatus(`${label} unavailable · remote TTS failed`,'error');
-      bozoTtsLog('remote failure',error?.message||error);
-      if(manual)toast(`${label} could not reach BOZO TTS. No fake system voice was substituted.`);
-      return;
-    }
-    const fallbackWorked=reviewSpeechFallback(text);
-    if(manual&&!fallbackWorked)toast('Coach voice could not play on this device.');
+    console.warn('Aura-2 Review voice failed:',error);
+    if(token!==reviewVoiceRequestToken)return;
+    reviewVoiceStatus('Aura-2 voice could not play.','error');
+    if(manual)toast('Coach voice could not play right now.');
   }
 }
 
@@ -10294,12 +10183,7 @@ async function handleRatedOnlineSquare(square) {
     }
 
     // We don't submit anything now. We store ONE provisional move only.
-    let promotion='q';
-    if(bozoPromotionRequired(game,from,square,ratedMatchSession.myColor)){
-      promotion=await chooseBozoPromotion(ratedMatchSession.myColor);
-      if(!promotion){paintRatedOnlineGame();return;}
-    }
-    queueRatedPremove(from, square, promotion);
+    queueRatedPremove(from, square, 'q');
     return;
   }
 
@@ -10319,7 +10203,7 @@ async function handleRatedOnlineSquare(square) {
 
   const from = ratedMatchSelectedSquare;
   ratedMatchSelectedSquare = null;
-  const candidate = await bozoLegalMoveForDestination(game, from, square, ratedMatchSession.myColor);
+  const candidate = game.moves({ square: from, verbose: true }).find(move => move.to === square);
 
   if (!candidate) {
     paintRatedOnlineGame();
@@ -10757,8 +10641,11 @@ $('submit-create-arena')?.addEventListener('click', async () => {
 });
 
 function startBozoFreePlay() {
-  const strengthKey = $('freeplay-strength')?.value || 'club';
-  const strength = BOT_STRENGTHS[strengthKey] || BOT_STRENGTHS.club;
+  unlockBozoBotAudio().catch(()=>{});
+  setBozoExhibitionPresentation(null,false);
+  const strengthKey = $('freeplay-strength')?.value || 'jayquellen';
+  const botProfile = botProfileForKey(strengthKey) || BOZO_BOTS.jayquellen;
+  const strength = botStrengthFromProfile(botProfile);
   const colorChoice = $('freeplay-color')?.value || 'white';
   const playerColor = colorChoice === 'random'
     ? (Math.random() < .5 ? 'w' : 'b')
@@ -10772,6 +10659,7 @@ function startBozoFreePlay() {
     playerColor,
     strengthKey,
     strength,
+    botProfile,
     phase: 'freeplay',
     status: 'active',
     resultReason: '',
@@ -10780,7 +10668,10 @@ function startBozoFreePlay() {
     lastMove: null,
     botThinking: false,
     startedAt: Date.now(),
-    freePlay: true
+    freePlay: true,
+    castled:{w:false,b:false},
+    accuracyState:bozoNewAccuracyState(),
+    dialogueMode:'every'
   };
 
   $('bot-game-modal').hidden = false;
@@ -10790,16 +10681,18 @@ function startBozoFreePlay() {
   $('rated-draw-offer-panel').hidden = true;
   $('rated-rematch-panel').hidden = true;
   $('bot-arena-label').textContent = 'BOZO BOT ARENA';
+  $('bot-player-role-label').textContent = 'YOU';
   $('bot-opponent-label').textContent = 'BOZO BOT';
   $('bot-sidebar-title').textContent = 'SELECTED LINE';
   $('bot-status-title').textContent = 'TRAINING STATUS';
-  $('bot-game-title').textContent = 'Free Play vs BOZO Bot';
-  $('bot-game-subtitle').textContent = `Unrestricted game · ${strength.label}`;
+  $('bot-game-title').textContent = `Free Play vs ${botProfile.name}`;
+  $('bot-game-subtitle').textContent = `${botProfile.elo} Elo · ${botProfile.style} · ${botProfile.personality}`;
   $('bot-book-name').textContent = 'Starting position';
   $('bot-book-pgn').textContent = 'No opening is locked. Play any legal move.';
   $('bot-player-color-label').textContent = playerColor === 'w' ? 'White' : 'Black';
-  $('bot-strength-label').textContent = strength.label;
+  $('bot-strength-label').textContent = botProfileLabel(botProfile);
   $('bot-review-button').hidden = true;
+  paintBozoBotCharacter(botProfile, `${botProfile.name} is ready.`);
   botUserArrows = [];
   webBotSelectedSquare = null;
 
@@ -10809,6 +10702,7 @@ function startBozoFreePlay() {
   $('bot-eval-label').textContent = 'Paused';
   $('bot-eval-white').style.width = '50%';
 
+  speakBozoBot(botProfile, 'start', null, true);
   if (!webBotIsPlayerTurn()) requestWebBotMove('freeplay-start');
 }
 
@@ -10823,6 +10717,1224 @@ const BOT_STRENGTHS = {
   advanced: { label: 'Advanced', depth: 14, randomness: 0 },
   master: { label: 'BOZO Master', depth: 17, randomness: 0 }
 };
+
+// BOZO Bot System v1. Character profiles are deliberately separate from the
+// engine strength presets so personality, displayed Elo and real playing
+// strength can evolve independently. The voice field is reserved for the
+// Aura-2 dialogue layer.
+const BOZO_BOTS = {
+  dragovic: { name:'Dragovic', avatar:'./assets/bots/dragovic.webp', elo:1800, actualElo:1800, voice:'draco', personality:'cocky', style:'gambit-heavy', trashTalk:'medium', openings:'Likes to play opening gambits', mistakes:'Tends to lash out in the opening, which can lead to positional weaknesses', notes:'Assumes all his sacrifices are sound, and brags about such' },
+  diana: { name:'Diana', avatar:'./assets/bots/diana.webp', elo:1150, actualElo:1150, voice:'callista', personality:'friendly', style:'positional', trashTalk:'light', openings:'Enjoys d4 lines', mistakes:'Tends to misevaluate trades or pawn moves', notes:'Friendly lass who enjoys chess' },
+  lucas: { name:'Lucas', avatar:'./assets/bots/lucas.webp', elo:500, actualElo:500, voice:'orion', personality:'dramatic', style:'aggressive', trashTalk:'medium', openings:'Only plays the fried liver', mistakes:"Doesn't know what to do after his opening checkmate is defended against", notes:"Doesn't really know what he's doing" },
+  jack: { name:'Jack', avatar:'./assets/bots/jack.webp', elo:850, actualElo:850, voice:'hyperion', personality:'calm', style:'tricky', trashTalk:'unhinged', openings:'Loves pushing pawns', mistakes:'Tends to be under-developed out of the opening', notes:'Just learned about en passant' },
+  havid: { name:'Havid', avatar:'./assets/bots/havid.webp', elo:2200, actualElo:2200, voice:'arcas', personality:'intense', style:'endgame', trashTalk:'none', openings:'Loves to play deep theory', mistakes:'Tries too hard to trade into an endgame', notes:'Bro thinks hes Magnus' },
+  christine: { name:'Christine', avatar:'./assets/bots/christine.webp', elo:1350, actualElo:1350, voice:'cordelia', personality:'sarcastic', style:'solid', trashTalk:'savage', openings:'Loves to play e4 lines', mistakes:'Knights are her worst nightmare', notes:'Overly sarcastic about mistakes' },
+  wichitus: { name:'Wichitus', avatar:'./assets/bots/wichitus.webp', elo:1, actualElo:2600, voice:'zeus', personality:'teacher', style:'endgame', trashTalk:'unhinged', openings:'Jack of all trades', mistakes:'None', notes:'A master in disguise', secretBoss:true },
+  miyaka: { name:'Miyaka', avatar:'./assets/bots/miyaka.webp', elo:700, actualElo:700, voice:'harmonia', personality:'stoic', style:'aggressive', trashTalk:'light', openings:"No clue what she's doing", mistakes:'Just moves and prays', notes:'Beginner to chess' },
+  rico: { name:'Rico', avatar:'./assets/bots/rico.webp', elo:2000, actualElo:2000, voice:'pluto', personality:'chaotic', style:'aggressive', trashTalk:'savage', openings:'Loves to play obscure openings', mistakes:'His opening tendencies often give him worse positions', notes:'Brags about his opening ball knowledge' },
+  jayquellen: { name:'Jayquellen', avatar:'./assets/bots/jayquellen.webp', elo:1500, actualElo:1500, voice:'luna', personality:'friendly', style:'tactical', trashTalk:'none', openings:'Enjoys the London', mistakes:"Doesn't know when to not play the London", notes:'Only plays the London' }
+};
+
+function botProfileForKey(key) {
+  return BOZO_BOTS[key] || null;
+}
+
+function botStrengthFromProfile(profile) {
+  const elo = Number(profile?.actualElo ?? profile?.elo ?? 1500);
+
+  // Deliberately shallow at the bottom. More depth does NOT make a 500 feel
+  // human even if we add randomness later; it just gives the randomizer a
+  // collection of excellent moves.
+  const depth =
+    elo >= 2500 ? 18 :
+    elo >= 2200 ? 14 :
+    elo >= 2000 ? 12 :
+    elo >= 1800 ? 10 :
+    elo >= 1500 ? 8 :
+    elo >= 1300 ? 7 :
+    elo >= 1100 ? 6 :
+    elo >= 850  ? 5 :
+    elo >= 650  ? 4 : 3;
+
+  return {
+    label: profile ? `${profile.name} · ${profile.elo} Elo` : 'BOZO Bot',
+    depth,
+    randomness: 0
+  };
+}
+
+function botProfileLabel(profile) {
+  if (!profile) return 'BOZO Bot';
+  return `${profile.name} · ${profile.elo} Elo`;
+}
+
+function botCandidateCount(profile) {
+  const elo=Number(profile?.actualElo ?? 1500);
+  if (profile?.secretBoss) return 2;
+  if (elo < 600)  return 28;
+  if (elo < 800)  return 24;
+  if (elo < 1000) return 20;
+  if (elo < 1200) return 16;
+  if (elo < 1400) return 14;
+  if (elo < 1600) return 12;
+  if (elo < 1800) return 10;
+  if (elo < 2000) return 8;
+  if (elo < 2200) return 6;
+  return 4;
+}
+
+function botScoreValue(line) {
+  if (Number.isFinite(line?.mate)) return line.mate > 0 ? 100000 - line.mate * 1000 : -100000 - line.mate * 1000;
+  return Number.isFinite(line?.cp) ? line.cp : -99999;
+}
+
+function botMoveFromUci(game, uci) {
+  if (!uci || uci.length < 4) return null;
+  return game.moves({verbose:true}).find(m => m.from===uci.slice(0,2) && m.to===uci.slice(2,4) && (!uci[4] || (m.promotion||'q')===uci[4])) || null;
+}
+
+function botStyleBonus(game, move, profile) {
+  if (!move || !profile) return 0;
+  const ply=game.history().length;
+  const style=profile.style;
+  let bonus=0;
+  const isCapture=Boolean(move.captured);
+  const isCheck=/[+#]/.test(move.san||'');
+  const isCastle=/O-O/.test(move.san||'');
+  const isPawn=move.piece==='p';
+  const center=['c4','c5','d4','d5','e4','e5','f4','f5'].includes(move.to);
+  const develops=(move.piece==='n'||move.piece==='b') && ply<18;
+
+  if (style==='aggressive') { if(isCapture) bonus+=36;if(isCheck) bonus+=42;if(center)bonus+=12; }
+  if (style==='tactical') { if(isCapture) bonus+=44;if(isCheck)bonus+=48;if(move.promotion)bonus+=60; }
+  if (style==='gambit-heavy') { if(isCapture)bonus+=30;if(isCheck)bonus+=38;if(isPawn&&center)bonus+=20;if(ply<14)bonus+=develops?8:4; }
+  if (style==='positional') { if(develops)bonus+=28;if(isCastle)bonus+=34;if(center)bonus+=18;if(isCheck&&ply<12)bonus-=8; }
+  if (style==='solid') { if(develops)bonus+=25;if(isCastle)bonus+=36;if(isCapture)bonus+=8;if(move.piece==='q'&&ply<12)bonus-=24; }
+  if (style==='tricky') { if(isCheck)bonus+=32;if(isCapture)bonus+=20;if(isPawn)bonus+=10; }
+  if (style==='endgame') { if(isCapture)bonus+=26;if(move.piece==='q'&&isCapture)bonus+=24;if(ply>35&&move.piece==='k')bonus+=18; }
+
+  // Character-specific opening fingerprints. These are biases, not forced lines.
+  if (ply < 8) {
+    if (profile.name==='Diana' && move.to==='d4') bonus+=70;
+    if (profile.name==='Christine' && move.to==='e4') bonus+=70;
+    if (profile.name==='Jayquellen' && (move.to==='d4'||move.to==='f4'||move.to==='f3')) bonus+=55;
+    if (profile.name==='Jack' && isPawn) bonus+=35;
+    if (profile.name==='Lucas' && (move.to==='e4'||move.to==='f3'||move.to==='c4')) bonus+=55;
+    if (profile.name==='Rico') bonus += Math.random()*24;
+  }
+  return bonus;
+}
+
+function botErrorProfile(elo) {
+  // Probabilities sum to 1.0. Loss bands are centipawns relative to the
+  // engine's best candidate from the current position.
+  if (elo < 600) return [
+    {p:.10,min:0,max:35}, {p:.18,min:36,max:90}, {p:.27,min:91,max:180},
+    {p:.27,min:181,max:350}, {p:.18,min:351,max:900}
+  ];
+  if (elo < 800) return [
+    {p:.16,min:0,max:30}, {p:.25,min:31,max:80}, {p:.27,min:81,max:160},
+    {p:.22,min:161,max:300}, {p:.10,min:301,max:700}
+  ];
+  if (elo < 1000) return [
+    {p:.24,min:0,max:28}, {p:.30,min:29,max:70}, {p:.25,min:71,max:140},
+    {p:.16,min:141,max:260}, {p:.05,min:261,max:550}
+  ];
+  if (elo < 1200) return [
+    {p:.34,min:0,max:25}, {p:.34,min:26,max:65}, {p:.20,min:66,max:125},
+    {p:.09,min:126,max:220}, {p:.03,min:221,max:450}
+  ];
+  if (elo < 1400) return [
+    {p:.46,min:0,max:22}, {p:.32,min:23,max:55}, {p:.15,min:56,max:105},
+    {p:.06,min:106,max:190}, {p:.01,min:191,max:350}
+  ];
+  if (elo < 1600) return [
+    {p:.58,min:0,max:20}, {p:.28,min:21,max:50}, {p:.10,min:51,max:95},
+    {p:.035,min:96,max:160}, {p:.005,min:161,max:300}
+  ];
+  if (elo < 1800) return [
+    {p:.68,min:0,max:18}, {p:.23,min:19,max:42}, {p:.07,min:43,max:80},
+    {p:.018,min:81,max:140}, {p:.002,min:141,max:250}
+  ];
+  if (elo < 2000) return [
+    {p:.76,min:0,max:16}, {p:.19,min:17,max:36}, {p:.04,min:37,max:70},
+    {p:.009,min:71,max:120}, {p:.001,min:121,max:220}
+  ];
+  if (elo < 2200) return [
+    {p:.84,min:0,max:14}, {p:.13,min:15,max:30}, {p:.025,min:31,max:55},
+    {p:.005,min:56,max:100}
+  ];
+  return [
+    {p:.91,min:0,max:12}, {p:.075,min:13,max:25}, {p:.014,min:26,max:45},
+    {p:.001,min:46,max:80}
+  ];
+}
+
+function botSampleErrorBand(elo) {
+  const profile=botErrorProfile(elo);
+  let r=Math.random();
+  for(const band of profile){r-=band.p;if(r<=0)return band;}
+  return profile[0];
+}
+
+function bozoBotAccuracyConfig(profile){
+  const elo=Number(profile?.actualElo ?? profile?.elo ?? 1500);
+  if(profile?.secretBoss)return{window:10,maxTop1:10,maxTop2:10,unrestricted:true};
+  if(elo<600)return{window:10,maxTop1:1,maxTop2:2};
+  if(elo<800)return{window:10,maxTop1:2,maxTop2:3};
+  if(elo<1000)return{window:10,maxTop1:2,maxTop2:4};
+  if(elo<1200)return{window:10,maxTop1:3,maxTop2:5};
+  if(elo<1400)return{window:10,maxTop1:3,maxTop2:6};
+  if(elo<1600)return{window:10,maxTop1:4,maxTop2:7};
+  if(elo<1800)return{window:10,maxTop1:4,maxTop2:7};
+  if(elo<2000)return{window:10,maxTop1:5,maxTop2:8};
+  if(elo<2200)return{window:10,maxTop1:6,maxTop2:9};
+  return{window:10,maxTop1:7,maxTop2:9};
+}
+
+function bozoNewAccuracyState(){return{decisions:[]};}
+
+function bozoAccuracyBudgetAllows(rank,profile,state,meaningful=true){
+  const cfg=bozoBotAccuracyConfig(profile);
+  if(cfg.unrestricted||!meaningful||rank>2)return true;
+  const recent=(state?.decisions||[]).slice(-(cfg.window-1));
+  const top1=recent.filter(r=>r===1).length;
+  const top2=recent.filter(r=>r<=2).length;
+  if(rank===1&&top1>=cfg.maxTop1)return false;
+  if(rank<=2&&top2>=cfg.maxTop2)return false;
+  return true;
+}
+
+function bozoRecordAccuracyDecision(state,rank,profile){
+  if(!state)return;
+  const cfg=bozoBotAccuracyConfig(profile);
+  state.decisions.push(Number(rank)||99);
+  if(state.decisions.length>cfg.window)state.decisions.splice(0,state.decisions.length-cfg.window);
+}
+
+function chooseProfiledBotMove(game, lines, profile, accuracyState=null) {
+  const candidates=(lines||[]).filter(l=>l?.pv?.[0]);
+  if (!candidates.length) return null;
+  if (profile?.secretBoss) {
+    bozoRecordAccuracyDecision(accuracyState,1,profile);
+    if(accuracyState)accuracyState.lastChoice={uci:candidates[0].pv[0],rank:1,rawLoss:0,effectiveLoss:0};
+    return candidates[0].pv[0];
+  }
+
+  const elo=Number(profile?.actualElo ?? profile?.elo ?? 1500);
+  const best=botScoreValue(candidates[0]);
+  const enriched=[];
+
+  for (const line of candidates) {
+    const move=botMoveFromUci(game,line.pv[0]);
+    if(!move)continue;
+    const rawLoss=Math.max(0,best-botScoreValue(line));
+    const styleBias=Math.max(-45,Math.min(70,botStyleBonus(game,move,profile)));
+    const effectiveLoss=Math.max(0,rawLoss-styleBias*.45);
+    enriched.push({uci:line.pv[0],move,rawLoss,effectiveLoss,rank:line.rank||99});
+  }
+  if(!enriched.length)return candidates[0].pv[0];
+
+  // A rating governor is applied only when the position offers meaningful choice.
+  // Forced moves, very narrow legal positions, and a clearly dominant only move do
+  // not consume the bot's top-move budget.
+  const legalCount=game.moves().length;
+  const second=enriched.find(x=>x.rank===2);
+  const meaningful=legalCount>2 && enriched.length>2 && (!second || second.rawLoss<120);
+  let budgeted=enriched.filter(x=>bozoAccuracyBudgetAllows(x.rank,profile,accuracyState,meaningful));
+  if(!budgeted.length)budgeted=enriched;
+
+  const band=botSampleErrorBand(elo);
+  let pool=budgeted.filter(x=>x.effectiveLoss>=band.min && x.effectiveLoss<=band.max);
+  if(!pool.length){
+    const target=(band.min+band.max)/2;
+    pool=[...budgeted]
+      .sort((a,b)=>Math.abs(a.effectiveLoss-target)-Math.abs(b.effectiveLoss-target))
+      .slice(0,Math.min(3,budgeted.length));
+  }
+
+  const weights=pool.map(item=>{
+    const style=Math.max(-40,Math.min(60,botStyleBonus(game,item.move,profile)));
+    const rankPenalty=Math.max(0,item.rank-1)*2.5;
+    return {...item,weight:Math.max(.01,1 + style/70 - rankPenalty/100 + Math.random()*.18)};
+  });
+  const total=weights.reduce((sum,x)=>sum+x.weight,0);
+  let r=Math.random()*total;
+  let chosen=weights[0];
+  for(const item of weights){r-=item.weight;if(r<=0){chosen=item;break;}}
+  bozoRecordAccuracyDecision(accuracyState,chosen.rank,profile);
+  if(accuracyState){
+    accuracyState.lastChoice={uci:chosen.uci,rank:chosen.rank,rawLoss:chosen.rawLoss,effectiveLoss:chosen.effectiveLoss};
+  }
+  return chosen.uci;
+}
+
+
+
+/* ============================================================
+   BOZO BOT DIALOGUE + AURA-2 TTS v1
+   Shared frontend: website + Capacitor Android.
+   ============================================================ */
+const BOZO_BOT_TTS_ENDPOINT = BOZO_AURA_TTS_ENDPOINT;
+let bozoBotSpeechAudio = null;
+let bozoBotSpeechUrl = null;
+let bozoBotSpeechToken = 0;
+let bozoBotAudioContext = null;
+let bozoBotAudioSource = null;
+let bozoBotAudioUnlocked = false;
+let bozoBotPrimedHtmlAudio = null;
+let bozoBotSpeechChain = Promise.resolve();
+
+function ensureBozoBotAudioContext(){
+  if(!bozoBotAudioContext){
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(AudioCtx)bozoBotAudioContext=new AudioCtx();
+  }
+  return bozoBotAudioContext;
+}
+
+function ensureBozoBotHtmlAudio(){
+  if(!bozoBotPrimedHtmlAudio){
+    const audio=new Audio();
+    audio.preload='auto';
+    audio.setAttribute('playsinline','');
+    audio.setAttribute('webkit-playsinline','');
+    bozoBotPrimedHtmlAudio=audio;
+  }
+  return bozoBotPrimedHtmlAudio;
+}
+
+async function unlockBozoBotAudio(){
+  const ctx=ensureBozoBotAudioContext();
+  let webAudioReady=false;
+  try{
+    if(ctx){
+      if(ctx.state==='suspended')await ctx.resume();
+      // Android WebView can report "running" after resume() while still refusing
+      // later script-started audio. Actually starting a silent buffer during the
+      // user's gesture reliably unlocks the context for Bot-vs-Bot autoplay.
+      if(ctx.state==='running'){
+        try{
+          const buffer=ctx.createBuffer(1,1,22050);
+          const source=ctx.createBufferSource();
+          source.buffer=buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+        }catch(_){}
+        webAudioReady=true;
+      }
+    }
+  }catch(error){
+    console.warn('BOZO bot WebAudio unlock failed:',error);
+  }
+
+  // Prime one persistent HTMLAudio element from the same user gesture. If a
+  // device cannot decode Aura through WebAudio, we reuse this already-authorized
+  // element instead of constructing a brand-new autoplay-blocked <audio>.
+  try{
+    const audio=ensureBozoBotHtmlAudio();
+    if(!audio.dataset.bozoPrimed){
+      const silentWav='data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQQAAAAAAA==';
+      audio.src=silentWav;
+      audio.volume=0;
+      await audio.play();
+      audio.pause();
+      audio.currentTime=0;
+      audio.volume=1;
+      audio.removeAttribute('src');
+      audio.load();
+      audio.dataset.bozoPrimed='1';
+    }
+  }catch(error){
+    console.warn('BOZO bot HTMLAudio prime failed:',error);
+  }
+
+  bozoBotAudioUnlocked=webAudioReady || bozoBotPrimedHtmlAudio?.dataset.bozoPrimed==='1';
+  return bozoBotAudioUnlocked;
+}
+
+['pointerdown','touchstart','mousedown','keydown'].forEach(type=>{
+  document.addEventListener(type,()=>{unlockBozoBotAudio();},{capture:true,passive:true});
+});
+
+function stopBozoBotSpeech() {
+  bozoBotSpeechToken++;
+  bozoBotSpeechChain=Promise.resolve();
+  if (bozoBotAudioSource) {
+    try { bozoBotAudioSource.stop(); } catch (_) {}
+    try { bozoBotAudioSource.disconnect(); } catch (_) {}
+    bozoBotAudioSource = null;
+  }
+  if (bozoBotSpeechAudio) {
+    try { bozoBotSpeechAudio.pause(); } catch (_) {}
+    bozoBotSpeechAudio = null;
+  }
+  if (bozoBotSpeechUrl) {
+    try { URL.revokeObjectURL(bozoBotSpeechUrl); } catch (_) {}
+    bozoBotSpeechUrl = null;
+  }
+}
+
+
+let bozoLastBotDialogue={profile:null,text:''};
+
+function setBozoExhibitionPresentation(session,enabled){
+  $('bot-game-modal')?.classList.toggle('is-exhibition',Boolean(enabled));
+  const dual=$('bot-exhibition-dialogue');
+  const versus=dual?.querySelector('.bot-exhibition-vs');
+  if(versus)versus.hidden=true;
+  const single=$('bot-character-panel');
+  if(dual)dual.hidden=!enabled;
+  if(single)single.hidden=Boolean(enabled);
+  const wa=$('bot-white-fighter-avatar'),ba=$('bot-black-fighter-avatar');
+  if(wa)wa.hidden=!enabled;
+  if(ba)ba.hidden=!enabled;
+  if(!enabled)return;
+  const white=session?.whiteBot,black=session?.blackBot;
+  if(white){
+    if(wa){wa.src=white.avatar;wa.alt=`${white.name} avatar`;}
+    if($('bot-exhibition-white-avatar'))$('bot-exhibition-white-avatar').src=white.avatar;
+    if($('bot-exhibition-white-name'))$('bot-exhibition-white-name').textContent=white.name;
+    if($('bot-exhibition-white-meta'))$('bot-exhibition-white-meta').textContent=`${white.elo} Elo · White`;
+    if($('bot-exhibition-white-text'))$('bot-exhibition-white-text').textContent='Ready.';
+  }
+  if(black){
+    if(ba){ba.src=black.avatar;ba.alt=`${black.name} avatar`;}
+    if($('bot-exhibition-black-avatar'))$('bot-exhibition-black-avatar').src=black.avatar;
+    if($('bot-exhibition-black-name'))$('bot-exhibition-black-name').textContent=black.name;
+    if($('bot-exhibition-black-meta'))$('bot-exhibition-black-meta').textContent=`${black.elo} Elo · Black`;
+    if($('bot-exhibition-black-text'))$('bot-exhibition-black-text').textContent='Ready.';
+  }
+}
+
+function showBozoExhibitionDialogue(profile,text){
+  const session=webBotSession;
+  if(!session?.exhibition||!profile||!text)return false;
+  const isWhite=profile===session.whiteBot || profile?.name===session.whiteBot?.name;
+  const prefix=isWhite?'white':'black';
+  const box=$(`bot-exhibition-${prefix}-text`);
+  if(box)box.textContent=text;
+  $('bot-exhibition-white-card')?.classList.toggle('is-speaking',isWhite);
+  $('bot-exhibition-black-card')?.classList.toggle('is-speaking',!isWhite);
+  bozoLastBotDialogue={profile,text};
+  return true;
+}
+
+function paintBozoBotCharacter(profile,text='',thinking=false){
+  if(!profile)return;
+  const avatar=$('bot-character-avatar');
+  const name=$('bot-character-name');
+  const meta=$('bot-character-meta');
+  const box=$('bot-dialogue-text');
+  if(avatar){
+    avatar.src=profile.avatar||'./assets/bozo-supporter.png';
+    avatar.alt=`${profile.name} avatar`;
+  }
+  if(name)name.textContent=profile.name||'BOZO Bot';
+  if(meta)meta.textContent=`${profile.elo} Elo · ${profile.style} · ${profile.personality}`;
+  if(box){
+    box.textContent=text||`${profile.name} is ready.`;
+    box.classList.toggle('bot-dialogue-thinking',Boolean(thinking));
+  }
+}
+
+function showBozoBotDialogue(profile,text){
+  if(!profile||!text)return;
+  if(showBozoExhibitionDialogue(profile,text))return;
+  bozoLastBotDialogue={profile,text};
+  paintBozoBotCharacter(profile,text,false);
+}
+
+
+const bozoBotDialogueHistory=new Map();
+
+function bozoBotPickFreshLine(profile,event,pool){
+  const choices=(pool||[]).filter(Boolean);
+  if(!choices.length)return'';
+  const key=`${profile?.name||'bot'}|${event||'move'}`;
+  const recent=bozoBotDialogueHistory.get(key)||[];
+  let available=choices.filter(line=>!recent.includes(line));
+  if(!available.length)available=choices;
+  const line=available[Math.floor(Math.random()*available.length)]||choices[0]||'';
+  const keep=Math.max(1,Math.min(4,choices.length-1));
+  bozoBotDialogueHistory.set(key,[...recent,line].slice(-keep));
+  return line;
+}
+
+function bozoBotSpeechText(text){
+  // Keep SAN in the visible dialogue box, but send natural chess language to Aura.
+  // We also tame punctuation because Aura-2 is context-aware and punctuation can
+  // noticeably change pitch, pace, and emotional delivery between generations.
+  let spoken=reviewChessTextForSpeech(String(text||''));
+  spoken=spoken
+    // Speech-only aliases keep visible bot names unchanged while making Aura
+    // pronounce unusual names consistently.
+    .replace(/\bWichitus\b/gi,'Witch-it-us')
+    .replace(/\b([a-h])[- ]file\b/gi,(m,file)=>`${file} file`)
+    .replace(/!+/g,'.')               // visible UI may be excited; spoken delivery stays steadier
+    .replace(/\s+([.,?;:])/g,'$1')
+    .replace(/\.{2,}/g,'.')
+    .replace(/\s+/g,' ')
+    .trim();
+
+  // A newline is still one Aura request, but gives sentence boundaries a little
+  // more breathing room without synthesizing each sentence with a different take.
+  spoken=spoken.replace(/([.?])\s+(?=[A-Z])/g,'$1\n');
+  return spoken;
+}
+
+function bozoSpeechSleep(ms){
+  return new Promise(resolve=>setTimeout(resolve,Math.max(0,Number(ms)||0)));
+}
+
+function splitBozoSpeechChunks(text,maxChars=520){
+  const clean=String(text||'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+  if(!clean)return[];
+  const sentences=clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g)||[clean];
+  const chunks=[];
+  let current='';
+  for(const sentenceRaw of sentences){
+    const sentence=sentenceRaw.trim();
+    if(!sentence)continue;
+    if(!current){current=sentence;continue;}
+    if((current+' '+sentence).length<=maxChars){current+=' '+sentence;continue;}
+    chunks.push(current);
+    current=sentence;
+  }
+  if(current)chunks.push(current);
+  return chunks;
+}
+
+// BOZO v4.15.37: chess-only conversational boundary.
+// This client guard is shared by web + Android. Any future cloud conversation
+// endpoint MUST enforce the same rule server-side before invoking a model.
+const BOZO_CHESS_ONLY_REDIRECTS = [
+  'I only talk chess. Play a move or ask me about the position.',
+  'Wrong board. I only help with chess.',
+  'Keep it on the sixty-four squares. Ask me something about chess.',
+  'I am here for chess. Want to analyze the position?'
+];
+
+function bozoChessOnlyGuard(input){
+  const text=String(input||'').trim();
+  if(!text)return{allowed:false,reason:'empty',reply:BOZO_CHESS_ONLY_REDIRECTS[0]};
+  const chess=/\b(chess|move|moves|position|board|square|file|rank|pawn|knight|bishop|rook|queen|king|castle|castling|check|checkmate|mate|stalemate|draw|resign|opening|gambit|variation|line|theory|tactic|tactical|strategy|strategic|endgame|middlegame|blunder|mistake|brilliant|fork|pin|skewer|sacrifice|sac|tempo|initiative|development|develop|center|centre|material|evaluation|eval|stockfish|engine|elo|rating|rated|tournament|rapid|blitz|bullet|classical|pgn|fen|san|uci|promotion|promote|en passant|repetition|zugzwang|opposition|passed pawn|isolated pawn|hanging|capture|take|defend|attack|threat|legal|illegal|best move|candidate move|white|black|[a-h][1-8]|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?)\b/i;
+  if(chess.test(text))return{allowed:true,reason:'chess',reply:''};
+  return{allowed:false,reason:'off-topic',reply:BOZO_CHESS_ONLY_REDIRECTS[Math.floor(Math.random()*BOZO_CHESS_ONLY_REDIRECTS.length)]};
+}
+
+// Personality may change tone, never domain/safety. Innuendo as a roast is OK;
+// flirting/sexting, real-world threats/harm, self-harm encouragement, slurs, and
+// unrelated assistance are outside BOZO's conversational contract.
+const bozoBotProfanityState=new Map();
+
+function bozoBotProfanityLine(profile,event){
+  const level=String(profile?.trashTalk||'none').toLowerCase();
+  if(level!=='savage'&&level!=='unhinged')return'';
+  const key=profile?.name||'bot';
+  let cooldown=Number(bozoBotProfanityState.get(key)||0);
+  if(cooldown>0){bozoBotProfanityState.set(key,cooldown-1);return'';}
+  const chance=level==='unhinged'?.42:.22;
+  if(Math.random()>chance)return'';
+  const banks={
+    hanging_piece_won:[`You just hung a fucking piece.`,`Holy shit, you really left that there?`,`That piece was free as hell.`],
+    queen_won:[`You just hung your fucking queen.`,`Holy shit. Nine points, just gone.`,`Your queen is fucking gone.`],
+    rook_won:[`You just hung a whole damn rook.`,`That rook was free as hell.`,`Holy shit, a whole rook.`],
+    favorable_trade:[`That trade was shit for you.`,`You really chose that fucking trade?`,`Thanks. That trade helps me a lot.`],
+    equal_trade:[`Fine. We can trade the damn pieces.`,`Sure. Trade it off.`,`Alright, clean fucking trade.`],
+    check:[`Check. Deal with that shit.`,`Your king has a fucking problem now.`,`Check. Figure it out.`],
+    blunder:[`What the hell was that move?`,`That was a shit move and you know it.`,`Holy shit, that was rough.`],
+    move:[`Your move. Don't fuck it up.`,`Alright. Show me what the hell you've got.`,`I played my move. Deal with it.`]
+  };
+  const pool=banks[event]||[];
+  if(!pool.length)return'';
+  bozoBotProfanityState.set(key,2);
+  return bozoBotPickFreshLine(profile,`profanity-${event}`,pool);
+}
+
+function bozoBotEventDialogue(profile,event,move=null,context=null){
+  if(!profile)return'';
+  const level=String(profile.trashTalk||'none').toLowerCase();
+  const profanity=bozoBotProfanityLine(profile,event);
+  if(profanity)return profanity;
+  const banks={
+    queen_won:{
+      none:[`That wins the queen.`,`Queen captured. That's a major material swing.`],
+      light:[`Ouch. That's your queen.`,`I think you'll miss that queen.`],
+      medium:[`Thanks for the queen.`,`I'll be taking that queen.`],
+      savage:[`Nine points donated. Very charitable.`,`That queen deserved a better bodyguard.`],
+      unhinged:[`That queen lasted longer than you can in bed.`,`Your queen just filed for a transfer after seeing your position.`,`You gave me nine points like they were pocket change.`]
+    },
+    queen_trade:{
+      none:[`Queens come off.`,`That's a queen trade.`],
+      light:[`Queens are off. This gets simpler now.`,`Clean queen trade.`],
+      medium:[`Fine. No queens. Let's see who can actually play the ending.`,`Queens off. Now the excuses get smaller.`],
+      savage:[`Queens are gone. Time to find out who was hiding behind theirs.`,`There goes the chaos. Try playing the position now.`],
+      unhinged:[`Queens off. No more bullshit, just chess.`,`There goes your emotional support queen.`]
+    },
+    rook_won:{
+      none:[`That wins a rook.`,`I pick up a full rook.`],
+      light:[`Ouch. There goes the rook.`,`That rook was expensive.`],
+      medium:[`Thanks for the rook.`,`Five points. Mine now.`],
+      savage:[`A whole rook? You shouldn't have.`,`Your back rank just lost an employee.`],
+      unhinged:[`You left a whole rook for me. That's insane.`,`Five points vanished faster than your confidence.`]
+    },
+    hanging_piece_won:{
+      none:[`That piece was left loose. I take it.`,`I win a piece there.`],
+      light:[`That piece was loose.`,`I'll take the free piece.`],
+      medium:[`You left that piece hanging.`,`Free piece? Thanks.`],
+      savage:[`That piece was defended by hopes and prayers.`,`You made that capture way too easy.`],
+      unhinged:[`You left that piece hanging like I wasn't going to notice.`,`I've seen unattended shopping carts with better protection.`]
+    },
+    equal_trade:{
+      none:[`Pieces come off.`,`That's an even trade.`],
+      light:[`Fair trade. We keep going.`,`Alright, pieces come off.`],
+      medium:[`Fine. I'll make that trade.`,`Equal trade. Your move.`],
+      savage:[`We traded. Nobody gets to brag about that one.`,`Even trade. Try not to celebrate.`],
+      unhinged:[`That's a trade, not a miracle. Keep playing.`,`We swapped pieces. Calm the hell down.`]
+    },
+    favorable_trade:{
+      none:[`That trade favors me.`,`I come out ahead in that exchange.`],
+      light:[`I think that trade helps me.`,`That exchange worked out nicely for me.`],
+      medium:[`I'll take that trade every time.`,`You traded into my favor.`],
+      savage:[`That trade did more for me than it did for you.`,`You simplified directly into my advantage.`],
+      unhinged:[`You really volunteered for the worse side of that trade.`,`That exchange was a terrible fucking business deal.`]
+    },
+    unfavorable_trade:{
+      none:[`That trade cost me material.`,`I gave up more than I got there.`],
+      light:[`That exchange wasn't ideal for me.`,`You got the better end of that trade.`],
+      medium:[`Fine, you won that trade.`,`That exchange went your way.`],
+      savage:[`Enjoy it. I got the ugly side of that trade.`,`Yeah, that trade sucked for me.`],
+      unhinged:[`That trade was shit for me. Don't get used to it.`,`Fine. You robbed me on that exchange.`]
+    },
+    castle_opponent_uncastled:{
+      none:[`Castled. King safety first.`,`My king is tucked away.`],
+      light:[`King's a little safer now.`,`Time to tuck the king away.`],
+      medium:[`King secured. Now back to your problems.`,`I actually remembered king safety.`],
+      savage:[`My king is safe. Yours still has paperwork to finish.`,`I castled. Your king is still considering its options.`],
+      unhinged:[`My king found shelter. Yours is still raw-dogging the center.`,`My king has a home. Yours is still apartment hunting.`]
+    },
+    castle_both_safe:{
+      none:[`Castled. Both kings are tucked away now.`,`We're both castled. Game on.`],
+      light:[`There we go. Both kings have homes now.`,`Both kings are tucked away.`],
+      medium:[`Both kings are safe. Now we can get back to causing problems.`,`Alright, both kings have roofs over their heads.`],
+      savage:[`Look at us, pretending both kings are safe.`,`Both kings are housed. Time to attack the furniture.`],
+      unhinged:[`Look at us, two responsible adults who actually castled. Disgusting.`,`Both kings have homes. Now let's see whose gets fucking demolished first.`]
+    },
+    promotion:{
+      none:[`Promotion. New piece on the board.`],
+      light:[`That pawn earned a promotion.`],
+      medium:[`From pawn to problem.`],
+      savage:[`My pawn got promoted before some of your pieces got useful.`],
+      unhinged:[`My pawn got promoted while your position got demoted.`]
+    },
+    en_passant:{
+      none:[`En passant.`], light:[`En passant. Had to do it.`], medium:[`Google en passant.`],
+      savage:[`Google en passant before you call the arbiter.`],
+      unhinged:[`Google en passant. I'll wait.`]
+    },
+    escaped_check:{
+      none:[`Check answered. We continue.`], light:[`Got out of that one.`], medium:[`Nice check. Anyway.`],
+      savage:[`You checked me just to watch me walk away.`],
+      unhinged:[`You gave check like it was a personality trait.`]
+    }
+  };
+  const eventBank=banks[event];
+  if(!eventBank)return'';
+  const pool=eventBank[level]||eventBank.none||[];
+  return bozoBotPickFreshLine(profile,event,pool);
+}
+
+function bozoRegisterCastling(session,move){
+  if(!session||!move)return;
+  session.castled=session.castled||{w:false,b:false};
+  if(move.flags?.includes('k')||move.flags?.includes('q'))session.castled[move.color]=true;
+}
+
+function bozoCaptureEvent(beforeFen,gameAfter,move,session){
+  if(!move?.captured)return null;
+  const capturedValue=botMaterialValue(move.captured);
+  const moverValue=botMaterialValue(move.piece);
+  const replies=gameAfter.moves({verbose:true});
+  const recapture=replies.some(reply=>reply.to===move.to && Boolean(reply.captured));
+  if(recapture){
+    // A one-ply material count cannot tell whether an exchange is actually good.
+    // Tactical recaptures, zwischenzugs and clearance ideas can reverse the verdict
+    // immediately, so Exhibition never calls these favorable/unfavorable on sight.
+    if(move.captured==='q'&&move.piece==='q')return'queen_trade';
+    return'equal_trade';
+  }
+
+  // A capture is not automatically a hanging piece. Only use the hanging/loose
+  // dialogue when the captured minor piece was actually undefended before the move.
+  // Otherwise keep the wording neutral instead of inventing a chess claim.
+  let wasLoose=false;
+  try{
+    const capturedColor=move.color==='w'?'b':'w';
+    wasLoose=reviewLoosePieces(beforeFen,capturedColor).some(item=>item.square===move.to);
+  }catch(_){ wasLoose=false; }
+
+  if(move.captured==='q')return'queen_won';
+  if(move.captured==='r')return'rook_won';
+  if(['n','b'].includes(move.captured)&&wasLoose)return'hanging_piece_won';
+  return'clean_capture';
+}
+
+function bozoBotMoveEvent(move,session=null,beforeFen='',gameAfter=null){
+  if(!move)return'move';
+  if(move.promotion)return'promotion';
+  if(move.flags?.includes('e'))return'en_passant';
+  if(move.captured&&gameAfter){
+    const captureEvent=bozoCaptureEvent(beforeFen,gameAfter,move,session);
+    if(captureEvent)return captureEvent;
+  }
+  if(move.flags?.includes('k')||move.flags?.includes('q')){
+    const other=move.color==='w'?'b':'w';
+    return session?.castled?.[other]?'castle_both_safe':'castle_opponent_uncastled';
+  }
+  if(move.san?.includes('+')||move.san?.includes('#'))return'check';
+  if(session?.playerLastEvent==='check')return'escaped_check';
+  return'move';
+}
+
+// Exported for the future conversational coach/backend adapter.
+window.bozoChessOnlyGuard=bozoChessOnlyGuard;
+
+function bozoExhibitionOpponent(profile,session=webBotSession){
+  if(!session?.exhibition||!profile)return null;
+  return profile===session.whiteBot?session.blackBot:session.whiteBot;
+}
+
+// Opponent names are punctuation, not filler. Exhibition bots use names at the
+// start/end of a game and for genuinely notable moments. Routine moves, trades,
+// captures, and ordinary checks stay conversational without repeating names.
+function bozoExhibitionNameMoment(profile,event,session=webBotSession){
+  if(!session?.exhibition||!profile)return false;
+  if(['start','win','lose','draw','resign','checkmate','blunder','brilliant','great','queen_won','hanging_piece_won','promotion'].includes(event))return true;
+  if(event==='check'){
+    const key=profile?.name||'';
+    return Number(session.exhibitionCheckStreakByBot?.[key]||0)>=2;
+  }
+  return false;
+}
+
+function bozoStripExhibitionOpponentName(line,name){
+  if(!line||!name)return line||'';
+  const escaped=String(name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  let out=String(line)
+    .replace(new RegExp(`,\\s*${escaped}(?=[,.!?;:]|$)`,'gi'),'')
+    .replace(new RegExp(`\\b${escaped}\\b[,:;]?\\s*`,'gi'),'')
+    .replace(/\s+([,.!?;:])/g,'$1')
+    .replace(/,{2,}/g,',')
+    .replace(/^\s*[,.;:!?]+\s*/,'')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+  if(!out)return'Your move.';
+  return out.charAt(0).toUpperCase()+out.slice(1);
+}
+
+function bozoTrackExhibitionMoment(session,profile,event){
+  if(!session?.exhibition||!profile)return;
+  const key=profile.name||'';
+  session.exhibitionCheckStreakByBot=session.exhibitionCheckStreakByBot||{};
+  if(event==='check')session.exhibitionCheckStreakByBot[key]=Number(session.exhibitionCheckStreakByBot[key]||0)+1;
+  else session.exhibitionCheckStreakByBot[key]=0;
+}
+
+function bozoExhibitionDialogueLine(profile,event,move=null,session=webBotSession){
+  if(!session?.exhibition||!profile)return'';
+  const opponent=bozoExhibitionOpponent(profile,session);
+  const them=opponent?.name||'you';
+  const san=move?.san||'';
+  const p=profile.personality||'friendly';
+  const level=String(profile.trashTalk||'none').toLowerCase();
+
+  if(event==='blunder'){
+    const lines={
+      friendly:[`That looked better before I played it.`,`Okay... that may have been a mistake.`,`I don't love what I just allowed.`],
+      teacher:[`That was inaccurate. I missed the consequence.`,`I miscalculated that one.`,`That move gave away too much.`],
+      cocky:[`...Yeah, pretend you didn't see that.`,`That was not part of the plan.`,`Okay. That one was ugly.`],
+      sarcastic:[`Fantastic. I just made my own life harder.`,`Well, that was a terrible idea.`,`I appear to have outplayed myself.`],
+      intense:[`Bad calculation.`,`I missed the tactic.`,`That was a serious mistake.`],
+      calm:[`That was a mistake.`,`I missed something there.`,`Not my best move.`],
+      dramatic:[`Disaster. I missed the consequence.`,`That move may haunt me.`,`A serious miscalculation.`],
+      stoic:[`Mistake.`,`I missed it.`,`Bad move.`],
+      chaotic:[`Well, I found the bad kind of chaos.`,`Oops. That got ugly fast.`,`I may have cooked myself there.`]
+    };
+    const pool=lines[p]||lines.friendly;
+    let line=bozoBotPickFreshLine(profile,'exhibition-blunder',pool);
+    if(bozoExhibitionNameMoment(profile,event,session)&&Math.random()<.35)line=`${them}, ${line.charAt(0).toLowerCase()+line.slice(1)}`;
+    return line;
+  }
+
+  const eventLines={
+    start:{
+      friendly:[`Good luck, ${them}. Let's have a good game.`,`Alright, ${them}. Let's see what you've got.`,`Ready when you are, ${them}.`],
+      teacher:[`${them}, forget the rating. Watch the board.`,`Alright, ${them}. Show me what you understand.`,`Class is in session, ${them}. Try to keep up.`],
+      cocky:[`${them}, I hope you brought your best chess.`,`Alright, ${them}. Let's see how long that confidence lasts.`],
+      sarcastic:[`Oh good, ${them}. This should be entertaining.`,`Good luck, ${them}. You're probably going to need it.`],
+      intense:[`${them}, focus. Every move matters.`,`Let's get to work, ${them}.`],
+      calm:[`Good luck, ${them}. Let's play.`,`Alright, ${them}. Clean game.`],
+      dramatic:[`${them}, the board is set. Let the battle begin.`,`At last, ${them}. We begin.`],
+      stoic:[`${them}. Your move.`,`We begin, ${them}.`],
+      chaotic:[`${them}, normal chess is cancelled.`,`Let's make this weird, ${them}.`]
+    },
+    move:{
+      friendly:[`${them}, your turn.`,`I'm curious how you answer that, ${them}.`,`Over to you, ${them}.`,`Let's see your reply, ${them}.`],
+      teacher:[`Your move, ${them}. Show me the idea.`,`${them}, I'm waiting for the point.`,`Alright, ${them}. What's your answer?`],
+      cocky:[`${them}, your problem now.`,`Keep up, ${them}.`,`Your move, ${them}. Impress me.`],
+      sarcastic:[`${them}, surely you have a plan for that.`,`Your move, ${them}. Try something respectable.`],
+      intense:[`${them}, calculate carefully.`,`Your response matters, ${them}.`],
+      calm:[`Your move, ${them}.`,`Over to you, ${them}.`],
+      dramatic:[`${them}, the position is yours to answer.`,`Your move, ${them}. The plot thickens.`],
+      stoic:[`${them}.`,`Your move, ${them}.`],
+      chaotic:[`${them}, make it stranger.`,`Your move, ${them}. Add some chaos.`]
+    },
+    clean_capture:{
+      friendly:[`That comes off, ${them}.`,`I take that, ${them}. Your move.`],
+      teacher:[`I take that, ${them}. Keep calculating.`,`That piece comes off, ${them}.`],
+      cocky:[`I'll take that, ${them}.`,`That one's mine, ${them}.`],
+      sarcastic:[`I'll take it, ${them}. No speech required.`,`That comes off, ${them}. Keep going.`],
+      intense:[`Captured, ${them}. Your move.`],
+      calm:[`That comes off, ${them}.`],
+      dramatic:[`One piece leaves the board, ${them}.`],
+      stoic:[`Captured, ${them}.`],
+      chaotic:[`Piece gone, ${them}. Keep it weird.`]
+    },
+    check:{
+      friendly:[`Check, ${them}.`,`That's check, ${them}.`],
+      teacher:[`Check, ${them}. Forced moves first.`,`Your king is in check, ${them}. Solve that before anything else.`],
+      cocky:[`Check, ${them}. Deal with it.`,`Your king has a problem, ${them}.`],
+      sarcastic:[`Check, ${them}. Tiny detail.`,`Apparently your king wanted attention, ${them}.`],
+      intense:[`Check, ${them}. Calculate.`,`Check. Precision now, ${them}.`],
+      calm:[`Check, ${them}.`,`Your king is checked, ${them}.`],
+      dramatic:[`Check, ${them}! The king enters the story.`,`Check! Answer me, ${them}.`],
+      stoic:[`Check, ${them}.`],
+      chaotic:[`Check, ${them}! More chaos.`,`Your king joined the circus, ${them}.`]
+    },
+    queen_won:{
+      friendly:[`Ouch, ${them}. That's the queen.`,`I think you'll miss that queen, ${them}.`],
+      teacher:[`${them}, that's a full queen. Find where it became loose.`,`Nine points, ${them}. That position needs a postmortem.`],
+      cocky:[`Thanks for the queen, ${them}.`,`Nine points, ${them}. Very generous.`],
+      sarcastic:[`${them}, your queen deserved a better security detail.`,`That queen is mine now, ${them}.`]
+    },
+    hanging_piece_won:{
+      friendly:[`${them}, that piece was loose.`,`I think you left that piece hanging, ${them}.`],
+      teacher:[`${them}, that piece was hanging. Check its defenders next time.`,`Loose piece, ${them}. Count attackers and defenders.`],
+      cocky:[`Free piece, ${them}. Thanks.`,`You left that hanging for me, ${them}.`],
+      sarcastic:[`${them}, that piece was defended by optimism.`,`I've seen better protection, ${them}.`]
+    },
+    equal_trade:{
+      friendly:[`Fair trade, ${them}. We keep going.`,`Alright, ${them}. Pieces come off.`],
+      teacher:[`Even trade, ${them}. Now reassess what's left.`,`Pieces come off, ${them}. The position changed, not the score.`],
+      cocky:[`Fine, ${them}. Equal trade.`,`We traded, ${them}. Nobody gets a trophy.`],
+      sarcastic:[`${them}, that's a trade, not a miracle.`,`Even trade, ${them}. Try not to celebrate.`]
+    },
+    favorable_trade:{
+      friendly:[`I think that trade helps me, ${them}.`,`That exchange worked out nicely for me, ${them}.`],
+      teacher:[`${them}, that trade favors me. Compare what each side gave up.`,`I come out ahead there, ${them}.`],
+      cocky:[`I'll take that trade every time, ${them}.`,`You traded into my favor, ${them}.`],
+      sarcastic:[`${them}, that was a terrible business deal.`,`Thanks for the favorable trade, ${them}.`]
+    },
+    unfavorable_trade:{
+      friendly:[`You got the better end of that one, ${them}.`,`That trade went your way, ${them}.`],
+      teacher:[`Good trade, ${them}. You came out ahead.`,`That exchange favored you, ${them}.`],
+      cocky:[`Fine, ${them}. You won that trade.`,`Enjoy that one, ${them}.`],
+      sarcastic:[`Alright, ${them}. You robbed me on that exchange.`,`That trade sucked for me, ${them}.`]
+    },
+    castle_both_safe:{
+      friendly:[`Both kings are tucked away now, ${them}.`,`Look at us, ${them}. Both kings actually found homes.`],
+      teacher:[`We're both castled, ${them}. Now king safety is relative.`,`Both kings are housed, ${them}. Time to look for new targets.`],
+      cocky:[`Both kings are safe, ${them}. For now.`,`We're both castled, ${them}. Let's see whose shelter lasts.`],
+      sarcastic:[`Look at us, ${them}, pretending both kings are safe.`,`Both kings have homes, ${them}. Cute.`]
+    },
+    castle_opponent_uncastled:{
+      friendly:[`I'm castled, ${them}. Your turn.`,`My king is tucked away now, ${them}.`],
+      teacher:[`I castled, ${them}. Your king is still in the center.`,`King safety handled on my side, ${them}.`],
+      cocky:[`My king has shelter, ${them}. Yours is still shopping.`,`I'm castled, ${them}. Your king still has decisions to make.`],
+      sarcastic:[`My king found a home, ${them}. Yours is still apartment hunting.`,`I castled, ${them}. Your king missed the memo.`]
+    },
+    promotion:{
+      friendly:[`Promotion, ${them}. That pawn made it.`,`New piece on the board, ${them}.`],
+      teacher:[`Promotion, ${them}. Passed pawns matter.`,`That pawn reached the end, ${them}.`],
+      cocky:[`My pawn got promoted, ${them}.`,`New piece, ${them}. More problems for you.`],
+      sarcastic:[`My pawn got promoted before your position did, ${them}.`]
+    },
+    en_passant:{
+      friendly:[`En passant, ${them}. Had to do it.`],
+      teacher:[`En passant, ${them}. Yes, it's legal.`],
+      cocky:[`Google en passant, ${them}.`],
+      sarcastic:[`Google en passant before you call the arbiter, ${them}.`]
+    },
+    win:{
+      friendly:[`Good game, ${them}. That was fun.`,`That's game, ${them}. Well played.`],
+      teacher:[`That's game, ${them}. Now we review where it turned.`,`Good game, ${them}. The board always tells you where it changed.`],
+      cocky:[`That's game, ${them}. I told you to bring your best.`,`Checkmate, ${them}. I'll take that one.`],
+      sarcastic:[`That's game, ${them}. Your king has officially had enough.`,`Checkmate, ${them}. Turns out the threats were real.`],
+      intense:[`Game over, ${them}. Good fight.`,`Checkmate, ${them}.`],
+      calm:[`Good game, ${them}.`,`That's game, ${them}.`],
+      dramatic:[`And that's the end, ${them}. Checkmate.`,`The battle is over, ${them}.`],
+      stoic:[`Checkmate, ${them}.`,`Game, ${them}.`],
+      chaotic:[`Checkmate, ${them}. Beautiful mess.`,`That's game, ${them}. Chaos wins.`]
+    },
+    lose:{
+      friendly:[`You got me, ${them}. Good game.`,`Nice game, ${them}. Well played.`],
+      teacher:[`Well played, ${them}. You earned that one.`,`Good game, ${them}. That finish was clean.`],
+      cocky:[`Fine, ${them}. You got this one.`,`Alright, ${them}. Enjoy it while it lasts.`],
+      sarcastic:[`Fine, ${them}. Try not to frame the screenshot.`,`Alright, ${them}. Apparently I was the lesson today.`],
+      intense:[`Well played, ${them}.`,`You earned it, ${them}.`],
+      calm:[`Good game, ${them}.`,`Well played, ${them}.`],
+      dramatic:[`The battle is yours, ${them}.`,`Defeated, ${them}. What a tragedy.`],
+      stoic:[`You win, ${them}.`,`Well played, ${them}.`],
+      chaotic:[`You survived the nonsense, ${them}. Respect.`,`Fine, ${them}. Chaos lost this one.`]
+    },
+    draw:{
+      friendly:[`Draw, ${them}. Good game.`,`Half a point each, ${them}.`],
+      teacher:[`Draw, ${them}. Plenty to review.`,`Half a point, ${them}. Now find the turning points.`],
+      cocky:[`A draw, ${them}. I'll allow it.`,`Half a point, ${them}. We'll settle it next game.`],
+      sarcastic:[`A draw, ${them}. Nobody gets bragging rights.`,`Half a point each, ${them}. How diplomatic.`],
+      intense:[`Draw, ${them}.`,`Even game, ${them}.`],
+      calm:[`Draw, ${them}. Good game.`,`That's a draw, ${them}.`],
+      dramatic:[`Neither king claims victory, ${them}.`,`The battle ends even, ${them}.`],
+      stoic:[`Draw, ${them}.`,`Even, ${them}.`],
+      chaotic:[`A draw, ${them}? After all that?`,`The chaos cancels itself out, ${them}.`]
+    },
+    resign:{
+      friendly:[`Good game, ${them}.`,`Resignation accepted, ${them}.`],
+      teacher:[`Resignation accepted, ${them}. Now find the turning point.`,`Good game, ${them}. Review where it became hopeless.`],
+      cocky:[`Resignation accepted, ${them}.`,`Already, ${them}? I was just getting started.`],
+      sarcastic:[`Resigning, ${them}? Probably your best move.`,`Accepted, ${them}. Your king appreciates it.`],
+      intense:[`Resignation accepted, ${them}.`],
+      calm:[`Good game, ${them}.`],
+      dramatic:[`The king yields, ${them}.`,`And the battle closes, ${them}.`],
+      stoic:[`Accepted, ${them}.`],
+      chaotic:[`And there goes the chaos, ${them}.`,`Resignation accepted, ${them}.`]
+    }
+  };
+
+  // Unhinged/savage bots get their own opponent-aware profanity rather than
+  // generic player-facing lines.
+  if(level==='unhinged'||level==='savage'){
+    const spicy={
+      move:[`${them}, your move. Don't fuck it up.`,`Alright, ${them}. Show me what the hell you've got.`],
+      check:[`Check, ${them}. Deal with that shit.`,`Your king has a fucking problem, ${them}.`],
+      queen_won:[`${them}, you just gave me your fucking queen.`,`Holy shit, ${them}. Nine points, gone.`],
+      hanging_piece_won:[`${them}, you just hung a fucking piece.`,`Holy shit, ${them}, you really left that there?`],
+      favorable_trade:[`${them}, that trade was shit for you.`,`You really chose that fucking trade, ${them}?`],
+      equal_trade:[`Fine, ${them}. Clean fucking trade.`,`We swapped pieces, ${them}. Calm the hell down.`],
+      castle_both_safe:[`Both kings have homes, ${them}. Now let's see whose gets fucking demolished first.`],
+      castle_opponent_uncastled:[`My king found shelter, ${them}. Yours is still raw-dogging the center.`]
+    };
+    const spicyPool=spicy[event]||[];
+    if(spicyPool.length && Math.random()<(level==='unhinged'?.42:.22)){
+      let line=bozoBotPickFreshLine(profile,`exhibition-${event}-spicy`,spicyPool);
+      if(!bozoExhibitionNameMoment(profile,event,session))line=bozoStripExhibitionOpponentName(line,opponent?.name||'');
+      return line;
+    }
+  }
+
+  const byPersonality=eventLines[event]||eventLines.move;
+  const pool=byPersonality[p]||byPersonality.friendly||[];
+  let line=bozoBotPickFreshLine(profile,`exhibition-${event}`,pool);
+  if(!bozoExhibitionNameMoment(profile,event,session))line=bozoStripExhibitionOpponentName(line,opponent?.name||'');
+  return line;
+}
+
+function bozoBotDialogueLine(profile,event,move=null){
+  if(!profile)return'';
+  if(webBotSession?.exhibition){
+    const exhibitionLine=bozoExhibitionDialogueLine(profile,event,move,webBotSession);
+    if(exhibitionLine)return exhibitionLine;
+  }
+  const name=profile.name||'BOZO Bot';
+  const san=move?.san||'';
+  const p=profile.personality||'friendly';
+  const eventLine=bozoBotEventDialogue(profile,event,move);
+  if(eventLine)return eventLine;
+
+  const banks={
+    start:{
+      cocky:[`I'm ${name}. Try not to make this too easy for me.`,`Alright. Show me what you've got.`,`You brought your best moves, right?`,`Let's see how long the confidence lasts.`,`I hope you warmed up first.`,`Your move. Impress me.`],
+      friendly:[`Hey, I'm ${name}. Good luck, and have fun.`,`Let's play some chess. Good luck.`,`Nice to meet you. Let's have a good game.`,`Alright, let's see where this game takes us.`,`Have fun. I'll try not to make it too painful.`,`Ready when you are.`],
+      dramatic:[`At last. The battle begins.`,`This board is about to become a war zone.`,`The pieces are set. Let the story begin.`,`One board. Two kings. No excuses.`,`And so the battle opens.`,`Let's make this game memorable.`],
+      calm:[`Let's have a clean game.`,`No rush. Let's see where the position takes us.`,`Take your time. I'll do the same.`,`Let's keep it simple and precise.`,`Good luck. Play your position.`,`We have plenty of chess ahead of us.`],
+      intense:[`Focus. Every move matters.`,`Let's get to work.`,`No wasted moves.`,`Calculate first. Move second.`,`Stay sharp from move one.`,`Let's see who loses focus first.`],
+      sarcastic:[`Oh good, another victim. I mean, opponent.`,`Let's see how long this position stays respectable.`,`I'm sure this will go perfectly for you.`,`Please tell me you studied something before this.`,`Good luck. You're probably going to need it.`,`Let's begin before either of us makes a questionable decision.`],
+      teacher:[`Welcome. Your first lesson is not to trust the rating.`,`Let's begin. Pay attention.`,`Every move changes the position. Watch carefully.`,`Think before every move and you'll already be ahead of most players.`,`Let's see what you understand about this position.`,`Class is in session.`],
+      stoic:[`Your move.`,`We begin.`,`Let's play.`,`The board is ready.`,`Make your move.`,`Begin.`],
+      chaotic:[`Theory is optional. Chaos is mandatory.`,`Let's make this position weird.`,`Normal chess is boring.`,`I have no idea where this is going, which is perfect.`,`Let's ruin somebody's opening preparation.`,`Time to create problems.`]
+    },
+    move:{
+      cocky:[`${san}. Your problem now.`,`I like that position. Your move.`,`${san}. Keep up.`,`Let's see if you find the idea.`,`That should make things uncomfortable.`,`${san}. Show me your answer.`,`I'm happy with that.`,`Your turn. Don't waste it.`],
+      friendly:[`${san}. Your turn.`,`Let's see your reply.`,`Over to you.`,`I think that works.`,`${san}. What would you play here?`,`Let's keep going.`,`Interesting position now.`,`Take your time.`],
+      dramatic:[`${san}. The plot thickens.`,`The board changes again.`,`And now the tension rises.`,`${san}. Another chapter begins.`,`Things are getting serious.`,`That changes everything a little.`,`The position has a different story now.`,`Your move. The board is waiting.`],
+      calm:[`${san}. Your move.`,`That feels natural.`,`Nothing forced yet.`,`Let's improve the position.`,`${san}. We continue.`,`A quiet move can still matter.`,`Your turn.`,`I'll leave that there.`],
+      intense:[`${san}. Keep calculating.`,`Stay focused.`,`Your response matters.`,`${san}. Don't relax yet.`,`Find the strongest reply.`,`Keep working.`,`The position demands accuracy.`,`Your move. Calculate first.`],
+      sarcastic:[`${san}. Saw that coming?`,`Please have a plan.`,`I'm sure everything is fine.`,`${san}. No pressure. Except all of it.`,`Your position can explain itself.`,`This should be entertaining.`,`Surely that won't cause problems.`,`Your move. Try something legal and ambitious.`],
+      teacher:[`${san}. What changed?`,`Find the best response.`,`Identify the new weakness.`,`${san}. Which piece improved?`,`Re-evaluate the position now.`,`Look at checks, captures, and threats.`,`Before moving, compare your candidate moves.`,`What am I threatening now?`],
+      stoic:[`${san}.`,`Your move.`,`Continue.`,`${san}.`,`${san}. Your turn.`,`Proceed.`,`Your move.`,`Continue.`],
+      chaotic:[`${san}. Let's make it ugly.`,`Normal is overrated.`,`That's weird enough.`,`${san}. More complications.`,`Let's make the engine uncomfortable.`,`Welcome to the mess.`,`I want more pieces doing questionable things.`,`Your turn. Make it strange.`]
+    },
+    check:{
+      cocky:[`Check. You might want to deal with that.`,`Check. Awkward.`,`Check. Your king looks busy.`,`Check. That's one problem you can't ignore.`,`Check. I suggest moving the important piece.`,`Check. Have fun with that.`],
+      friendly:[`Check.`,`That's check. Your move.`,`Check. Take a look at your legal replies.`,`Your king is in check.`,`Check. Let's see how you handle it.`,`That's check.`],
+      dramatic:[`Check! The king is under fire.`,`Check. The walls are closing in.`,`Check! The king must answer.`,`Check. The battlefield just changed.`,`Check! Now the king enters the story.`,`Check. No hiding now.`],
+      calm:[`Check.`,`Your king is in check.`,`Check. Respond carefully.`,`That's check.`,`Check. Deal with the king first.`,`Check.`],
+      intense:[`Check. Respond carefully.`,`Check.`,`Check. Calculate every legal response.`,`Check. Don't rush this.`,`Check. Precision now.`,`Check. Find the right defense.`],
+      sarcastic:[`Check. Turns out the king matters.`,`Check. Minor inconvenience, I'm sure.`,`Check. Apparently kings don't enjoy that.`,`Check. Surely this was all part of the plan.`,`Check. Tiny detail. Huge consequence.`,`Check. You can ignore everything except that.`],
+      teacher:[`Check. Start with your legal responses.`,`Your king is in check. Solve that first.`,`Check. List the legal king responses before calculating anything else.`,`Check. Defense comes before strategy here.`,`Check. Find every legal response, then compare them.`,`Check. Your priority is forced.`],
+      stoic:[`Check.`,`Check.`,`Your king is checked.`,`Check.`,`Respond.`,`Check.`],
+      chaotic:[`Check! Now we're having fun.`,`Check. Welcome to the mess.`,`Check! More chaos.`,`Check. The king joins the circus.`,`Check! Let's make this complicated.`,`Check. Beautiful.`]
+    },
+    win:{
+      cocky:[`Checkmate. I told you this would be easy.`,`That's mate. Better luck next time.`,`Mate. I'll take that one.`,`Checkmate. Thanks for the point.`,`That's game.`,`Mate. We can run it back if you want.`],
+      friendly:[`Checkmate. Good game.`,`That's mate. Thanks for the game.`,`Good game. That was fun.`,`Checkmate. Nice fight.`,`That's game. Well played.`,`Mate. Thanks for playing.`],
+      dramatic:[`Checkmate. The battle is over.`,`And that is checkmate.`,`The king falls. Checkmate.`,`The final move has been played.`,`Checkmate. The board is silent.`,`And the battle ends here.`],
+      calm:[`Checkmate. Good game.`,`That's mate.`,`Game over. Well played.`,`Checkmate.`,`That's the game.`,`Mate. Good game.`],
+      intense:[`Checkmate.`,`Game over. Checkmate.`,`Mate. Stay sharper next time.`,`Checkmate. The calculation was decisive.`,`That's game.`,`Mate.`],
+      sarcastic:[`Checkmate. I'm shocked. Absolutely shocked.`,`Mate. That position aged beautifully.`,`Checkmate. The king has formally filed a complaint.`,`Mate. That escalated efficiently.`,`Checkmate. Turns out the threats were real.`,`Mate. I promise the board saw it coming.`],
+      teacher:[`Checkmate. Review where the position turned.`,`That's mate. There's a lesson in the game.`,`Checkmate. Find the first moment your position became difficult.`,`Mate. Review the critical position, not just the final move.`,`Checkmate. The ending started several moves ago.`,`That's game. Now study why.`],
+      stoic:[`Checkmate.`,`Game over.`,`Mate.`,`Finished.`,`Checkmate.`,`Game.`],
+      chaotic:[`Checkmate! Beautiful disaster.`,`Mate. Chaos wins again.`,`Checkmate. What a mess.`,`Mate. Exactly as planned. Probably.`,`Checkmate! That got weird fast.`,`Mate. Long live chaos.`]
+    },
+    lose:{
+      cocky:[`Alright, you got me. Don't get used to it.`,`Fine. Good game.`,`You got this one.`,`Enjoy the win while it lasts.`,`Alright. Run it back.`,`Fine. That was decent.`],
+      friendly:[`Nice game. You got me.`,`Good game. Well played.`,`That was a good one.`,`Nice finish.`,`You played that well.`,`Good game. Let's play again sometime.`],
+      dramatic:[`Defeated. What a tragedy.`,`The king has fallen.`,`And so my reign ends.`,`The battle is yours.`,`Defeat. A painful ending.`,`The final chapter belongs to you.`],
+      calm:[`Well played.`,`Good game.`,`You converted that nicely.`,`That was clean.`,`Good game. You earned it.`,`Well played.`],
+      intense:[`You earned that one.`,`Well played.`,`Good conversion.`,`You stayed focused.`,`That was precise.`,`You found the finish.`],
+      sarcastic:[`Congratulations. I'll pretend that was intentional.`,`Fine, you win. Try not to frame the screenshot.`,`Well, that's inconvenient.`,`Enjoy your moment.`,`Apparently I was the lesson today.`,`Fine. You can have that one.`],
+      teacher:[`Well played. You converted the advantage.`,`Good game. That was a clean finish.`,`You found the right plan and finished it.`,`Good conversion. Review what created the advantage.`,`That was well handled.`,`Good game. Identify the move that gave you control.`],
+      stoic:[`Well played.`,`You win.`,`Good game.`,`Finished.`,`Your game.`,`Well played.`],
+      chaotic:[`You survived the nonsense. Respect.`,`Fine. Chaos lost this one.`,`Somehow you escaped.`,`You tamed the mess.`,`Alright, that was fun.`,`The chaos has been defeated.`]
+    },
+    draw:{
+      cocky:[`A draw. I'll allow it.`,`Fine. Half a point each.`,`You escaped with half.`,`A draw. Acceptable.`,`Half a point. Don't celebrate too hard.`,`Draw. We'll settle it next game.`],
+      friendly:[`Draw. Good game.`,`Looks like a draw. Well played.`,`Good game. That was even.`,`Draw. Nice defense.`,`Half a point each.`,`That was a fair result.`],
+      dramatic:[`A draw. Neither king claims victory.`,`And the battle ends even.`,`Neither side falls. A draw.`,`The struggle ends without a winner.`,`A draw. The board refuses to choose.`,`And so it ends level.`],
+      calm:[`Draw. Good game.`,`That's a draw.`,`Even game.`,`Draw. Well defended.`,`Half a point each.`,`That's level.`],
+      intense:[`Draw.`,`Even game.`,`No winner this time.`,`Draw.`,`Half a point.`,`Game drawn.`],
+      sarcastic:[`A draw. Somehow we both survived.`,`Half a point. Thrilling.`,`A draw. Nobody gets bragging rights.`,`Well, that solved absolutely nothing.`,`Draw. Suspenseful ending.`,`Half a point each. How diplomatic.`],
+      teacher:[`Draw. Worth reviewing the critical moments.`,`That's a draw. Good defensive work.`,`Draw. Review where either side could have improved.`,`A draw. There is usually still something to learn.`,`Half a point each. Check the turning points.`,`Draw. Study the moments where the evaluation changed.`],
+      stoic:[`Draw.`,`Game drawn.`,`Even.`,`Draw.`,`Half point.`,`Finished.`],
+      chaotic:[`A draw? After all that?`,`Nobody wins the circus.`,`A draw. The chaos cancels itself out.`,`All that nonsense for half a point.`,`Draw. Somehow.`,`The mess ends even.`]
+    },
+    resign:{
+      cocky:[`Already? I was just getting started.`,`Resignation accepted.`,`That works too.`,`You sure? Alright.`,`I'll take the win.`,`Accepted. Better luck next time.`],
+      friendly:[`Good game.`,`Thanks for the game.`,`Resignation accepted. Well played.`,`Good game. We can run it back.`,`Thanks for playing.`,`Alright. Good game.`],
+      dramatic:[`And the flag of surrender is raised.`,`The battle ends by resignation.`,`The king yields.`,`The fight ends before mate.`,`Surrender accepted.`,`And so the battle closes.`],
+      calm:[`Resignation accepted. Good game.`,`Good game.`,`Accepted.`,`That's the game.`,`Resignation accepted.`,`Well played.`],
+      intense:[`Resignation accepted.`,`Game over.`,`Accepted.`,`That's game.`,`Resignation.`,`Finished.`],
+      sarcastic:[`Resigning? Probably your best move.`,`At least that move didn't blunder anything.`,`A surprisingly accurate final decision.`,`Resignation accepted. Sensible.`,`That's one way to stop the position getting worse.`,`Accepted. Your king appreciates it.`],
+      teacher:[`Resignation accepted. Review the position and try again.`,`Good game. Now find where things went wrong.`,`Accepted. Study the first serious mistake.`,`Good game. Review the position before it became hopeless.`,`Resignation accepted. Find the turning point.`,`Game over. Now learn from it.`],
+      stoic:[`Accepted.`,`Game over.`,`Resignation.`,`Finished.`,`Accepted.`,`Good game.`],
+      chaotic:[`You can't leave, the position was just getting weird.`,`Resignation accepted. Cowardice noted.`,`The circus closes early.`,`You escaped before it got stranger.`,`Accepted. I had more nonsense planned.`,`Fine. End the chaos.`]
+    }
+  };
+
+  const eventBank=banks[event]||{};
+  const pool=eventBank[p]||eventBank.friendly||[];
+  return bozoBotPickFreshLine(profile,event,pool);
+}
+
+
+async function bozoNativeTtsFallback(text,profile){
+  try{
+    const cap=window.Capacitor;
+    const plugin=cap?.Plugins?.TextToSpeech;
+    if(!plugin?.speak)return false;
+    const personality=profile?.personality||'friendly';
+    const pitch=personality==='dramatic'?1.08:personality==='intense'?.94:personality==='stoic'?.92:1;
+    const rate=personality==='chaotic'?1.06:personality==='calm'?.94:1;
+    await plugin.speak({text:String(text||''),lang:'en-US',rate,pitch,volume:1,category:'ambient'});
+    return true;
+  }catch(error){
+    console.warn('BOZO native TTS fallback failed:',error);
+    return false;
+  }
+}
+
+async function playBozoAuraBlob(blob,token){
+  if(token!==bozoBotSpeechToken)return false;
+  if(!blob?.size)throw new Error('Aura returned empty audio');
+
+  // 1) WebAudio path.
+  const ctx=ensureBozoBotAudioContext();
+  if(ctx){
+    try{
+      if(ctx.state==='suspended')await ctx.resume();
+      if(ctx.state==='running'){
+        const bytes=await blob.arrayBuffer();
+        const decoded=await ctx.decodeAudioData(bytes.slice(0));
+        if(token!==bozoBotSpeechToken)return false;
+        if(bozoBotAudioSource){
+          try{bozoBotAudioSource.stop();}catch{}
+          try{bozoBotAudioSource.disconnect();}catch{}
+        }
+        await new Promise((resolve,reject)=>{
+          try{
+            const source=ctx.createBufferSource();
+            source.buffer=decoded;
+            source.connect(ctx.destination);
+            bozoBotAudioSource=source;
+            source.onended=()=>{if(bozoBotAudioSource===source)bozoBotAudioSource=null;resolve();};
+            source.start(0);
+          }catch(error){reject(error);}
+        });
+        return token===bozoBotSpeechToken;
+      }
+    }catch(webAudioError){
+      console.warn('BOZO WebAudio path failed; trying fresh HTMLAudio:',webAudioError);
+    }
+  }
+
+  // 2) Restore the exact fresh-HTMLAudio Blob path that was proven working in
+  // v4.15.34. Some Android WebViews dislike reusing a primed Audio element.
+  let freshUrl=null;
+  try{
+    freshUrl=URL.createObjectURL(blob);
+    const audio=new Audio(freshUrl);
+    audio.preload='auto';
+    audio.setAttribute('playsinline','');
+    audio.volume=1;
+    bozoBotSpeechAudio=audio;
+    await new Promise((resolve,reject)=>{
+      const cleanup=()=>{
+        audio.removeEventListener('ended',onEnded);
+        audio.removeEventListener('error',onError);
+      };
+      const onEnded=()=>{cleanup();resolve();};
+      const onError=()=>{cleanup();reject(new Error('Fresh HTMLAudio playback failed'));};
+      audio.addEventListener('ended',onEnded);
+      audio.addEventListener('error',onError);
+      audio.play().catch(error=>{cleanup();reject(error);});
+    });
+    if(bozoBotSpeechAudio===audio)bozoBotSpeechAudio=null;
+    try{URL.revokeObjectURL(freshUrl);}catch{}
+    return token===bozoBotSpeechToken;
+  }catch(freshError){
+    console.warn('BOZO fresh HTMLAudio path failed; trying primed element:',freshError);
+    if(freshUrl){try{URL.revokeObjectURL(freshUrl);}catch{}}
+  }
+
+  // 3) Persistent primed element fallback.
+  if(bozoBotSpeechAudio){try{bozoBotSpeechAudio.pause();}catch{}}
+  if(bozoBotSpeechUrl){try{URL.revokeObjectURL(bozoBotSpeechUrl);}catch{}}
+  bozoBotSpeechUrl=URL.createObjectURL(blob);
+  const audio=ensureBozoBotHtmlAudio();
+  audio.preload='auto';audio.src=bozoBotSpeechUrl;audio.volume=1;
+  try{audio.currentTime=0;}catch(_){}
+  bozoBotSpeechAudio=audio;
+  await new Promise((resolve,reject)=>{
+    const onEnded=()=>{cleanup();resolve();};
+    const onError=()=>{cleanup();reject(new Error('Primed HTMLAudio playback failed'));};
+    const cleanup=()=>{audio.removeEventListener('ended',onEnded);audio.removeEventListener('error',onError);};
+    audio.addEventListener('ended',onEnded);audio.addEventListener('error',onError);
+    try{audio.load();}catch(_){}
+    audio.play().catch(error=>{cleanup();reject(error);});
+  });
+  if(bozoBotSpeechAudio===audio)bozoBotSpeechAudio=null;
+  if(bozoBotSpeechUrl){try{URL.revokeObjectURL(bozoBotSpeechUrl);}catch{}bozoBotSpeechUrl=null;}
+  return token===bozoBotSpeechToken;
+}
+
+async function playBozoAuraText(profile,text,{markFailure=true}={}){
+  if(!profile?.voice||!text)return false;
+
+  // Cancel the previous line at the moment a new line begins, not after the next
+  // network response arrives. This keeps dialogue crisp and prevents overlap.
+  const token=++bozoBotSpeechToken;
+  if(bozoBotAudioSource){
+    try{bozoBotAudioSource.stop();}catch{}
+    try{bozoBotAudioSource.disconnect();}catch{}
+    bozoBotAudioSource=null;
+  }
+  if(bozoBotSpeechAudio){
+    try{bozoBotSpeechAudio.pause();}catch{}
+    bozoBotSpeechAudio=null;
+  }
+  if(bozoBotSpeechUrl){
+    try{URL.revokeObjectURL(bozoBotSpeechUrl);}catch{}
+    bozoBotSpeechUrl=null;
+  }
+
+  const spoken=bozoBotSpeechText(text);
+  // Bot lines should almost always remain ONE Aura request. This is important:
+  // separate TTS calls can return slightly different pitch/cadence even with the
+  // same speaker. Only unusually long dialogue is split.
+  const chunks=splitBozoSpeechChunks(spoken,520);
+
+  try{
+    for(const chunk of chunks){
+      if(token!==bozoBotSpeechToken)return false;
+      const response=await fetch(BOZO_BOT_TTS_ENDPOINT,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({text:chunk,speaker:profile.voice}),
+        cache:'no-store'
+      });
+      if(!response.ok){
+        let detail='';
+        try{detail=await response.text();}catch{}
+        throw new Error(`Aura POST ${response.status}${detail?`: ${detail.slice(0,120)}`:''}`);
+      }
+      const blob=await response.blob();
+      const completed=await playBozoAuraBlob(blob,token);
+      if(!completed)return false;
+      if(chunk!==chunks[chunks.length-1])await bozoSpeechSleep(140);
+    }
+    return true;
+  }catch(error){
+    console.warn('BOZO Bot Aura dialogue failed:',error);
+    // Last-resort Android fallback: keep the match audible even if Aura fetch or
+    // WebView decoding fails. This uses the installed Capacitor TTS plugin and
+    // speaks the SAME chess-only line. Aura remains the preferred voice path.
+    const nativeOk=await bozoNativeTtsFallback(spoken,profile);
+    if(nativeOk)return true;
+    if(markFailure){
+      const box=$('bot-dialogue-text');
+      if(box&&!box.textContent.includes('🔇'))box.textContent+='  🔇';
+    }
+    return false;
+  }
+}
+
+async function speakBozoBot(profile, event, move = null, force = false) {
+  if(!profile?.voice||!BOZO_BOT_TTS_ENDPOINT)return false;
+  const text=bozoBotDialogueLine(profile,event,move);
+  if(!text)return false;
+
+  const speak=async()=>{
+    // Text first, then audio. Both surfaces always use the same exact line.
+    showBozoBotDialogue(profile,text);
+
+    // Keep trying to wake the already-primed context, but the actual autoplay
+    // authorization is obtained from the user's Start / move gesture.
+    unlockBozoBotAudio().catch(()=>{});
+    const ok=await playBozoAuraText(profile,text,{markFailure:false});
+    if(!ok){
+      if(webBotSession?.exhibition){
+        const isWhite=profile===webBotSession.whiteBot;
+        const box=$(isWhite?'bot-exhibition-white-text':'bot-exhibition-black-text');
+        if(box&&!box.textContent.includes('🔇'))box.textContent+='  🔇';
+      }else{
+        const box=$('bot-dialogue-text');
+        if(box&&!box.textContent.includes('🔇'))box.textContent+='  🔇';
+      }
+    }
+    return ok;
+  };
+
+  // Exhibition mode is fully autonomous, so every voice line must be serialized.
+  // Otherwise a second bot can invalidate the first bot's speech token before
+  // Android has decoded/started the first Aura response.
+  if(webBotSession?.exhibition){
+    const queued=bozoBotSpeechChain.catch(()=>{}).then(speak);
+    bozoBotSpeechChain=queued.catch(()=>{});
+    return queued;
+  }
+  return speak();
+}
 
 let webBotSession = null;
 let webBotSelectedSquare = null;
@@ -10896,6 +12008,8 @@ function registerRatedOnlineBoardInput() {
 }
 
 async function startWebBotGameFromSetup() {
+  await unlockBozoBotAudio().catch(()=>false);
+  setBozoExhibitionPresentation(null,false);
   const openingId = $('duel-opening-id').value;
   if (!openingId) {
     $('duel-create-status').textContent = 'Choose a cloud opening line first.';
@@ -10922,8 +12036,9 @@ async function startWebBotGameFromSetup() {
     const bookSans = parser.history();
     if (!bookSans.length) throw new Error('The selected line contains no moves.');
 
-    const strengthKey = $('bot-strength').value;
-    const strength = BOT_STRENGTHS[strengthKey] || BOT_STRENGTHS.club;
+    const strengthKey = $('bot-strength').value || 'jayquellen';
+    const botProfile = botProfileForKey(strengthKey) || BOZO_BOTS.jayquellen;
+    const strength = botStrengthFromProfile(botProfile);
     const playerColor = $('duel-color').value === 'black' ? 'b' : 'w';
     const requestedBookPlies = Number($('duel-required-plies').value);
     const requiredBookPlies = Math.min(requestedBookPlies, bookSans.length);
@@ -10936,6 +12051,7 @@ async function startWebBotGameFromSetup() {
       playerColor,
       strengthKey,
       strength,
+      botProfile,
       phase: 'book',
       status: 'active',
       resultReason: '',
@@ -10943,7 +12059,10 @@ async function startWebBotGameFromSetup() {
       selected: null,
       lastMove: null,
       botThinking: false,
-      startedAt: Date.now()
+      startedAt: Date.now(),
+      castled:{w:false,b:false},
+      accuracyState:bozoNewAccuracyState(),
+      dialogueMode:'every'
     };
 
     $('challenge-create-modal').hidden = true;
@@ -10965,8 +12084,9 @@ async function startWebBotGameFromSetup() {
       `${opening.name}${opening.variation ? ': ' + opening.variation : ''}`;
     $('bot-book-pgn').textContent = opening.pgn || '';
     $('bot-player-color-label').textContent = playerColor === 'w' ? 'White' : 'Black';
-    $('bot-strength-label').textContent = strength.label;
+    $('bot-strength-label').textContent = botProfileLabel(botProfile);
     $('bot-review-button').hidden = true;
+    paintBozoBotCharacter(botProfile, `${botProfile.name} is ready.`);
     botUserArrows = [];
     webBotSelectedSquare = null;
 
@@ -10976,6 +12096,7 @@ async function startWebBotGameFromSetup() {
     $('bot-eval-label').textContent = 'Paused';
     $('bot-eval-white').style.width = '50%';
 
+    speakBozoBot(botProfile, 'start', null, true);
     if (!webBotIsPlayerTurn()) {
       requestWebBotMove('game-start');
     }
@@ -10989,7 +12110,87 @@ async function startWebBotGameFromSetup() {
   }
 }
 
+
+async function startBotExhibitionFromSetup(){
+  await unlockBozoBotAudio().catch(()=>false);
+  const button=$('send-opening-duel');
+  button.disabled=true;
+  button.textContent='Starting exhibition…';
+  $('duel-create-status').textContent='';
+  try{
+    const whiteKey=$('exhibition-white-bot')?.value||'diana';
+    const blackKey=$('exhibition-black-bot')?.value||'wichitus';
+    const whiteBot=botProfileForKey(whiteKey)||BOZO_BOTS.diana;
+    const blackBot=botProfileForKey(blackKey)||BOZO_BOTS.wichitus;
+    const dialogueMode=$('exhibition-dialogue')?.value||'key';
+    const moveDelayMs=Math.max(500,Number($('exhibition-speed')?.value||3000));
+    const openingId=$('duel-opening-id')?.value||'';
+    let opening=null,bookSans=[],requiredBookPlies=0,phase='freeplay';
+    if(openingId){
+      const {data,error}=await sb.from('openings').select('id,eco,name,variation,pgn').eq('id',openingId).single();
+      if(error)throw error;
+      opening=data;
+      const parser=new Chess();
+      if(!parser.load_pgn(opening.pgn||'',{sloppy:true}))throw new Error('The selected opening line contains invalid move text.');
+      bookSans=parser.history();
+      requiredBookPlies=Math.min(Number($('duel-required-plies')?.value||12),bookSans.length);
+      phase=requiredBookPlies>0?'book':'freeplay';
+    }
+    webBotSession={
+      exhibition:true,opening,game:new Chess(),bookSans,requiredBookPlies,playerColor:null,
+      whiteBot,blackBot,whiteKey,blackKey,
+      strengths:{w:botStrengthFromProfile(whiteBot),b:botStrengthFromProfile(blackBot)},
+      accuracyStates:{w:bozoNewAccuracyState(),b:bozoNewAccuracyState()},
+      botProfile:whiteBot,strength:botStrengthFromProfile(whiteBot),
+      phase,status:'active',resultReason:'',moves:[],selected:null,lastMove:null,botThinking:false,
+      startedAt:Date.now(),freePlay:!opening,castled:{w:false,b:false},dialogueMode,moveDelayMs,
+      exhibitionCheckStreakByBot:{},exhibitionLastSpokenPly:-99
+    };
+    $('challenge-create-modal').hidden=true;
+    $('bot-game-modal').hidden=false;
+    hideRatedClocks();
+    $('rated-offer-draw-button').hidden=true;
+    $('rated-rematch-button').hidden=true;
+    $('rated-draw-offer-panel').hidden=true;
+    $('rated-rematch-panel').hidden=true;
+    $('bot-resign-button').hidden=true;
+    $('bot-review-button').hidden=true;
+    $('bot-arena-label').textContent='BOZO BOT EXHIBITION';
+    $('bot-player-role-label').textContent='WHITE BOT';
+    $('bot-opponent-label').textContent='BLACK BOT';
+    $('bot-player-color-label').textContent=botProfileLabel(whiteBot);
+    $('bot-strength-label').textContent=botProfileLabel(blackBot);
+    $('bot-sidebar-title').textContent=opening?'SELECTED LINE':'EXHIBITION';
+    $('bot-status-title').textContent='MATCH STATUS';
+    $('bot-game-title').textContent=`${whiteBot.name} vs ${blackBot.name}`;
+    $('bot-game-subtitle').textContent=opening
+      ? `${opening.name}${opening.variation?': '+opening.variation:''} · ${dialogueMode} dialogue`
+      : `Starting position · ${dialogueMode} dialogue`;
+    $('bot-book-name').textContent=opening?`${opening.name}${opening.variation?': '+opening.variation:''}`:'Starting position';
+    $('bot-book-pgn').textContent=opening?.pgn||'No opening lock. Both bots play from the starting position.';
+    setBozoExhibitionPresentation(webBotSession,true);
+    showBozoExhibitionDialogue(whiteBot,`${whiteBot.name} has White.`);
+    showBozoExhibitionDialogue(blackBot,`${blackBot.name} has Black.`);
+    botUserArrows=[];webBotSelectedSquare=null;
+    resetManagedStockfish();
+    paintWebBotGame();updateWebBotStatus();startWebBotTurnMonitor();
+    $('bot-eval-label').textContent='Exhibition';$('bot-eval-white').style.width='50%';
+    if(dialogueMode!=='off'){
+      await speakBozoBot(whiteBot,'start',null,true);
+      await speakBozoBot(blackBot,'start',null,true);
+    }
+    setTimeout(()=>requestWebBotMove('exhibition-start'),Math.min(1200,moveDelayMs));
+  }catch(error){
+    console.error(error);$('duel-create-status').textContent=error?.message||'Could not start the bot exhibition.';
+  }finally{
+    button.disabled=false;
+    button.textContent='Start exhibition';
+  }
+}
+
 function closeWebBotGame() {
+  stopBozoBotSpeech();
+  setBozoExhibitionPresentation(null,false);
   stopRatedSpectating();
   stopRatedMatchPolling();
   if(ratedMatchChannel){try{sb.removeChannel(ratedMatchChannel)}catch(_){} ratedMatchChannel=null;}
@@ -11013,6 +12214,7 @@ function closeWebBotGame() {
 }
 
 function webBotIsPlayerTurn() {
+  if(webBotSession?.exhibition)return false;
   return Boolean(
     webBotSession &&
     webBotSession.game.turn() === webBotSession.playerColor
@@ -11051,7 +12253,7 @@ function paintWebBotGame() {
 
   const game = webBotSession.game;
   const board = fenBoard(game.fen());
-  const orientation = webBotSession.playerColor === 'w' ? 'white' : 'black';
+  const orientation = webBotSession.exhibition ? 'white' : (webBotSession.playerColor === 'w' ? 'white' : 'black');
   const ranks = orientation === 'white' ? [8,7,6,5,4,3,2,1] : [1,2,3,4,5,6,7,8];
   const files = orientation === 'white'
     ? ['a','b','c','d','e','f','g','h']
@@ -11172,6 +12374,7 @@ async function handleWebBotSquare(square) {
   }
 
   webBotSession.lastMove = played;
+  webBotSession.playerLastEvent = played?.san?.includes('+') || played?.san?.includes('#') ? 'check' : (played?.promotion ? 'promotion' : (played?.captured ? 'capture' : 'move'));
   webBotSession.moves = game.history();
   updateWebBotPhase();
   paintWebBotGame();
@@ -11192,6 +12395,7 @@ function startWebBotTurnMonitor() {
   webBotTurnMonitor = setInterval(() => {
     if (!webBotSession ||
         webBotSession.status !== 'active' ||
+        webBotSession.exhibition ||
         webBotIsPlayerTurn()) return;
 
     requestWebBotMove('turn-monitor');
@@ -11234,7 +12438,8 @@ function requestWebBotMove(reason = 'requested') {
       if (webBotSession === session &&
           session.status === 'active' &&
           !webBotIsPlayerTurn()) {
-        setTimeout(() => requestWebBotMove('post-search-recovery'), 250);
+        const delay=session.exhibition?Math.max(500,Number(session.moveDelayMs)||3000):250;
+        setTimeout(() => requestWebBotMove(session.exhibition?'exhibition-next':'post-search-recovery'), delay);
       }
     });
 
@@ -11332,16 +12537,44 @@ function chooseFallbackBotMove(game, strength) {
   return scored[Math.floor(Math.random() * choiceWindow)]?.move || scored[0].move;
 }
 
+function bozoExhibitionKeyMoment(event,session,profile,move,choice){
+  if(!session?.exhibition)return event!=='move';
+  // Key mode is intentionally quiet. Speech should feel like commentary on a
+  // moment, not a voice line after every ply.
+  if(['queen_won','rook_won','promotion','en_passant','blunder','brilliant'].includes(event))return true;
+  if(event==='hanging_piece_won')return true;
+  if(event==='check'){
+    const key=profile?.name||'';
+    return Number(session.exhibitionCheckStreakByBot?.[key]||0)>=2 || Boolean(move?.san?.includes('#'));
+  }
+  return false;
+}
+
+function bozoExhibitionQualityEvent(event,choice){
+  const loss=Number(choice?.rawLoss);
+  if(Number.isFinite(loss)&&loss>=180)return'blunder';
+  return event;
+}
+
 async function playWebBotMove() {
-  if (!webBotSession ||
-      webBotSession.status !== 'active' ||
-      webBotIsPlayerTurn()) return null;
+  if (!webBotSession || webBotSession.status !== 'active' || webBotIsPlayerTurn()) return null;
 
   const session = webBotSession;
   const game = session.game;
+  const actorColor=game.turn();
+  const actorProfile=session.exhibition
+    ? (actorColor==='w'?session.whiteBot:session.blackBot)
+    : session.botProfile;
+  const actorStrength=session.exhibition
+    ? session.strengths?.[actorColor]||botStrengthFromProfile(actorProfile)
+    : session.strength;
+  const accuracyState=session.exhibition
+    ? session.accuracyStates?.[actorColor]
+    : session.accuracyState;
+  session.botProfile=actorProfile;
+  session.strength=actorStrength;
   let played = null;
-
-  // This flag describes only the current bot move.
+  const beforeFen=game.fen();
   session.usedFallback = false;
 
   try {
@@ -11351,68 +12584,59 @@ async function playWebBotMove() {
     if (webBotBookPhaseActive() && expectedSan) {
       played = game.move(expectedSan, { sloppy: true });
       if (!played) throw new Error(`Invalid book move: ${expectedSan}`);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, session.exhibition ? Math.min(350,session.moveDelayMs||1000) : 500));
     } else {
       updateWebBotPhase();
-      $('bot-turn-badge').textContent = 'BOZO Bot thinking…';
-      $('bot-game-message').textContent =
-        `Stockfish is calculating at depth ${session.strength.depth}.`;
+      $('bot-turn-badge').textContent = `${actorProfile?.name||'BOZO Bot'} thinking…`;
+      $('bot-game-message').textContent = actorProfile
+        ? `${actorProfile.name} is thinking…`
+        : `Stockfish is calculating at depth ${actorStrength.depth}.`;
 
       let result = null;
-      const searchTimeout = Math.max(14000, session.strength.depth * 1500);
-
+      const searchTimeout = Math.max(14000, actorStrength.depth * 1500);
       for (let attempt = 1; attempt <= 2 && !result; attempt++) {
         try {
           const engine = await getWebBotMoveEngine();
-          result = await withBotTimeout(
-            engine.analyze(game.fen(), session.strength.depth),
-            searchTimeout
-          );
+          if (actorProfile) {
+            const lines = await withBotTimeout(
+              engine.analyzeMultiPv(game.fen(), actorStrength.depth, botCandidateCount(actorProfile)),
+              searchTimeout
+            );
+            result = {
+              bestMove: chooseProfiledBotMove(game, lines, actorProfile, accuracyState),
+              profileLines: lines
+            };
+          } else {
+            result = await withBotTimeout(engine.analyze(game.fen(), actorStrength.depth),searchTimeout);
+          }
         } catch (engineError) {
           console.warn(`BOZO Bot Stockfish attempt ${attempt} failed:`, engineError);
           resetManagedStockfish();
-
-          if (attempt === 1) {
-            $('bot-game-message').textContent =
-              'Restarting Stockfish and recalculating…';
-          }
+          if (attempt === 1) $('bot-game-message').textContent = 'Restarting Stockfish and recalculating…';
         }
       }
 
       if (webBotSession !== session || session.status !== 'active') return null;
-
       let chosenUci = result?.bestMove || null;
-
-      if (chosenUci &&
-          session.strength.randomness > 0 &&
-          Math.random() < session.strength.randomness) {
-        const random = chooseFallbackBotMove(game, session.strength);
-        if (random) {
-          chosenUci = `${random.from}${random.to}${random.promotion || ''}`;
-        }
-      }
+      if (actorProfile) console.debug('BOZO calibrated bot move', {
+        name:actorProfile.name,displayedElo:actorProfile.elo,actualElo:actorProfile.actualElo,
+        depth:actorStrength.depth,candidates:result?.profileLines?.length||0,chosenUci,
+        topMoveHistory:accuracyState?.decisions||[]
+      });
 
       if (chosenUci) {
-        played = game.move({
-          from: chosenUci.slice(0, 2),
-          to: chosenUci.slice(2, 4),
-          promotion: chosenUci.slice(4, 5) || 'q'
-        });
+        played = game.move({from:chosenUci.slice(0,2),to:chosenUci.slice(2,4),promotion:chosenUci.slice(4,5)||'q'});
       }
-
       if (!played) {
-        const fallback = chooseFallbackBotMove(game, session.strength);
+        const fallback = chooseFallbackBotMove(game, actorStrength);
         if (!fallback) throw new Error('BOZO Bot has no legal move.');
-        played = game.move({
-          from: fallback.from,
-          to: fallback.to,
-          promotion: fallback.promotion || 'q'
-        });
+        played = game.move({from:fallback.from,to:fallback.to,promotion:fallback.promotion||'q'});
         session.usedFallback = true;
         console.warn('BOZO Bot used its emergency fallback move.');
       }
     }
 
+    bozoRegisterCastling(session,played);
     session.lastMove = played;
     session.moves = game.history();
     updateWebBotPhase();
@@ -11420,14 +12644,24 @@ async function playWebBotMove() {
     paintWebBotGame();
     updateWebBotStatus();
 
+    let event=bozoBotMoveEvent(played,session,beforeFen,game);
+    if(session.exhibition)event=bozoExhibitionQualityEvent(event,accuracyState?.lastChoice);
+    bozoTrackExhibitionMoment(session,actorProfile,event);
     const gameEnded = checkWebBotGameOver();
-    $('bot-eval-label').textContent =
-      session.usedFallback ? 'Fallback' : 'Engine';
+    $('bot-eval-label').textContent = session.usedFallback ? 'Fallback' : (session.exhibition?'Exhibition':'Engine');
     if (gameEnded) return played;
+
+    const mode=session.dialogueMode||'key';
+    const keyEvent=bozoExhibitionKeyMoment(event,session,actorProfile,played,accuracyState?.lastChoice);
+    if(mode!=='off' && (mode==='every'||keyEvent)){
+      await speakBozoBot(actorProfile,event,played,keyEvent);
+      if(session.exhibition)session.exhibitionLastSpokenPly=game.history().length;
+    } else if(actorProfile){
+      paintBozoBotCharacter(actorProfile,`${played.san}.`,false);
+    }
   } catch (error) {
     console.error('BOZO Bot error:', error);
-    $('bot-game-message').textContent =
-      error?.message || 'BOZO Bot could not move.';
+    $('bot-game-message').textContent = error?.message || 'BOZO Bot could not move.';
     throw error;
   } finally {
     if (webBotSession === session) {
@@ -11442,26 +12676,44 @@ async function playWebBotMove() {
 function checkWebBotGameOver() {
   if (!webBotSession) return true;
   if (webBotSession.onlineRated) return webBotSession.status !== 'active';
-  const game = webBotSession.game;
+  const session=webBotSession;
+  const game = session.game;
   if (!game.game_over()) return false;
 
-  webBotSession.status = 'completed';
+  session.status = 'completed';
   stopWebBotTurnMonitor();
 
-  if (game.in_checkmate()) {
-    const loser = game.turn();
-    webBotSession.resultReason =
-      loser === webBotSession.playerColor
+  if(session.exhibition){
+    if(game.in_checkmate()){
+      const loser=game.turn();
+      const winner=loser==='w'?session.blackBot:session.whiteBot;
+      const loserBot=loser==='w'?session.whiteBot:session.blackBot;
+      session.resultReason=`Checkmate. ${winner.name} defeats ${loserBot.name}.`;
+      if((session.dialogueMode||'every')!=='off')speakBozoBot(winner,'win',session.lastMove,true);
+    }else if(game.in_stalemate())session.resultReason='Draw by stalemate.';
+    else if(game.in_threefold_repetition())session.resultReason='Draw by threefold repetition.';
+    else if(game.insufficient_material())session.resultReason='Draw by insufficient material.';
+    else session.resultReason='The exhibition ended in a draw.';
+    if(!game.in_checkmate()&&(session.dialogueMode||'every')!=='off'){
+      const speaker=game.turn()==='w'?session.whiteBot:session.blackBot;
+      speakBozoBot(speaker,'draw',session.lastMove,true);
+    }
+  } else {
+    if (game.in_checkmate()) {
+      const loser = game.turn();
+      session.resultReason = loser === session.playerColor
         ? 'Checkmate. BOZO Bot wins.'
         : 'Checkmate. You defeated BOZO Bot!';
-  } else if (game.in_stalemate()) {
-    webBotSession.resultReason = 'Draw by stalemate.';
-  } else if (game.in_threefold_repetition()) {
-    webBotSession.resultReason = 'Draw by threefold repetition.';
-  } else if (game.insufficient_material()) {
-    webBotSession.resultReason = 'Draw by insufficient material.';
-  } else {
-    webBotSession.resultReason = 'The game ended in a draw.';
+    } else if (game.in_stalemate()) session.resultReason = 'Draw by stalemate.';
+    else if (game.in_threefold_repetition()) session.resultReason = 'Draw by threefold repetition.';
+    else if (game.insufficient_material()) session.resultReason = 'Draw by insufficient material.';
+    else session.resultReason = 'The game ended in a draw.';
+
+    const profile = session.botProfile;
+    if (game.in_checkmate()) {
+      const loser = game.turn();
+      speakBozoBot(profile, loser === session.playerColor ? 'win' : 'lose', session.lastMove, true);
+    } else speakBozoBot(profile, 'draw', session.lastMove, true);
   }
 
   $('bot-review-button').hidden = false;
@@ -11499,11 +12751,25 @@ function updateWebBotStatus() {
   }
 
   if (session.botThinking) {
-    $('bot-turn-badge').textContent = 'BOZO Bot thinking…';
-    $('bot-game-message').textContent =
-      session.phase === 'book'
-        ? 'BOZO Bot is following the selected line.'
-        : `Stockfish is thinking at depth ${session.strength.depth}.`;
+    const thinker=session.exhibition?(session.game.turn()==='w'?session.whiteBot:session.blackBot):session.botProfile;
+    if(session.exhibition){
+      const isWhite=thinker===session.whiteBot;
+      $('bot-exhibition-white-card')?.classList.toggle('is-speaking',isWhite);
+      $('bot-exhibition-black-card')?.classList.toggle('is-speaking',!isWhite);
+    }
+    $('bot-turn-badge').textContent = `${thinker?.name||'BOZO Bot'} thinking…`;
+    $('bot-game-message').textContent = session.phase === 'book'
+      ? `${thinker?.name||'BOZO Bot'} is following the selected line.`
+      : `${thinker?.name||'BOZO Bot'} is thinking…`;
+    return;
+  }
+
+  if(session.exhibition){
+    const next=session.game.turn()==='w'?session.whiteBot:session.blackBot;
+    $('bot-turn-badge').textContent=`${next.name} to move`;
+    $('bot-game-message').textContent=session.phase==='book'
+      ? `${next.name} will play the stored book move.`
+      : `${next.name} is up next.`;
     return;
   }
 
@@ -11521,7 +12787,9 @@ function updateWebBotStatus() {
         ? 'BOZO Bot will answer with the stored book move.'
         : session.usedFallback
           ? 'The last move used the emergency safety fallback.'
-          : 'BOZO Bot will choose a Stockfish move.';
+          : session.botProfile
+            ? `${session.botProfile.name} will choose a move in their own style.`
+            : 'BOZO Bot will choose a Stockfish move.';
 
     // Recovery is handled by the permanent turn monitor.
   }
@@ -11542,46 +12810,35 @@ async function resignWebBotGame() {
   if(ratedMatchSession?.status==='active'){
     try{const {data,error}=await sb.functions.invoke('rated-match',{body:{action:'resign',matchId:ratedMatchSession.id}});if(error)throw error;if(data?.error)throw new Error(data.error);await refreshRatedMatchFromServer();return;}catch(error){toast(error?.message||'Could not resign this online game.');return;}
   }
-  if(!webBotSession||webBotSession.status!=='active')return;
-  webBotSession.status='completed';stopWebBotTurnMonitor();webBotSession.resultReason='You resigned. BOZO Bot wins.';$('bot-review-button').hidden=false;updateWebBotStatus();
+  if(!webBotSession||webBotSession.status!=='active'||webBotSession.exhibition)return;
+  webBotSession.status='completed';stopWebBotTurnMonitor();webBotSession.resultReason='You resigned. BOZO Bot wins.';$('bot-review-button').hidden=false;updateWebBotStatus();speakBozoBot(webBotSession.botProfile,'resign',null,true);
 }
 
 function restartWebBotGame() {
   if (!webBotSession) return;
-  const setup = {
-    opening: webBotSession.opening,
-    bookSans: webBotSession.bookSans,
-    requiredBookPlies: webBotSession.requiredBookPlies,
-    playerColor: webBotSession.playerColor,
-    strengthKey: webBotSession.strengthKey,
-    strength: webBotSession.strength,
-    freePlay: Boolean(webBotSession.freePlay)
-  };
+  const old=webBotSession;
+  if(old.exhibition){
+    webBotSession={
+      exhibition:true,opening:old.opening,game:new Chess(),bookSans:old.bookSans||[],requiredBookPlies:old.requiredBookPlies||0,
+      playerColor:null,whiteBot:old.whiteBot,blackBot:old.blackBot,whiteKey:old.whiteKey,blackKey:old.blackKey,
+      strengths:{w:botStrengthFromProfile(old.whiteBot),b:botStrengthFromProfile(old.blackBot)},
+      accuracyStates:{w:bozoNewAccuracyState(),b:bozoNewAccuracyState()},botProfile:old.whiteBot,strength:botStrengthFromProfile(old.whiteBot),
+      phase:old.opening?'book':'freeplay',status:'active',resultReason:'',moves:[],selected:null,lastMove:null,botThinking:false,
+      startedAt:Date.now(),freePlay:!old.opening,castled:{w:false,b:false},dialogueMode:old.dialogueMode||'key',moveDelayMs:old.moveDelayMs||3000,
+      exhibitionCheckStreakByBot:{},exhibitionLastSpokenPly:-99
+    };
+    $('bot-resign-button').hidden=true;
+    paintBozoBotCharacter(old.whiteBot,`${old.whiteBot.name} has White. ${old.blackBot.name} has Black.`);
+  }else{
+    const setup={opening:old.opening,bookSans:old.bookSans,requiredBookPlies:old.requiredBookPlies,playerColor:old.playerColor,strengthKey:old.strengthKey,strength:old.strength,botProfile:old.botProfile,freePlay:Boolean(old.freePlay)};
+    webBotSession={...setup,game:new Chess(),phase:setup.freePlay?'freeplay':'book',status:'active',resultReason:'',moves:[],selected:null,lastMove:null,botThinking:false,startedAt:Date.now(),castled:{w:false,b:false},accuracyState:bozoNewAccuracyState(),dialogueMode:'every'};
+    $('bot-resign-button').hidden=false;
+  }
 
-  webBotSession = {
-    ...setup,
-    game: new Chess(),
-    phase: setup.freePlay ? 'freeplay' : 'book',
-    status: 'active',
-    resultReason: '',
-    moves: [],
-    selected: null,
-    lastMove: null,
-    botThinking: false,
-    startedAt: Date.now()
-  };
-
-  webBotSelectedSquare = null;
-  botUserArrows = [];
-  $('bot-review-button').hidden = true;
-  resetManagedStockfish();
-  paintWebBotGame();
-  updateWebBotStatus();
-  startWebBotTurnMonitor();
-  $('bot-eval-label').textContent = 'Paused';
-  $('bot-eval-white').style.width = '50%';
-
-  if (!webBotIsPlayerTurn()) requestWebBotMove('restart');
+  webBotSelectedSquare=null;botUserArrows=[];$('bot-review-button').hidden=true;resetManagedStockfish();
+  paintWebBotGame();updateWebBotStatus();startWebBotTurnMonitor();
+  $('bot-eval-label').textContent=webBotSession.exhibition?'Exhibition':'Paused';$('bot-eval-white').style.width='50%';
+  if(!webBotIsPlayerTurn())setTimeout(()=>requestWebBotMove('restart'),webBotSession.exhibition?700:0);
 }
 
 function reviewWebBotGame() {
@@ -11724,13 +12981,21 @@ function openNewGameSetup(mode = 'friend') {
   $('duel-opening-results').innerHTML = '';
   $('duel-opening-id').value = '';
   $('duel-create-status').textContent = '';
+
+  const isExhibition = mode === 'exhibition';
+  if ($('new-game-mode-tabs')) $('new-game-mode-tabs').hidden = isExhibition;
+  if ($('new-game-eyebrow')) $('new-game-eyebrow').textContent = isExhibition ? 'BOT VS BOT EXHIBITION' : 'NEW OPENING GAME';
+  if ($('new-game-title')) $('new-game-title').textContent = isExhibition ? 'Pair the bots' : 'Choose the battleground';
+
   $$('[data-new-game-mode]').forEach(button =>
     button.classList.toggle('active', button.dataset.newGameMode === mode)
   );
   $('friend-game-fields').hidden = mode !== 'friend';
   $('bot-game-fields').hidden = mode !== 'bot';
+  if($('exhibition-game-fields'))$('exhibition-game-fields').hidden = !isExhibition;
+  if($('duel-color-wrap'))$('duel-color-wrap').hidden = isExhibition;
   $('send-opening-duel').textContent =
-    mode === 'bot' ? 'Start training game' : 'Send challenge';
+    mode === 'bot' ? 'Start training game' : isExhibition ? 'Start exhibition' : 'Send challenge';
 }
 
 $('manage-ratings-button')?.addEventListener('click', () => openRatingSetup(selectedMatchmakingPool()));
@@ -11769,11 +13034,12 @@ $('play-rating-grid')?.addEventListener('click', event => {
   if (!ratingRow(pool)) openRatingSetup(pool);
 });
 
-$('start-freeplay-bot')?.addEventListener('click', startBozoFreePlay);
+$('start-freeplay-bot')?.addEventListener('click',()=>{unlockBozoBotAudio().catch(()=>{});startBozoFreePlay();});
+$('start-bot-exhibition-setup')?.addEventListener('click',()=>{unlockBozoBotAudio().catch(()=>{});openNewGameSetup('exhibition');});
 $('play-friend-existing')?.addEventListener('click', () => route('challenges'));
 
 $('new-challenge-button').addEventListener('click', () => openNewGameSetup('friend'));
-$('new-bot-game-button').addEventListener('click', () => openNewGameSetup('bot'));
+$('new-bot-game-button')?.addEventListener('click', () => openNewGameSetup('bot'));
 
 $$('[data-new-game-mode]').forEach(button => {
   button.addEventListener('click', () => openNewGameSetup(button.dataset.newGameMode));
@@ -11797,7 +13063,9 @@ $('duel-opening-search').addEventListener('input', () => {
   openingSearchTimer = setTimeout(searchDuelOpenings, 260);
 });
 $('send-opening-duel').addEventListener('click', () => {
+  unlockBozoBotAudio().catch(()=>{});
   if (newGameMode === 'bot') startWebBotGameFromSetup();
+  else if(newGameMode === 'exhibition') startBotExhibitionFromSetup();
   else sendWebChallenge();
 });
 
@@ -13214,7 +14482,7 @@ async function handleStudySquare(square) {
 
   const from = studySelectedSquare;
   studySelectedSquare = null;
-  const candidate = await bozoLegalMoveForDestination(game, from, square, game.turn());
+  const candidate = game.moves({ square: from, verbose: true }).find(move => move.to === square);
   if (!candidate) {
     paintStudyBoard();
     return toast('That move is not legal.');
@@ -15212,9 +16480,12 @@ async function evaluatePlayedPuzzleMove(fenBefore, playedUci, knownCandidates=[]
   return { candidate:{uci:playedUci,rank:99,loss,dynamic:true,pv:[playedUci,...(after.pv||[])]}, loss, dynamic:true };
 }
 
-async function resolvePuzzleLegalMove(from, to) {
+function resolvePuzzleLegalMove(from, to) {
   if (!puzzleGame) return null;
-  return bozoLegalMoveForDestination(puzzleGame,from,to,puzzleGame.turn());
+  const legal = puzzleGame.moves({ verbose:true }).filter(move => move.from === from && move.to === to);
+  if (!legal.length) return null;
+  // Default to queen promotion when the destination admits several promotion choices.
+  return legal.find(move => move.promotion === 'q') || legal[0];
 }
 
 async function clickPuzzleSquare(square) {
@@ -15225,7 +16496,7 @@ async function clickPuzzleSquare(square) {
     puzzleSelectedSquare=square; paintPuzzleBoard(); return;
   }
   const from=puzzleSelectedSquare; puzzleSelectedSquare=null;
-  const legalMove = await resolvePuzzleLegalMove(from, square);
+  const legalMove = resolvePuzzleLegalMove(from, square);
   if (!legalMove) {
     setPuzzleFeedback('wrong','That move is not legal here.','BOZO checks legality from the current board before evaluating move quality.');
     paintPuzzleBoard(); updatePuzzleUI(); return;
@@ -16595,83 +17866,6 @@ $('master-puzzle-search')?.addEventListener('keydown',e=>{if(e.key==='Enter')fin
 // BOZO v4.15.0 — Endgame Study + universal Scholar BOZO coach
 const BOZO_TABLEBASE_ENDPOINT='https://tablebase.lichess.ovh/standard';
 let endgameCatalog=[],endgameCurrent=null,endgameGame=null,endgameSelected=null,endgameMode='learn',endgameUserColor='w',endgameTarget='draw',endgameStartFen='',endgameMistakes=0,endgameHints=0,endgameBusy=false,endgameHistory=[],endgameHistoryIndex=0,endgamePremove=null,endgamePremoveSelected=null;
-
-// Shared promotion UI. Keep this in the web layer so the website and Capacitor
-// Android build use the exact same chess-correct promotion flow.
-let bozoPromotionRequest=null;
-function bozoPromotionRequired(game,from,to,color=''){
-  try{
-    const piece=game?.get?.(from);
-    if(!piece||piece.type!=='p')return false;
-    if(color&&piece.color!==color)return false;
-    return (piece.color==='w'&&String(to).endsWith('8'))||(piece.color==='b'&&String(to).endsWith('1'));
-  }catch{return false;}
-}
-function ensureBozoPromotionPicker(){
-  let overlay=$('bozo-promotion-overlay');
-  if(overlay)return overlay;
-  const style=document.createElement('style');
-  style.id='bozo-promotion-style';
-  style.textContent=`
-    #bozo-promotion-overlay{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(8,4,12,.66);backdrop-filter:blur(4px)}
-    #bozo-promotion-overlay[hidden]{display:none!important}
-    .bozo-promotion-card{width:min(430px,calc(100vw - 28px));border:1px solid rgba(181,115,255,.42);border-radius:20px;padding:18px;background:#16091f;box-shadow:0 24px 80px rgba(0,0,0,.55);text-align:center}
-    .bozo-promotion-card b{display:block;font-size:1.05rem;margin-bottom:4px}
-    .bozo-promotion-card span{display:block;opacity:.72;font-size:.9rem;margin-bottom:14px}
-    .bozo-promotion-options{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-    .bozo-promotion-piece{min-width:0;min-height:72px;border:1px solid rgba(255,255,255,.16);border-radius:14px;background:rgba(255,255,255,.06);color:inherit;font:inherit;cursor:pointer;touch-action:manipulation}
-    .bozo-promotion-piece:hover,.bozo-promotion-piece:focus-visible{border-color:#b573ff;background:rgba(181,115,255,.16);outline:none}
-    .bozo-promotion-glyph{display:block!important;font-size:2.25rem;line-height:1;margin:0!important;opacity:1!important}
-    .bozo-promotion-name{display:block!important;margin:7px 0 0!important;font-size:.72rem!important;opacity:.82!important}
-    @media(max-width:520px){.bozo-promotion-card{padding:15px}.bozo-promotion-options{gap:7px}.bozo-promotion-piece{min-height:68px}.bozo-promotion-glyph{font-size:2rem}}
-  `;
-  document.head.appendChild(style);
-  overlay=document.createElement('div');
-  overlay.id='bozo-promotion-overlay';
-  overlay.hidden=true;
-  overlay.setAttribute('role','dialog');
-  overlay.setAttribute('aria-modal','true');
-  overlay.setAttribute('aria-label','Choose promotion piece');
-  document.body.appendChild(overlay);
-  return overlay;
-}
-function chooseBozoPromotion(color='w'){
-  if(bozoPromotionRequest)return bozoPromotionRequest;
-  const overlay=ensureBozoPromotionPicker();
-  const pieces=[['q','Queen'],['r','Rook'],['b','Bishop'],['n','Knight']];
-  const glyphs=color==='b'?{q:'♛',r:'♜',b:'♝',n:'♞'}:{q:'♕',r:'♖',b:'♗',n:'♘'};
-  overlay.innerHTML=`<div class="bozo-promotion-card"><b>Promote pawn</b><span>Choose a piece.</span><div class="bozo-promotion-options">${pieces.map(([code,name])=>`<button type="button" class="bozo-promotion-piece" data-promotion="${code}" aria-label="Promote to ${name}"><span class="bozo-promotion-glyph">${glyphs[code]}</span><span class="bozo-promotion-name">${name}</span></button>`).join('')}</div></div>`;
-  overlay.hidden=false;
-  bozoPromotionRequest=new Promise(resolve=>{
-    let settled=false;
-    const onKey=event=>{
-      if(event.key==='Escape'){event.preventDefault();finish(null);return;}
-      const hotkey={q:'q',r:'r',b:'b',n:'n'}[String(event.key||'').toLowerCase()];
-      if(hotkey){event.preventDefault();finish(hotkey);}
-    };
-    const onBackdrop=event=>{if(event.target===overlay)finish(null);};
-    const finish=value=>{
-      if(settled)return;settled=true;
-      document.removeEventListener('keydown',onKey);overlay.removeEventListener('click',onBackdrop);
-      overlay.hidden=true;overlay.innerHTML='';bozoPromotionRequest=null;resolve(value);
-    };
-    overlay.querySelectorAll('[data-promotion]').forEach(button=>button.addEventListener('click',()=>finish(button.dataset.promotion),{once:true}));
-    overlay.addEventListener('click',onBackdrop);
-    document.addEventListener('keydown',onKey);
-    overlay.querySelector('[data-promotion="q"]')?.focus();
-  });
-  return bozoPromotionRequest;
-}
-async function bozoLegalMoveForDestination(game,from,to,color=''){
-  let candidates=[];
-  try{candidates=game?.moves?.({square:from,verbose:true})?.filter(move=>move.to===to)||[];}catch{}
-  if(!candidates.length)return null;
-  const promotionMoves=candidates.filter(move=>move.promotion);
-  if(!promotionMoves.length)return candidates[0];
-  const promotion=await chooseBozoPromotion(color||promotionMoves[0]?.color||game?.get?.(from)?.color||'w');
-  if(!promotion)return null;
-  return promotionMoves.find(move=>move.promotion===promotion)||null;
-}
 const endgameCoachVariantCursor=new Map();
 const endgameTbCache=new Map();
 
@@ -16682,171 +17876,46 @@ function bozoCoachSetDialogue(text,{speak=true,title='Scholar BOZO'}={}){
   document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>s.value=reviewVoiceId);
   if(speak&&reviewVoiceEnabled&&text)bozoCoachSpeakText(text);
 }
-function bozoNativeAndroid(){
-  try{
-    return Boolean(window.Capacitor?.isNativePlatform?.()&&window.Capacitor?.getPlatform?.()==='android');
-  }catch{return false;}
-}
-let bozoAndroidVoiceCache={key:'',index:null,name:'',lang:''};
-const BOZO_ANDROID_VOICE_KEY_PREFIX='bozo-android-voice-index-';
-
-function bozoAndroidStoredVoiceIndex(voiceId){
-  const raw=localStorage.getItem(`${BOZO_ANDROID_VOICE_KEY_PREFIX}${voiceId}`);
-  if(raw===null||raw==='')return null;
-  const value=Number(raw);
-  return Number.isInteger(value)&&value>=0?value:null;
-}
-function bozoAndroidStoreVoiceIndex(voiceId,index){
-  if(!Number.isInteger(index)||index<0)return;
-  localStorage.setItem(`${BOZO_ANDROID_VOICE_KEY_PREFIX}${voiceId}`,String(index));
-  bozoAndroidVoiceCache={key:'',index:null,name:'',lang:''};
-}
-function bozoAndroidVoiceLabel(voice={},index=0){
-  const name=String(voice.name||voice.voiceURI||`Voice ${index}`);
-  const lang=String(voice.lang||'unknown');
-  const local=voice.localService?'local':'network';
-  return `${name} · ${lang} · ${local}`;
-}
-async function bozoGetAndroidVoice(plugin,voiceId=reviewVoiceId){
-  const key=String(voiceId||'george');
-  if(bozoAndroidVoiceCache.key===key&&Number.isInteger(bozoAndroidVoiceCache.index))return bozoAndroidVoiceCache;
-  try{
-    const result=await plugin.getSupportedVoices?.();
-    const voices=Array.isArray(result?.voices)?result.voices:[];
-    if(!voices.length)return {key,index:null,name:'',lang:''};
-
-    const stored=bozoAndroidStoredVoiceIndex(key);
-    if(Number.isInteger(stored)&&voices[stored]){
-      const voice=voices[stored];
-      bozoAndroidVoiceCache={key,index:stored,name:String(voice.name||voice.voiceURI||`Voice ${stored}`),lang:String(voice.lang||'en-GB')};
-      return bozoAndroidVoiceCache;
-    }
-
-    // Until the user calibrates, only prefer English and do NOT guess gender.
-    // Android does not expose reliable gender metadata for system voices.
-    let chosenIndex=voices.findIndex(v=>/^en-GB/i.test(String(v?.lang||'')));
-    if(chosenIndex<0)chosenIndex=voices.findIndex(v=>/^en/i.test(String(v?.lang||'')));
-    if(chosenIndex<0)chosenIndex=0;
-    const voice=voices[chosenIndex];
-    bozoAndroidVoiceCache={key,index:chosenIndex,name:String(voice?.name||voice?.voiceURI||`Voice ${chosenIndex}`),lang:String(voice?.lang||'en-GB')};
-    return bozoAndroidVoiceCache;
-  }catch(error){
-    console.warn('BOZO could not enumerate Android TTS voices:',error);
-    return {key,index:null,name:'',lang:''};
-  }
-}
-
-async function bozoNativeSpeak(text){
-  const plugin=window.Capacitor?.Plugins?.TextToSpeech;
-  if(plugin?.speak){
-    try{
-      await plugin.stop?.();
-      const selected=await bozoGetAndroidVoice(plugin,reviewVoiceId);
-      const options={text,lang:selected.lang||'en-GB',rate:.96,pitch:1,volume:1,queueStrategy:0};
-      if(Number.isInteger(selected.index))options.voice=selected.index;
-      plugin.speak(options).catch(()=>reviewSpeechFallback(text));
-      if(Number.isInteger(selected.index)){
-        reviewVoiceStatus(`${REVIEW_COACH_VOICES[reviewVoiceId]?.label||'Coach'} · Android voice: ${selected.name}`,'ready');
-      }else{
-        reviewVoiceStatus('Android voice unavailable. Using the device fallback.','fallback');
-      }
-      return true;
-    }catch(error){
-      console.warn('BOZO native Android speech failed:',error);
-    }
-  }
-  return reviewSpeechFallback(text);
-}
-
-function bozoEnsureAndroidVoiceSetupStyles(){
-  if(document.getElementById('bozo-android-voice-style'))return;
-  const style=document.createElement('style');
-  style.id='bozo-android-voice-style';
-  style.textContent=`
-    .bozo-voice-setup-btn{margin-left:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:inherit;border-radius:10px;padding:8px 10px;font:inherit;font-weight:800;cursor:pointer}
-    .bozo-voice-cal-backdrop{position:fixed;inset:0;z-index:100000;background:rgba(8,4,18,.78);backdrop-filter:blur(5px);display:grid;place-items:center;padding:18px}
-    .bozo-voice-cal{width:min(720px,100%);max-height:85vh;overflow:auto;background:#190826;border:1px solid #6f3c92;border-radius:20px;padding:20px;box-shadow:0 24px 80px rgba(0,0,0,.45);color:#fff}
-    .bozo-voice-cal h2{margin:0 0 5px}.bozo-voice-cal p{margin:0 0 14px;color:#d5cbe0;line-height:1.45}
-    .bozo-voice-cal-actions{display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px}.bozo-voice-cal-actions button,.bozo-voice-row button{border:1px solid rgba(255,255,255,.18);background:#30183e;color:#fff;border-radius:9px;padding:8px 10px;font:inherit;font-weight:800;cursor:pointer}
-    .bozo-voice-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:12px 0;border-top:1px solid rgba(255,255,255,.1)}
-    .bozo-voice-row small{display:block;color:#bfb1ca;margin-top:3px;word-break:break-word}.bozo-voice-row-controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-    .bozo-voice-row button[data-assign="george"]{border-color:#9d6bd0}.bozo-voice-row button[data-assign="daniel"]{border-color:#4c9ac5}
-    .bozo-voice-current{font-size:.78rem;color:#79ffe2;margin-top:4px}
-    @media(max-width:600px){.bozo-voice-row{grid-template-columns:1fr}.bozo-voice-row-controls{justify-content:flex-start}.bozo-voice-cal{padding:16px}}
-  `;
-  document.head.appendChild(style);
-}
-
-async function bozoOpenAndroidVoiceSetup(){
-  const plugin=window.Capacitor?.Plugins?.TextToSpeech;
-  if(!plugin?.getSupportedVoices||!plugin?.speak){toast('Android voice setup is unavailable on this device.');return;}
-  bozoEnsureAndroidVoiceSetupStyles();
-  let voices=[];
-  try{voices=(await plugin.getSupportedVoices())?.voices||[];}catch(error){console.warn(error);}
-  if(!voices.length){
-    try{await plugin.openInstall?.();}catch{}
-    toast('Android did not report any installed TTS voices.');
-    return;
-  }
-  const english=voices.map((voice,index)=>({voice,index})).filter(({voice})=>/^en/i.test(String(voice?.lang||'')));
-  const list=english.length?english:voices.map((voice,index)=>({voice,index}));
-  const georgeIndex=bozoAndroidStoredVoiceIndex('george');
-  const danielIndex=bozoAndroidStoredVoiceIndex('daniel');
-  const backdrop=document.createElement('div');
-  backdrop.className='bozo-voice-cal-backdrop';
-  backdrop.innerHTML=`<div class="bozo-voice-cal" role="dialog" aria-modal="true" aria-label="Android voice setup">
-    <div class="bozo-voice-cal-actions"><button type="button" data-close>Close</button></div>
-    <h2>Android voice setup</h2>
-    <p>Android does not reliably tell BOZO whether a system voice is male or female. Tap <b>Test</b> to hear each installed English voice, then assign the ones you want to George and Daniel. Your choices are saved on this device.</p>
-    <div data-voice-list>${list.map(({voice,index})=>`<div class="bozo-voice-row" data-index="${index}">
-      <div><b>${escapeHtml(String(voice.name||`Voice ${index}`))}</b><small>${escapeHtml(String(voice.lang||'unknown'))} · ${voice.localService?'local':'network'}${voice.default?' · default':''}</small><div class="bozo-voice-current">${index===georgeIndex?'GEORGE':''}${index===georgeIndex&&index===danielIndex?' · ':''}${index===danielIndex?'DANIEL':''}</div></div>
-      <div class="bozo-voice-row-controls"><button type="button" data-test="${index}">Test</button><button type="button" data-assign="george" data-index="${index}">Use for George</button><button type="button" data-assign="daniel" data-index="${index}">Use for Daniel</button></div>
-    </div>`).join('')}</div>
-  </div>`;
-  document.body.appendChild(backdrop);
-  const close=()=>{try{plugin.stop?.();}catch{}backdrop.remove();};
-  backdrop.querySelector('[data-close]')?.addEventListener('click',close);
-  backdrop.addEventListener('click',e=>{if(e.target===backdrop)close();});
-  backdrop.querySelectorAll('[data-test]').forEach(button=>button.addEventListener('click',async()=>{
-    const index=Number(button.dataset.test);const voice=voices[index];
-    try{await plugin.stop?.();await plugin.speak({text:'Hello. This is BOZO voice test. The knight belongs on f three.',lang:String(voice?.lang||'en-GB'),rate:.96,pitch:1,volume:1,voice:index,queueStrategy:0});}catch(error){console.warn('Voice test failed',error);toast('That Android voice could not play.');}
-  }));
-  backdrop.querySelectorAll('[data-assign]').forEach(button=>button.addEventListener('click',()=>{
-    const id=button.dataset.assign;const index=Number(button.dataset.index);
-    bozoAndroidStoreVoiceIndex(id,index);
-    backdrop.querySelectorAll('.bozo-voice-current').forEach(el=>el.textContent='');
-    const g=bozoAndroidStoredVoiceIndex('george'),d=bozoAndroidStoredVoiceIndex('daniel');
-    backdrop.querySelectorAll('.bozo-voice-row').forEach(row=>{const i=Number(row.dataset.index);const tags=[];if(i===g)tags.push('GEORGE');if(i===d)tags.push('DANIEL');row.querySelector('.bozo-voice-current').textContent=tags.join(' · ');});
-    toast(`${id==='george'?'George':'Daniel'} now uses ${voice?.name||`voice ${index}`}.`);
-  }));
-}
-
 async function bozoCoachSpeakText(text){
   reviewStopVoice();
   if(!reviewVoiceEnabled||!text)return;
   const token=reviewVoiceRequestToken;
   const spoken=reviewChessTextForSpeech(String(text));
+  // Keep more of an explanation inside each Aura render so the voice remains
+  // consistent. We still split very long narration so Android does not lose the
+  // tail of a large response.
+  const chunks=splitBozoSpeechChunks(spoken,620);
   try{
-    const audio=bozoUseRemoteTts()?await requestRemoteKokoroAudio(spoken):await requestReviewCoachAudio(spoken,null);
-    if(token!==reviewVoiceRequestToken)return;
-    await bozoPlayCoachAudioResult(audio,token);
-  }catch(error){
-    console.warn('Kokoro coach voice failed:',error);
-    if(token!==reviewVoiceRequestToken||error?.name==='AbortError')return;
-    if(bozoUseRemoteTts()){
-      const label=REVIEW_COACH_VOICES[reviewVoiceId]?.label||'Coach';
-      reviewVoiceStatus(`${label} unavailable · remote TTS failed`,'error');
-      bozoTtsLog('remote failure',error?.message||error);
-      return;
+    for(const chunk of chunks){
+      if(token!==reviewVoiceRequestToken)return;
+      const audio=await requestReviewCoachAudio(chunk,null);
+      if(token!==reviewVoiceRequestToken)return;
+      const src=audio.blob?URL.createObjectURL(audio.blob):audio.url;
+      if(!src)continue;
+      reviewVoiceObjectUrl=audio.blob?src:'';
+      reviewVoicePlayback=new Audio(src);
+      await new Promise((resolve,reject)=>{
+        reviewVoicePlayback.addEventListener('ended',resolve,{once:true});
+        reviewVoicePlayback.addEventListener('error',()=>reject(new Error('Coach audio playback failed')),{once:true});
+        reviewVoicePlayback.play().catch(reject);
+      });
+      if(reviewVoiceObjectUrl===src){
+        try{URL.revokeObjectURL(src);}catch{}
+        reviewVoiceObjectUrl='';
+      }
+      // Slight human-like break between long narration segments.
+      if(chunk!==chunks[chunks.length-1])await bozoSpeechSleep(170);
     }
-    reviewSpeechFallback(spoken);
+  }catch(error){
+    if(token===reviewVoiceRequestToken){
+      console.warn('Aura-2 Scholar voice failed:',error);
+      reviewVoiceStatus('Aura-2 voice could not play.','error');
+    }
   }
 }
 function bindScholarControls(){
-  document.querySelectorAll('[data-scholar-voice-toggle]').forEach(b=>{if(b.dataset.bound)return;b.dataset.bound='1';b.addEventListener('click',()=>{bozoUnlockCoachAudio().catch(()=>{});setReviewVoiceEnabled(!reviewVoiceEnabled);bozoCoachSetDialogue('',{speak:false})})});
-  document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>{if(s.dataset.bound)return;s.dataset.bound='1';s.value=reviewVoiceId;s.addEventListener('change',()=>{bozoUnlockCoachAudio().catch(()=>{});setReviewVoiceId(s.value)})});
-  // v4.15.26: native Android + mobile web use the same remote George/Daniel service.
-  // Desktop web keeps local Kokoro. Mobile never falls back to an unrelated system voice.
+  document.querySelectorAll('[data-scholar-voice-toggle]').forEach(b=>{if(b.dataset.bound)return;b.dataset.bound='1';b.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);bozoCoachSetDialogue('',{speak:false})})});
+  document.querySelectorAll('[data-scholar-voice-select]').forEach(s=>{if(s.dataset.bound)return;s.dataset.bound='1';s.value=reviewVoiceId;s.addEventListener('change',()=>setReviewVoiceId(s.value))});
 }
 
 function endgameCoachVariant(key, variants){
@@ -16973,24 +18042,71 @@ function endgameMaterialLabel(fen){
 function endgamePositionFeatures(game=endgameGame){
   const out={pawns:0,rooks:0,bishops:0,knights:0,queens:0,whitePawns:0,blackPawns:0};
   try{for(const f of ['a','b','c','d','e','f','g','h'])for(let r=1;r<=8;r++){const piece=game?.get?.(`${f}${r}`);if(!piece)continue;if(piece.type==='p'){out.pawns++;piece.color==='w'?out.whitePawns++:out.blackPawns++;}else if(piece.type==='r')out.rooks++;else if(piece.type==='b')out.bishops++;else if(piece.type==='n')out.knights++;else if(piece.type==='q')out.queens++;}}catch{}
-  out.pawnless=out.pawns===0;out.rookEnding=out.rooks>0;out.queenEnding=out.queens>0;out.minorEnding=(out.bishops+out.knights)>0;return out;
+  out.pawnless=out.pawns===0;
+  out.rookEnding=out.rooks>0;
+  out.queenEnding=out.queens>0;
+  out.minorEnding=(out.bishops+out.knights)>0;
+  out.userPawns=endgameUserColor==='b'?out.blackPawns:out.whitePawns;
+  out.opponentPawns=endgameUserColor==='b'?out.whitePawns:out.blackPawns;
+  out.bothSidesHavePawns=out.whitePawns>0&&out.blackPawns>0;
+  return out;
 }
 function endgamePieceName(type){return({k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'})[type]||'piece';}
+function endgamePromotionObjectiveActive(row=endgameCurrent,game=endgameGame){
+  const f=endgamePositionFeatures(game);
+  if(endgameTarget!=='win'||f.userPawns<1)return false;
+  // A pawn merely existing is NOT enough. Promotion advice is reserved for
+  // exercises whose named concept explicitly makes promotion the plan.
+  const conceptText=`${row?.title||''} ${row?.concept||''} ${row?.subcategory||''}`.toLowerCase();
+  return /\b(promote|promotion|queening|queen the pawn|force promotion)\b/.test(conceptText);
+}
+function endgameCoachTopics(row=endgameCurrent,game=endgameGame){
+  const f=endgamePositionFeatures(game),promotion=endgamePromotionObjectiveActive(row,game);
+  const topics=['Checks and forcing tempi'];
+  if(f.pawnless&&f.rooks){topics.push('King confinement and escape squares','Rook activity and checking distance');if(f.minorEnding)topics.push('Piece coordination and mating-net geometry');else topics.push('King and rook coordination');}
+  else if(f.pawnless){topics.push('King activity and key squares');if(f.minorEnding)topics.push('Minor-piece coordination and controlled squares');if(f.queenEnding)topics.push('Queen checks, king safety and stalemate control');else topics.push('Loose pieces and simplification');}
+  else{
+    topics.push('King activity and key squares');
+    if(promotion)topics.push('Passed-pawn support and the concrete promotion route');
+    else if(f.bothSidesHavePawns)topics.push('Pawn breaks, races and which king arrives first');
+    else topics.push('Pawn support, blockade squares and king routes');
+    if(f.rookEnding)topics.push('Rook activity, checking distance and cut-off lines');
+    else if(f.minorEnding)topics.push('Piece coordination around the pawns');
+    else if(f.queenEnding)topics.push('Queen checks and king safety');
+    else topics.push('Tempo moves and opposition');
+  }
+  topics.push('Stalemate, repetition and 50-move drawing resources');
+  return topics.slice(0,5);
+}
+function updateEndgameCoachPrinciples(){
+  const box=document.querySelector('#endgame-study .scholar-coach-principles');if(!box)return;
+  const spans=[...box.querySelectorAll('span')],topics=endgameCoachTopics();
+  spans.forEach((el,i)=>{el.textContent=topics[i]||'';el.hidden=!topics[i];});
+}
 function endgameDefenseDialogue(move){
-  const f=endgamePositionFeatures();
+  const f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();
   if(/[+#]$/.test(move.san))return endgameCoachVariant('defense-check',[`The defense finds ${move.san} with check. Answer the forcing move first, then reassess your plan.`,`${move.san} forces your king to respond. After that, recalculate from the new king placement instead of following the old line automatically.`]);
   if(move.captured){
-    const suffix=f.pawns?'Recalculate the material balance, king activity, and any pawn race before moving again.':'With no pawn race to worry about, recalculate piece activity, king safety, and coordination before moving again.';
+    const suffix=f.pawnless?'With no pawn race to calculate, re-check piece activity, king placement, and coordination before moving again.':promotion?'Recalculate the material, king activity, and whether your promotion plan still works after the exchange.':f.bothSidesHavePawns?'Recalculate the material, king activity, and pawn structure before moving again.':'Recalculate the material, king activity, and the remaining pawn-support or blockade squares before moving again.';
     return endgameCoachVariant('defense-capture',[`The defense answers with ${move.san} and changes the material. ${suffix}`,`${move.san} changes what is left on the board. ${suffix}`]);
   }
-  if(move.piece==='k')return endgameCoachVariant('defense-king',[`The defender plays ${move.san}. The king has changed the key-square geometry, so check opposition, access squares, and whether your king can make progress.`,`${move.san} improves the defending king. Re-evaluate which squares your king needs and whether a direct approach still works.`]);
-  if(f.pawnless&&f.rookEnding)return endgameCoachVariant('defense-pawnless-rook',[`The defender plays ${move.san}. There are no pawns here, so focus on king confinement, checking distance, and coordination between the rook and king.`,`${move.san} changes the piece geometry. In this pawnless ending, re-check checks, rook activity, and how tightly the defending king is boxed in.`]);
+  if(move.piece==='k')return endgameCoachVariant('defense-king',[`The defender plays ${move.san}. The king has changed the key-square geometry, so check access squares and whether your king can still make progress.`,`${move.san} improves the defending king. Re-evaluate which squares your king needs and whether a direct approach still works.`]);
+  if(f.pawnless&&f.rookEnding)return endgameCoachVariant('defense-pawnless-rook',[`The defender plays ${move.san}. There are no pawns here, so focus on king confinement, checking distance, and piece coordination.`,`${move.san} changes the piece geometry. Re-check forcing checks, rook activity, escape squares, and how tightly the defending king is boxed in.`]);
   if(f.pawnless&&f.minorEnding)return endgameCoachVariant('defense-pawnless-minor',[`The defender plays ${move.san}. With no pawns on the board, piece coordination and king placement are the whole position.`,`${move.san} changes the piece geometry. Recalculate checks, mating nets, and which squares the kings and minor pieces control.`]);
-  if(f.pawns&&move.piece==='p')return endgameCoachVariant('defense-pawn',[`The defender plays ${move.san}. Recalculate the pawn race and which king reaches the critical squares first.`,`${move.san} changes the pawn structure. Check promotion timing, king routes, and whether a passed pawn has become more dangerous.`]);
-  if(f.rookEnding)return endgameCoachVariant('defense-rook',[`The defender plays ${move.san}. Re-check active rook squares, checks from behind or the side, and whether either king can be cut off.`,`${move.san} is the defensive resource. Before continuing, compare rook activity and king position rather than counting material alone.`]);
-  if(f.pawns)return endgameCoachVariant('defense-pawns',[`The defender plays ${move.san}. Recalculate key squares, king routes, and the pawn race from this exact position.`,`${move.san} changes the position. Check which pawn can advance safely and which king reaches the critical squares first.`]);
+  if(f.pawns&&move.piece==='p'){
+    if(promotion)return endgameCoachVariant('defense-pawn-promotion',[`The defender plays ${move.san}. Recalculate whether your pawn can still be supported all the way to promotion and which king controls the critical squares.`,`${move.san} changes the pawn geometry. Check the concrete promotion route again instead of assuming the old path still works.`]);
+    if(f.bothSidesHavePawns)return endgameCoachVariant('defense-pawn-race',[`The defender plays ${move.san}. Recalculate the pawn structure, king routes, and which side wins the race to the critical squares.`,`${move.san} changes the pawn structure. Compare king access and pawn breaks before deciding whether to push.`]);
+    return endgameCoachVariant('defense-pawn-single',[`The defender plays ${move.san}. Re-check the pawn's support, blockade squares, and the route both kings have to it.`,`${move.san} changes the pawn's role. Decide whether the important task is supporting it, blockading it, or improving the king first.`]);
+  }
+  if(f.rookEnding)return endgameCoachVariant('defense-rook',[`The defender plays ${move.san}. Re-check active rook squares, side or rear checks, and whether either king can be cut off.`,`${move.san} is the defensive resource. Before continuing, compare rook activity and king position rather than counting material alone.`]);
+  if(f.pawns){
+    if(promotion)return endgameCoachVariant('defense-pawns-promotion',[`The defender plays ${move.san}. Recalculate the key squares that support your promotion plan and whether the pawn can advance safely.`,`${move.san} changes the position. Check the concrete promotion route and the king support it requires.`]);
+    if(f.bothSidesHavePawns)return endgameCoachVariant('defense-pawns',[`The defender plays ${move.san}. Recalculate key squares, king routes, and the pawn structure from this exact position.`,`${move.san} changes the position. Compare pawn breaks and which king can improve first.`]);
+    return endgameCoachVariant('defense-one-pawn-side',[`The defender plays ${move.san}. Re-check king routes, blockade squares, and whether the pawn should move at all.`,`${move.san} changes the position. Focus on king activity and the pawn's support or blockade, not on pushing automatically.`]);
+  }
   return endgameCoachVariant('defense-generic',[`The defender plays ${move.san}. Recalculate checks, king activity, and piece coordination from the new position.`,`${move.san} is the reply. Do not continue the old plan automatically; identify what square or line the move changed.`]);
 }
+
 const ENDGAME_SEARCH_TIER_WORDS=new Set(['fundamentals','beginner','intermediate','club','advanced','expert','master']);
 const ENDGAME_SEARCH_CATEGORY_ALIASES={
   pawn:['pawn','pawns','king pawn','king and pawn','pawn ending','pawn endings'],
@@ -17038,19 +18154,8 @@ function tbSimple(category){if(['win','syzygy-win','maybe-win'].includes(categor
 function tbInvert(v){return v==='win'?'loss':v==='loss'?'win':v;}
 function tbRank(v){return v==='win'?2:v==='draw'?1:v==='loss'?0:-1;}
 async function endgameTablebase(fen){
-  const key=fen;
-  if(endgameTbCache.has(key))return await endgameTbCache.get(key);
-  // Cache the in-flight request as well as the finished result. Endgame move
-  // handling can ask for the same FEN from status/teaching/fairness paths in
-  // quick succession; on mobile those duplicate fetches make a tap feel hung.
-  const pending=(async()=>{
-    const response=await fetch(`${BOZO_TABLEBASE_ENDPOINT}?fen=${encodeURIComponent(fen)}`);
-    if(!response.ok)throw new Error('Tablebase unavailable for this position.');
-    return await response.json();
-  })();
-  endgameTbCache.set(key,pending);
-  try{const json=await pending;endgameTbCache.set(key,json);return json;}
-  catch(error){if(endgameTbCache.get(key)===pending)endgameTbCache.delete(key);throw error;}
+  const key=fen;if(endgameTbCache.has(key))return endgameTbCache.get(key);
+  const response=await fetch(`${BOZO_TABLEBASE_ENDPOINT}?fen=${encodeURIComponent(fen)}`);if(!response.ok)throw new Error('Tablebase unavailable for this position.');const json=await response.json();endgameTbCache.set(key,json);return json;
 }
 function endgameUserResult(tb){const side=endgameGame?.turn?.();const raw=tbSimple(tb.category);return side===endgameUserColor?raw:tbInvert(raw);}
 function endgameConfiguredObjective(row,tb){
@@ -17111,25 +18216,27 @@ async function startEndgameStudy(id,mode='learn'){
   const sourceLabel=row.source_type==='master_game'?'From the Master Games database':row.source_type==='theory'?'BOZO Theoretical Endgame':'BOZO Endgame';
   const mover=endgameGame.turn()==='w'?'WHITE':'BLACK',you=endgameUserColor==='w'?'WHITE':'BLACK';
   $('endgame-source').textContent=endgameGame.turn()===endgameUserColor?`${mover} TO MOVE · ${sourceLabel}`:`${mover} TO MOVE · YOU PLAY ${you} · ${sourceLabel}`;
-  paintEndgameBoard();updateEndgameStatus(tb);
-  const intro=endgameIntroDialogue(row,tb);bozoCoachSetDialogue(intro,{speak:endgameMode!=='test'});
+  paintEndgameBoard();updateEndgameStatus(tb);updateEndgameCoachPrinciples();
+  const intro=endgameIntroDialogue(row,tb);bozoCoachSetDialogue(intro,{speak:true});
   if(endgameGame.turn()!==endgameUserColor){
     await playEndgameDefense();
     if(endgameMode==='learn'&&endgameGame&&!endgameGame.game_over()&&endgameGame.turn()===endgameUserColor){try{await showEndgameTeachingLine(await endgameTablebase(endgameGame.fen()));}catch{}}
   }else if(mode==='learn')await showEndgameTeachingLine(tb);
 }
 
-function endgameIntroDialogue(row,tb){const objective=endgameTarget==='win'?'win this position':'hold the draw';const family=String(row.category||'endgame').toLowerCase();const waits=endgameGame?.turn?.()!==endgameUserColor?` The defense moves first; you are playing ${endgameUserColor==='w'?'White':'Black'}.`:'';return endgameCoachVariant('intro-'+family,[`This is a ${family} endgame. Your task is to ${objective}.${waits} Start by checking forcing moves and king activity.`,`Your goal here is to ${objective}.${waits} Before calculating deeply, identify passed pawns, loose pieces, and the most active king.`,`Take a moment before moving. In this ${family} ending, you need to ${objective}.${waits} Checks, pawn races, and key squares are the first things I want you to scan.`]);}
+function endgameIntroDialogue(row,tb){
+  const objective=endgameTarget==='win'?'win this position':'hold the draw',family=String(row.category||'endgame').toLowerCase(),waits=endgameGame?.turn?.()!==endgameUserColor?` The defense moves first; you are playing ${endgameUserColor==='w'?'White':'Black'}.`:'',f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive(row);
+  if(f.pawnless&&f.rookEnding)return endgameCoachVariant('intro-pawnless-rook',[`This is a ${family} endgame. Your task is to ${objective}.${waits} There are no pawns to race, so start with checks, king confinement, rook activity, and escape squares.`,`Your goal is to ${objective}.${waits} In this pawnless ending, calculate forcing checks and how the pieces restrict the enemy king before you move.`]);
+  if(f.pawnless)return endgameCoachVariant('intro-pawnless',[`This is a ${family} endgame. Your task is to ${objective}.${waits} With no pawns on the board, focus on king placement, forcing moves, and piece coordination.`,`Your goal is to ${objective}.${waits} Start with checks, controlled squares, and how your pieces coordinate around the kings.`]);
+  if(promotion)return endgameCoachVariant('intro-promotion',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Promotion is part of the actual training plan here, so calculate the pawn's route, the king support it needs, and the defender's blockade squares.`,`Your goal is to ${objective}.${waits} This lesson is specifically about converting through promotion. Identify the critical pawn, the supporting king route, and any forcing checks first.`]);
+  if(f.bothSidesHavePawns)return endgameCoachVariant('intro-pawn-structure',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Start with king activity, pawn breaks, and which side reaches the critical squares first.`,`Your goal is to ${objective}.${waits} There are pawns on both sides, but do not assume the answer is to push. Compare king routes, pawn breaks, and forcing moves first.`]);
+  return endgameCoachVariant('intro-single-pawn-side',[`This is a ${family} endgame. Your task is to ${objective}.${waits} Focus on king activity, blockade or support squares, and whether moving the pawn actually helps.`,`Your goal is to ${objective}.${waits} A pawn is present, but the position is not automatically about promotion. Start with king routes, forcing moves, and the pawn's strategic role.`]);
+}
 function paintEndgameBoard(){
   const board=$('endgame-board');if(!board||!endgameGame)return;const orientation=endgameUserColor==='w'?'white':'black',displayGame=endgameHistoryGame();const ranks=orientation==='white'?[8,7,6,5,4,3,2,1]:[1,2,3,4,5,6,7,8],files=orientation==='white'?['a','b','c','d','e','f','g','h']:['h','g','f','e','d','c','b','a'];
   board.innerHTML=ranks.flatMap(rank=>files.map(file=>{const sq=`${file}${rank}`,p=displayGame.get(sq),symbol=p?`${p.color}${p.type.toUpperCase()}`:'',selected=endgameSelected===sq||endgamePremoveSelected===sq,pmFrom=endgamePremove?.from===sq,pmTo=endgamePremove?.to===sq;return `<button type="button" data-endgame-square="${sq}" data-piece-color="${p?.color==='w'?'white':p?.color==='b'?'black':''}" class="${selected?'selected ':''}${pmFrom?'rated-premove-from ':''}${pmTo?'rated-premove-to':''}">${webPiece(symbol)}</button>`})).join('');
   syncBoardUserAnnotationPosition('endgame-board',`${displayGame.fen()}|${orientation}`);board.querySelectorAll('[data-endgame-square]').forEach(b=>b.addEventListener('click',()=>clickEndgameSquare(b.dataset.endgameSquare)));
 }
-function paintEndgameSelection(){
-  const board=$('endgame-board');if(!board)return;
-  board.querySelectorAll('[data-endgame-square]').forEach(b=>b.classList.toggle('selected',b.dataset.endgameSquare===endgameSelected||b.dataset.endgameSquare===endgamePremoveSelected));
-}
-
 async function clickEndgameSquare(square){
   if(!endgameGame||endgameGame.game_over()||!endgameAtLivePosition())return;
   const p=endgameGame.get(square),ourTurn=endgameGame.turn()===endgameUserColor;
@@ -17190,17 +18297,31 @@ async function executeEndgameUserMove(from,to,promotion='q',fromPremove=false){
   endgameBusy=false;
 }
 function endgameFailureDialogue(move,tb,result){
+  const f=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();
   if(tb.checkmate)return endgameCoachVariant('fail-mate',[`${move.san} allows checkmate. Check the king's escape squares before committing.`,`${move.san} loses to mate. In a reduced position, one forcing check can decide everything.`]);
   if(tb.stalemate)return endgameCoachVariant('fail-stalemate',[`${move.san} allows stalemate. The opponent has no legal move, so the win disappears.`,`Careful: ${move.san} stalemates the defender. Keep at least one legal move available while you convert.`]);
-  if(result==='draw'&&endgameTarget==='win')return endgameCoachVariant('fail-win-draw',[`${move.san} gives away the win. The position is now a draw, so look for the move that keeps the opponent restricted.`,`${move.san} lets the win slip. Re-check king activity, pawn races, and whether you surrendered a key checking square.`,`That move changes a winning position into a draw. Find the resource that keeps your opponent tied down instead.`]);
-  if(result==='loss')return endgameCoachVariant('fail-loss',[`${move.san} turns the position into a theoretical loss. Look for the square or tempo you just gave up.`,`${move.san} loses the result. Before retrying, compare forcing checks and the race of both kings and pawns.`]);
+  if(result==='draw'&&endgameTarget==='win'){
+    if(f.pawnless)return endgameCoachVariant('fail-win-draw-pawnless',[`${move.san} gives away the win. There is no pawn race here; look for the check, restriction, or king placement that keeps the defender boxed in.`,`${move.san} lets the win slip. Re-check forcing moves, escape squares, and piece coordination instead of searching for a pawn plan.`]);
+    if(promotion)return endgameCoachVariant('fail-win-draw-promotion',[`${move.san} gives away the win. Recalculate whether your promotion route still works and which supporting square you surrendered.`,`${move.san} lets the win slip. Check the exact pawn timing and king support required by this promotion plan.`]);
+    return endgameCoachVariant('fail-win-draw',[`${move.san} gives away the win. Re-check king activity, forcing moves, and the key square or pawn break you surrendered.`,`${move.san} lets the win slip. The presence of pawns does not mean you should race them; identify the move that keeps the opponent restricted.`]);
+  }
+  if(result==='loss'){
+    if(f.pawnless)return endgameCoachVariant('fail-loss-pawnless',[`${move.san} turns the position into a theoretical loss. Look for the checking line, escape square, or piece-coordination detail you just gave up.`,`${move.san} loses the result. Compare forcing moves and king placement before retrying.`]);
+    if(promotion)return endgameCoachVariant('fail-loss-promotion',[`${move.san} loses the result. Recalculate the concrete promotion route and the king support it needs.`,`${move.san} turns the position into a loss. Check whether the defender gained the critical blockade square.`]);
+    return endgameCoachVariant('fail-loss',[`${move.san} turns the position into a theoretical loss. Look for the square, tempo, or pawn-structure detail you just gave up.`,`${move.san} loses the result. Before retrying, compare forcing moves and king routes.`]);
+  }
   return endgameCoachVariant('fail-generic',[`${move.san} does not preserve the result. Compare the king positions and forcing moves before trying again.`,`Not quite. ${move.san} changes the theoretical result, so inspect checks, captures, and key squares first.`]);
 }
 function endgameSuccessDialogue(move,tb,result){
-  const check=/[+#]$/.test(move.san);if(check)return endgameCoachVariant('success-check',[`${move.san} works because the check forces a reply and gains you a tempo for the endgame plan.`,`${move.san} keeps the result. The check matters because your opponent must answer it before creating counterplay.`,`Good. ${move.san} is forcing, so the king has to respond before the defender can improve anything else.`]);
+  const f=endgamePositionFeatures(),promotionFocus=endgamePromotionObjectiveActive(),check=/[+#]$/.test(move.san);
+  if(move.promotion)return endgameCoachVariant('success-promotion',[`${move.san} works because the pawn actually reaches promotion while preserving the ${endgameTarget}. Now convert the new material cleanly.`,`${move.san} completes the promotion phase of the plan. The position still meets your ${endgameTarget} objective.`]);
+  if(check)return endgameCoachVariant('success-check',[`${move.san} works because the check forces a reply and gains you a tempo for the endgame plan.`,`${move.san} keeps the result. The check matters because your opponent must answer it before creating counterplay.`,`Good. ${move.san} is forcing, so the king has to respond before the defender can improve anything else.`]);
   if(move.captured)return endgameCoachVariant('success-capture',[`${move.san} keeps the theoretical ${endgameTarget}. The exchange changes the material without giving up the result.`,`That capture works. ${move.san} simplifies while preserving the ${endgameTarget}.`,`Good conversion choice. ${move.san} changes the material, but the resulting position still meets your objective.`]);
-  return endgameCoachVariant('success-quiet',[`${move.san} preserves the ${endgameTarget}. Now ask what the defender's most active reply is.`,`${move.san} is sound. Keep improving the position without allowing checks or a pawn race.`,`Good. ${move.san} holds the result. The next job is to restrict counterplay, not rush.`]);
+  if(f.pawnless)return endgameCoachVariant('success-quiet-pawnless',[`${move.san} preserves the ${endgameTarget}. With no pawns to race, keep improving king placement, checks, and piece coordination.`,`${move.san} is sound. The next job is to restrict escape squares and counterchecks, not search for a pawn plan.`]);
+  if(promotionFocus)return endgameCoachVariant('success-quiet-promotion',[`${move.san} preserves the ${endgameTarget}. Now check whether it improves the concrete promotion route or the king support behind it.`,`${move.san} is sound. Keep the promotion plan concrete: pawn route, king support, and blockade squares.`]);
+  return endgameCoachVariant('success-quiet',[`${move.san} preserves the ${endgameTarget}. Now ask what the defender's most active reply is.`,`${move.san} is sound. Keep improving the position without assuming the pawn must advance.`,`Good. ${move.san} holds the result. Restrict counterplay first; push pawns only when the position actually calls for it.`]);
 }
+
 async function playEndgameDefense(){
   if(!endgameGame||endgameGame.turn()===endgameUserColor||endgameGame.game_over())return;const tb=await endgameTablebase(endgameGame.fen());if(!tb.moves?.length)return;
   // The move categories in the tablebase response describe the CHILD position
@@ -17211,43 +18332,47 @@ async function playEndgameDefense(){
   // selecting the quickest losing line (for example, hanging a queen at DTZ 1).
   let choices=tb.moves.map((m,index)=>({m,index,user:tbSimple(m.category),rank:tbRank(tbSimple(m.category)),dtz:Number.isFinite(m.dtz)?m.dtz:-Infinity}));
   choices.sort((a,b)=>a.rank-b.rank||b.dtz-a.dtz||a.index-b.index);const chosen=choices[0].m;
-  const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,120));endgameGame.move(legal);endgamePushHistory(endgameGame.fen(),legal.san,'defense');paintEndgameBoard();
+  const legal=endgameGame.moves({verbose:true}).find(m=>(m.from+m.to+(m.promotion||'')).toLowerCase()===chosen.uci.toLowerCase());if(legal){await new Promise(r=>setTimeout(r,420));endgameGame.move(legal);endgamePushHistory(endgameGame.fen(),legal.san,'defense');paintEndgameBoard();
     // Terminal game state always wins over the generic "defense chooses..."
     // dialogue. This is the bug that previously let the board say repetition
     // while Scholar BOZO kept talking as if the exercise were still running.
     const terminalReason=endgameTerminalReason(endgameGame);
     if(terminalReason){await finishEndgame(endgameTerminalUserResult(endgameGame),terminalReason);return;}
-    // The selected tablebase move already contains the WDL category of the
-    // CHILD position from the next side-to-move's point of view. After BOZO's
-    // move, that next side is the student, so we can verify the training
-    // objective immediately without blocking input on a second network request.
-    const next={category:chosen.category,dtz:chosen.dtz};
-    const nextResult=tbSimple(chosen.category);
+    const next=await endgameTablebase(endgameGame.fen());
+    const nextResult=endgameUserResult(next);
+    // Hard runtime invariant: after BOZO moves, the student's objective must
+    // still be achievable under perfect play. If this ever fails because of bad
+    // metadata/API semantics, do not strand the student in an impossible task.
     if(tbRank(nextResult)<tbRank(endgameTarget)){
       console.error('[BOZO Endgames] defense move violated training objective',endgameCurrent?.id,legal.san,endgameTarget,nextResult,endgameGame.fen());
       endgameGame.undo();
       if(endgameHistory.length>1){endgameHistory.pop();endgameHistoryIndex=endgameHistory.length-1;}
       clearEndgamePremove();paintEndgameBoard();
-      updateEndgameStatus(tb);
+      try{updateEndgameStatus(await endgameTablebase(endgameGame.fen()));}catch{}
       bozoCoachSetDialogue('This exercise was paused because the defensive reply did not preserve a fair training objective. BOZO will not make you continue from an impossible position.',{speak:true});
       return;
     }
-    updateEndgameStatus(next);
-    // Warm the complete child tablebase response in the background for the
-    // student's next move/hint, but never keep endgameBusy locked waiting on it.
-    endgameTablebase(endgameGame.fen()).catch(()=>{});
-    const line=endgameDefenseDialogue(legal);bozoCoachSetDialogue(line,{speak:endgameMode!=='test'});await tryEndgamePremove();}
+    updateEndgameStatus(next);const line=endgameDefenseDialogue(legal);bozoCoachSetDialogue(`What the response did: ${line}`,{speak:endgameMode!=='test'});await tryEndgamePremove();}
 }
-function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=endgameObjectiveLabel();if(endgameMode==='learn')$('endgame-status').textContent=`Theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;else if(endgameMode==='practice')$('endgame-status').textContent=`Objective ${endgameObjectiveLabel()} · theoretical result hidden during practice`;else $('endgame-status').textContent='Theoretical result hidden until the exercise ends.';$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;}
-async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0];const lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'';const text=`${lesson}A strong move to investigate is ${best.san}. Do not memorize the notation: work out what square, tempo, check, restriction, or simplification makes the move preserve your objective.`;$('endgame-learn-note').textContent=text;}
+function updateEndgameStatus(tb){const result=endgameUserResult(tb);$('endgame-objective').textContent=endgameObjectiveLabel();if(endgameMode==='learn')$('endgame-status').textContent=`Theoretical result: ${result.toUpperCase()}${Number.isFinite(tb.dtz)?` · DTZ ${Math.abs(tb.dtz)}`:''}`;else if(endgameMode==='practice')$('endgame-status').textContent=`Objective ${endgameObjectiveLabel()} · theoretical result hidden during practice`;else $('endgame-status').textContent='Theoretical result hidden until the exercise ends.';$('endgame-mistakes').textContent=endgameMistakes;$('endgame-hints-used').textContent=endgameHints;updateEndgameCoachPrinciples();}
+async function showEndgameTeachingLine(tb){if(!tb?.moves?.length)return;const best=tb.moves[0],lesson=endgameCurrent?.coach_lesson?`${endgameCurrent.coach_lesson} `:'',promotion=endgamePromotionObjectiveActive();const reasons=promotion?'square, tempo, check, restriction, simplification, or promotion detail':'square, tempo, check, restriction, or simplification';const text=`${lesson}A strong move to investigate is ${best.san}. Do not memorize the notation: work out what ${reasons} makes the move preserve your objective.`;$('endgame-learn-note').textContent=text;}
 async function endgameHint(){
   if(!endgameGame||endgameBusy)return;endgameHints++;const tb=await endgameTablebase(endgameGame.fen());const ranked=(tb.moves||[]).map(m=>({m,result:tbInvert(tbSimple(m.category))})).sort((a,b)=>tbRank(b.result)-tbRank(a.result));const best=ranked[0]?.m;if(!best)return;
-  const stage=Math.min(endgameHints,3),from=best.uci.slice(0,2),piece=endgameGame.get(from),features=endgamePositionFeatures();let text='';
-  if(stage===1){if(features.pawnless&&features.rooks)text='There are no pawns to race. Start with forcing checks, king confinement, rook activity, and the distance between the kings.';else if(features.pawnless)text='There are no pawns here. Start with forcing moves, king placement, and how your pieces coordinate to restrict the enemy king.';else if(features.rooks)text='Start with forcing checks, active rook placement, king activity, and whether a rook belongs behind a passed pawn.';else if(features.queens)text='Start with forcing checks, king safety, and whether a queen move creates a promotion or mating threat.';else text='Start with opposition, key squares, king routes, and the exact timing of the pawn race.';}
+  const stage=Math.min(endgameHints,3),from=best.uci.slice(0,2),piece=endgameGame.get(from),features=endgamePositionFeatures(),promotion=endgamePromotionObjectiveActive();let text='';
+  if(stage===1){
+    if(features.pawnless&&features.rooks)text='There are no pawns to race. Start with forcing checks, king confinement, rook activity, checking distance, and escape squares.';
+    else if(features.pawnless)text='There are no pawns here. Start with forcing moves, king placement, and how your pieces coordinate to restrict the enemy king.';
+    else if(promotion)text="Promotion is part of this lesson. Start with the pawn's exact route, the king support it needs, and the defender's blockade squares.";
+    else if(features.rooks)text='Start with forcing checks, active rook placement, king activity, and the strategic role of the pawns. Do not assume the answer is to push one.';
+    else if(features.queens)text='Start with forcing checks, king safety, and the role of the pawns. Only calculate promotion if the position makes it a concrete threat.';
+    else if(features.bothSidesHavePawns)text='Start with opposition, key squares, pawn breaks, and king routes. A pawn race matters only if the timing is actually forcing.';
+    else text='Start with king routes, support or blockade squares, and whether moving the pawn improves the position at all.';
+  }
   else if(stage===2)text=`Focus on the ${endgamePieceName(piece?.type)} on ${from}. Find the move that preserves your ${endgameObjectiveLabel().toLowerCase()} and explain what it changes before you play it.`;
-  else text=`The move is ${best.san}. Before playing it, identify the concrete reason it works: a check, capture, key square, tempo, restriction, or promotion idea.`;
+  else text=promotion?`The move is ${best.san}. Before playing it, identify the concrete reason it works: a check, capture, key square, tempo, restriction, or promotion detail.`:`The move is ${best.san}. Before playing it, identify the concrete reason it works: a check, capture, key square, tempo, restriction, or simplification.`;
   bozoCoachSetDialogue(text,{speak:true});$('endgame-hints-used').textContent=endgameHints;
 }
+
 async function finishEndgame(result,reason=endgameTerminalReason(endgameGame)){
   const actual=reason?endgameTerminalUserResult(endgameGame):result;
   const won=endgameResultMeetsObjective(actual);
@@ -17309,3 +18434,16 @@ async function ownerSaveEndgame(card){const id=card?.dataset.ownerEndgame;if(!id
 
 // Keep shared Scholar BOZO controls synchronized wherever they appear.
 setTimeout(bindScholarControls,0);
+
+async function replayBozoBotDialogue(profile,text){
+  if(!profile?.voice||!text)return;
+  await unlockBozoBotAudio();
+  await playBozoAuraText(profile,text);
+}
+
+$('bot-dialogue-replay')?.addEventListener('click',()=>{
+  const {profile,text}=bozoLastBotDialogue||{};
+  if(!profile||!text)return;
+  replayBozoBotDialogue(profile,text);
+});
+
