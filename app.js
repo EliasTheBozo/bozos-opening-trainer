@@ -5802,8 +5802,8 @@ $('review-flip').addEventListener('click', () => {
 });
 $('ask-review-coach').addEventListener('click', askReviewCoach);
 $('clear-review-coach').addEventListener('click', clearReviewCoach);
-$('review-voice-toggle')?.addEventListener('click',()=>{unlockBozoBotAudio().catch(()=>{});setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
-$('review-voice-select')?.addEventListener('change',event=>{unlockBozoBotAudio().catch(()=>{});setReviewVoiceId(event.target.value);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
+$('review-voice-toggle')?.addEventListener('click',()=>{setReviewVoiceEnabled(!reviewVoiceEnabled);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
+$('review-voice-select')?.addEventListener('change',event=>{setReviewVoiceId(event.target.value);const row=reviewStepIndex===0?null:reviewData?.rows[reviewStepIndex-1];if(reviewVoiceEnabled&&row)speakCurrentReviewExplanation(row,{manual:true});});
 $('review-coach-question').addEventListener('keydown', event => {
   if (event.key === 'Enter') askReviewCoach();
 });
@@ -8419,7 +8419,6 @@ if(!REVIEW_COACH_VOICES[reviewVoiceId])reviewVoiceId='atlas';
 queueMicrotask(()=>updateReviewVoiceButton());
 let reviewVoicePlayback=null;
 let reviewVoiceObjectUrl='';
-let reviewVoiceAudioSource=null;
 let reviewVoiceRequestToken=0;
 const reviewVoiceCache=new Map();
 
@@ -8494,11 +8493,6 @@ function reviewVoiceStatus(text,state=''){
 }
 function reviewStopVoice(){
   reviewVoiceRequestToken++;
-  if(reviewVoiceAudioSource){
-    try{reviewVoiceAudioSource.stop();}catch{}
-    try{reviewVoiceAudioSource.disconnect();}catch{}
-    reviewVoiceAudioSource=null;
-  }
   try{reviewVoicePlayback?.pause?.();}catch{}
   reviewVoicePlayback=null;
   if(reviewVoiceObjectUrl){try{URL.revokeObjectURL(reviewVoiceObjectUrl);}catch{}reviewVoiceObjectUrl='';}
@@ -8536,8 +8530,7 @@ async function requestReviewCoachAudio(text,row){
   const response=await fetch(BOZO_AURA_TTS_ENDPOINT,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({text,speaker}),
-    cache:'no-store'
+    body:JSON.stringify({text,speaker})
   });
   if(!response.ok){
     let detail='';
@@ -8554,91 +8547,26 @@ async function requestReviewCoachAudio(text,row){
   reviewVoiceStatus(`${voiceConfig.label} ready.`,'ready');
   return {blob,voice:speaker};
 }
-async function playReviewAuraBlob(blob,token){
-  if(token!==reviewVoiceRequestToken)return false;
-  if(!blob?.size)throw new Error('Aura-2 returned empty audio');
-
-  // Use the same unlocked WebAudio path that proved reliable for BOZO Bot.
-  // Browser autoplay rules often reject a brand-new HTMLAudio element after an
-  // awaited network request, even when the move itself came from a click.
-  const ctx=ensureBozoBotAudioContext();
-  if(ctx){
-    try{
-      if(ctx.state==='suspended')await ctx.resume();
-      if(ctx.state==='running'){
-        const bytes=await blob.arrayBuffer();
-        const decoded=await ctx.decodeAudioData(bytes.slice(0));
-        if(token!==reviewVoiceRequestToken)return false;
-        await new Promise((resolve,reject)=>{
-          try{
-            const source=ctx.createBufferSource();
-            source.buffer=decoded;
-            source.connect(ctx.destination);
-            reviewVoiceAudioSource=source;
-            source.onended=()=>{
-              if(reviewVoiceAudioSource===source)reviewVoiceAudioSource=null;
-              resolve();
-            };
-            source.start(0);
-          }catch(error){reject(error);}
-        });
-        return token===reviewVoiceRequestToken;
-      }
-    }catch(error){
-      console.warn('Aura-2 Review WebAudio path failed; trying HTMLAudio:',error);
-    }
-  }
-
-  // Desktop/Safari fallback. Keep this path separate from Bot audio state.
-  let src='';
-  try{
-    src=URL.createObjectURL(blob);
-    reviewVoiceObjectUrl=src;
-    const audio=new Audio(src);
-    audio.preload='auto';
-    audio.setAttribute('playsinline','');
-    audio.setAttribute('webkit-playsinline','');
-    audio.volume=1;
-    reviewVoicePlayback=audio;
-    await new Promise((resolve,reject)=>{
-      const cleanup=()=>{
-        audio.removeEventListener('ended',onEnded);
-        audio.removeEventListener('error',onError);
-      };
-      const onEnded=()=>{cleanup();resolve();};
-      const onError=()=>{cleanup();reject(new Error('Review HTMLAudio playback failed'));};
-      audio.addEventListener('ended',onEnded);
-      audio.addEventListener('error',onError);
-      audio.play().catch(error=>{cleanup();reject(error);});
-    });
-    if(reviewVoicePlayback===audio)reviewVoicePlayback=null;
-    if(reviewVoiceObjectUrl===src){try{URL.revokeObjectURL(src);}catch{}reviewVoiceObjectUrl='';}
-    return token===reviewVoiceRequestToken;
-  }catch(error){
-    if(src&&reviewVoiceObjectUrl===src){try{URL.revokeObjectURL(src);}catch{}reviewVoiceObjectUrl='';}
-    throw error;
-  }
-}
-
 async function speakCurrentReviewExplanation(row,{manual=false}={}){
   reviewStopVoice();
   if(!reviewVoiceEnabled||!row)return;
-  // Resume/prime audio immediately when this call is reached from a user move,
-  // before the asynchronous Aura request consumes the browser's user gesture.
-  unlockBozoBotAudio().catch(()=>{});
   const token=reviewVoiceRequestToken;
   const text=reviewVoiceText(row);if(!text)return;
   try{
     const audio=await requestReviewCoachAudio(text,row);
     if(token!==reviewVoiceRequestToken)return;
-    const played=audio.blob?await playReviewAuraBlob(audio.blob,token):false;
-    if(!played&&token===reviewVoiceRequestToken)throw new Error('Aura-2 audio playback was cancelled');
+    const src=audio.blob?URL.createObjectURL(audio.blob):audio.url;if(!src)return;
+    reviewVoiceObjectUrl=audio.blob?src:'';
+    reviewVoicePlayback=new Audio(src);
+    reviewVoicePlayback.addEventListener('ended',()=>{
+      if(reviewVoiceObjectUrl===src){URL.revokeObjectURL(src);reviewVoiceObjectUrl='';}
+    },{once:true});
+    await reviewVoicePlayback.play();
   }catch(error){
     console.warn('Aura-2 Review voice failed:',error);
     if(token!==reviewVoiceRequestToken)return;
-    const blocked=String(error?.name||'').includes('NotAllowed')||/user gesture|autoplay|notallowed/i.test(String(error?.message||''));
-    reviewVoiceStatus(blocked?'Tap Coach voice to start audio.':'Aura-2 voice could not play.','error');
-    if(manual)toast(blocked?'Tap Coach voice once to unlock audio.':'Coach voice could not play right now.');
+    reviewVoiceStatus('Aura-2 voice could not play.','error');
+    if(manual)toast('Coach voice could not play right now.');
   }
 }
 
@@ -17962,9 +17890,18 @@ async function bozoCoachSpeakText(text){
       if(token!==reviewVoiceRequestToken)return;
       const audio=await requestReviewCoachAudio(chunk,null);
       if(token!==reviewVoiceRequestToken)return;
-      if(audio.blob){
-        const played=await playReviewAuraBlob(audio.blob,token);
-        if(!played&&token!==reviewVoiceRequestToken)return;
+      const src=audio.blob?URL.createObjectURL(audio.blob):audio.url;
+      if(!src)continue;
+      reviewVoiceObjectUrl=audio.blob?src:'';
+      reviewVoicePlayback=new Audio(src);
+      await new Promise((resolve,reject)=>{
+        reviewVoicePlayback.addEventListener('ended',resolve,{once:true});
+        reviewVoicePlayback.addEventListener('error',()=>reject(new Error('Coach audio playback failed')),{once:true});
+        reviewVoicePlayback.play().catch(reject);
+      });
+      if(reviewVoiceObjectUrl===src){
+        try{URL.revokeObjectURL(src);}catch{}
+        reviewVoiceObjectUrl='';
       }
       // Slight human-like break between long narration segments.
       if(chunk!==chunks[chunks.length-1])await bozoSpeechSleep(170);
