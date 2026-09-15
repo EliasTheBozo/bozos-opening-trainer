@@ -7501,7 +7501,10 @@ footer a,footer button,.footer-brand{color:#fff!important}
               <span>Email</span><b id="profile-email"></b>
               <span>User ID</span><code id="profile-user-id"></code>
             </div>
-            <button id="sign-out-button" class="button secondary">Sign out</button>
+            <div class="legal-actions">
+              <button id="sign-out-button" class="button secondary">Sign out</button>
+              <button class="button secondary" type="button" data-route="delete-account">Delete account</button>
+            </div>
           </section>
         </div>
         </div>
@@ -7841,6 +7844,48 @@ footer a,footer button,.footer-brand{color:#fff!important}
       </div>
     </section>
 
+    <section id="view-delete-account" class="view legal-view">
+      <div class="legal-shell">
+        <header class="legal-hero">
+          <div class="eyebrow">BOZO ACCOUNT & PRIVACY</div>
+          <h1>Delete your BOZO account</h1>
+          <p>This page explains how to request permanent deletion of your BOZO'S Opening Trainer account and associated personal data.</p>
+        </header>
+        <article class="panel legal-card">
+          <div class="legal-callout"><strong>You do not need to be signed in to make a deletion request.</strong> BOZO may ask you to verify ownership of the account before completing the request.</div>
+
+          <h2>How to request account deletion</h2>
+          <ol>
+            <li>Open BOZO's <button class="legal-inline-button" type="button" data-route="contact">Help & Contact</button> page.</li>
+            <li>Enter the email address associated with your BOZO account and your username if you know it.</li>
+            <li>Choose <strong>Privacy or data request</strong>.</li>
+            <li>Use a subject such as <strong>Delete my BOZO account</strong>.</li>
+            <li>In the details, state that you want your BOZO account and associated personal data permanently deleted.</li>
+          </ol>
+          <p>After BOZO receives the request, we may contact you using the account email or other reasonable verification method to confirm that the request belongs to the account owner.</p>
+          <div class="legal-actions">
+            <button class="button primary" type="button" data-route="contact">Request account deletion</button>
+          </div>
+
+          <h2>Data deleted with your account</h2>
+          <p>After a verified deletion request is completed, BOZO will delete or anonymize account-linked personal data that is no longer needed to operate, secure, or legally document the Service. This can include account and profile information, saved preferences, training progress, social relationships, and other user-specific records associated with the deleted account.</p>
+
+          <h2>Data that may be retained</h2>
+          <p>Some limited records may be retained when reasonably necessary for security, fraud prevention, moderation, fair-play and game-integrity enforcement, payment or transaction records, dispute resolution, or legal compliance. Retained records are kept only for as long as reasonably necessary for those purposes and are handled in accordance with BOZO's Privacy Policy.</p>
+
+          <h2>Subscriptions and payments</h2>
+          <p>Deleting a BOZO account does not automatically cancel a subscription that is managed by an external billing provider. If you have an active BOZO+ subscription, cancel it through the provider that billed you to avoid future renewal charges.</p>
+
+          <h2>Questions about deletion</h2>
+          <p>If you cannot access your account or have questions about what will be deleted, submit a <strong>Privacy or data request</strong> through <button class="legal-inline-button" type="button" data-route="contact">Help & Contact</button>.</p>
+          <div class="legal-actions">
+            <button class="button secondary" type="button" data-route="privacy">Read Privacy Policy</button>
+            <button class="button secondary" type="button" data-route="home">Back to BOZO</button>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section id="view-daily" class="view daily-view">
       <div class="page-heading daily-heading">
         <div><div class="eyebrow">DAILY BOZO</div><h1 id="daily-title">Today's handcrafted puzzle.</h1><p id="daily-subtitle">A staff-curated position with a real authored continuation.</p></div>
@@ -7924,6 +7969,7 @@ footer a,footer button,.footer-brand{color:#fff!important}
       <button id="footer-report-issue" type="button">Report an issue</button>
       <button data-route="terms">Terms</button>
       <button data-route="privacy">Privacy</button>
+      <button data-route="delete-account">Delete account</button>
     </div>
     <p>Independent, ad-free chess learning. © 2026 BOZO.</p>
   </footer>
